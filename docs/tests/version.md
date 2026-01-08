@@ -5,12 +5,12 @@ Tests for version information.
 ## Version flag
 
 ```bash
-expect --version | expect --contains "0.2.0"
+outmatch --version | outmatch --contains "0.2.0"
 ```
 
 ## Version exits cleanly
 
 ```bash
-expect --version
+outmatch --version
 test $? -eq 0
 ```

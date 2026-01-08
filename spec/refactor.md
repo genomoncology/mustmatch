@@ -1,4 +1,4 @@
-# Refactoring Plan: doctest-expect
+# Refactoring Plan: outmatch
 
 ## Goals
 
@@ -7,13 +7,13 @@
 3. Use Typer for CLI (modern, type-hint based, better than argparse)
 4. Use dataclasses for configuration and results
 5. Replace unit tests with self-hosted doctests (eat our own dogfood)
-6. Achieve 100% coverage using doctest-expect itself
+6. Achieve 100% coverage using outmatch itself
 7. Follow Python best practices (max 88 char lines, focused modules)
 
 ## New Package Structure
 
 ```
-src/doctest_expect/
+src/outmatch/
 ├── __init__.py          # Public API exports only
 ├── __main__.py          # Entry point: from .cli import app; app()
 ├── cli.py               # Typer CLI definition (~100 lines)
@@ -118,7 +118,7 @@ def expect(
 
 ## Testing Strategy: Self-Hosted Doctests
 
-Replace all unit tests with documentation that uses doctest-expect itself.
+Replace all unit tests with documentation that uses outmatch itself.
 
 ### Test Structure
 
@@ -148,26 +148,26 @@ docs/
 ## Basic exact match
 
 ```bash
-echo "hello world" | expect "hello world"
+echo "hello world" | outmatch "hello world"
 ```
 
 ## Trailing newline normalization
 
 ```bash
-printf "hello world\n" | expect "hello world"
+printf "hello world\n" | outmatch "hello world"
 ```
 
 ## Multi-line exact match
 
 ```bash
-printf "line one\nline two" | expect "line one
+printf "line one\nline two" | outmatch "line one
 line two"
 ```
 
 ## Mismatch returns exit code 1
 
 ```bash
-echo "hello" | expect "world" || echo "failed as expected"
+echo "hello" | outmatch "world" || echo "failed as expected"
 ```
 ```
 

@@ -1,8 +1,8 @@
 # outmatch Review and Roadmap
 
 **Date**: 2026-01-08
-**Current name**: `doctest-expect`
-**Proposed name**: `outmatch`
+**Current name**: `outmatch` (renamed from `doctest-expect`)
+**CLI command**: `outmatch`
 
 ---
 
@@ -12,7 +12,7 @@ The tool evolved from a simple 236-line stdin assertion tool to a comprehensive 
 
 **Assessment**: NOT too complicated. Complexity is opt-in, simple cases remain simple, and each feature solves real problems.
 
-**Recommendation**: Rename to `outmatch` and proceed with targeted feature additions.
+**Recommendation**: Proceed with targeted feature additions.
 
 ---
 
@@ -53,7 +53,7 @@ The tool evolved from a simple 236-line stdin assertion tool to a comprehensive 
 
 1. **Simple cases are still simple**:
    ```bash
-   echo "hello" | expect "hello"  # Still works
+   echo "hello" | outmatch "hello"  # Still works
    ```
 
 2. **Complexity is opt-in**:
@@ -109,28 +109,15 @@ The refactor added comprehensive examples but docs need:
 
 ## Roadmap
 
-### Phase 1: Rename and Stabilize (Immediate)
+### Phase 1: Stabilize (Immediate)
 
-#### 1.1 Rename to `outmatch`
+#### 1.1 Rename: COMPLETED
 
-**Why**: `doctest-expect` is confusing
-- "doctest" conflicts with Python stdlib
-- Doesn't describe what it does
-- Not discoverable
-
-**Why `outmatch`**:
-- Portmanteau: "output" + "match"
-- Clear in context: `cmd | outmatch "expected"`
-- No conflicts (Python keyword, existing tools)
-- Memorable, distinctive
-
-**Changes**:
+Package renamed from `doctest-expect` to `outmatch`:
 - Package name: `outmatch`
 - CLI command: `outmatch`
-- Module: `outmatch` (rename `doctest_expect`)
-- Update all docs, imports, examples
-
-**Timeline**: 1 day
+- Module: `outmatch`
+- All docs, imports, examples updated
 
 #### 1.2 Error Message Quality Audit
 
@@ -434,7 +421,7 @@ outmatch --http GET /api/users --expect-status 200 --expect-json '{"users": [...
 ## Priorities
 
 ### Must Have (Phase 1)
-1. ✅ Rename to `outmatch`
+1. ✅ Rename to `outmatch` (COMPLETED)
 2. ✅ Error message audit
 
 ### Should Have (Phase 2)
@@ -469,7 +456,7 @@ After Phase 2 completion:
 ## Next Actions
 
 1. Review and approve this roadmap
-2. Rename to `outmatch` (PR)
+2. ✅ Rename to `outmatch` (COMPLETED)
 3. Error message audit (PR)
 4. Begin Phase 2: Markdown testing (PR)
 5. Update `spec/mktestdocs-standard.md` to reference `outmatch`

@@ -1,6 +1,6 @@
-# doctest-expect
+# outmatch
 
-CLI output assertion tool for documentation testing. Pipe command output to `expect` to verify it matches expected values.
+CLI output assertion tool for documentation testing. Pipe command output to `outmatch` to verify it matches expected values.
 
 Designed for use with [mktestdocs](https://github.com/koaning/mktestdocs) to test CLI examples in documentation.
 
@@ -17,45 +17,40 @@ Designed for use with [mktestdocs](https://github.com/koaning/mktestdocs) to tes
 ## Installation
 
 ```bash
-uv add --group dev doctest-expect
+uv add --group dev outmatch
 ```
 
 Or install globally:
 ```bash
-uv tool install doctest-expect
-pipx install doctest-expect
-```
-
-**Note**: The CLI installs as `expect`. On systems with Tcl's `expect`, use the unambiguous invocation:
-```bash
-python -m doctest_expect --help
+uv tool install outmatch
+pipx install outmatch
 ```
 
 ## Quickstart
 
 ```bash
 # Exact match
-echo "hello world" | expect "hello world"
+echo "hello world" | outmatch "hello world"
 
 # Contains substring
-python --version 2>&1 | expect --contains "Python"
+python --version 2>&1 | outmatch --contains "Python"
 
 # Regex for volatile output
-mycli run | expect --regex 'completed in \d+\.\d+s'
+mycli run | outmatch --regex 'completed in \d+\.\d+s'
 
 # JSON semantic comparison (field order independent)
-echo '{"b": 2, "a": 1}' | expect --json '{"a": 1, "b": 2}'
+echo '{"b": 2, "a": 1}' | outmatch --json '{"a": 1, "b": 2}'
 ```
 
 **Important**: Many commands write to stderr (e.g., `python --version` on some systems). Use `2>&1` to capture both streams:
 ```bash
-python --version 2>&1 | expect --contains "Python"
+python --version 2>&1 | outmatch --contains "Python"
 ```
 
-**Pipeline exit codes**: In bash, `cmd | expect` returns `expect`'s exit code, not `cmd`'s. To fail when `cmd` fails:
+**Pipeline exit codes**: In bash, `cmd | outmatch` returns `outmatch`'s exit code, not `cmd`'s. To fail when `cmd` fails:
 ```bash
 set -o pipefail
-mycli run | expect "success"
+mycli run | outmatch "success"
 ```
 
 ## Comparison Modes
@@ -76,7 +71,7 @@ mycli run | expect "success"
 Compares output exactly, normalizing trailing newlines on both sides.
 
 ```bash
-echo "hello world" | expect "hello world"
+echo "hello world" | outmatch "hello world"
 ```
 
 ### Contains
@@ -84,7 +79,7 @@ echo "hello world" | expect "hello world"
 Checks if output contains the expected substring.
 
 ```bash
-python --help | expect --contains "usage:"
+python --help | outmatch --contains "usage:"
 ```
 
 ### Regex
@@ -92,8 +87,8 @@ python --help | expect --contains "usage:"
 Matches output against a regex pattern. Uses Python's `re` with `MULTILINE` and `DOTALL` flags.
 
 ```bash
-mycli build | expect --regex 'built in \d+ms'
-mycli logs | expect --regex 'ERROR:.*connection refused'
+mycli build | outmatch --regex 'built in \d+ms'
+mycli logs | outmatch --regex 'ERROR:.*connection refused'
 ```
 
 ### JSON
@@ -101,7 +96,7 @@ mycli logs | expect --regex 'ERROR:.*connection refused'
 Compares single JSON values semantically. Field order doesn't matter.
 
 ```bash
-echo '{"name": "alice", "age": 30}' | expect --json '{"age": 30, "name": "alice"}'
+echo '{"name": "alice", "age": 30}' | outmatch --json '{"age": 30, "name": "alice"}'
 ```
 
 ### JSONL
@@ -110,7 +105,7 @@ Compares JSON Lines output. Field order within records doesn't matter, but recor
 
 ```bash
 echo '{"id": 1}
-{"id": 2}' | expect --jsonl '{"id": 1}
+{"id": 2}' | outmatch --jsonl '{"id": 1}
 {"id": 2}'
 ```
 
@@ -119,7 +114,7 @@ echo '{"id": 1}
 Order-independent JSONL comparison (multiset semantics).
 
 ```bash
-mycli list | expect --jsonl-set '{"id": 2}
+mycli list | outmatch --jsonl-set '{"id": 2}
 {"id": 1}'
 ```
 
@@ -128,7 +123,7 @@ mycli list | expect --jsonl-set '{"id": 2}
 Match records by a key field, then compare. Useful for stable docs when record order varies.
 
 ```bash
-mycli users | expect --jsonl-key id '{"id": 2, "name": "bob"}
+mycli users | outmatch --jsonl-key id '{"id": 2, "name": "bob"}
 {"id": 1, "name": "alice"}'
 ```
 
@@ -137,7 +132,7 @@ mycli users | expect --jsonl-key id '{"id": 2, "name": "bob"}
 Check that output contains expected records. Partial field matching supported.
 
 ```bash
-mycli users | expect --jsonl-contains '{"name": "alice"}'
+mycli users | outmatch --jsonl-contains '{"name": "alice"}'
 ```
 
 ## Normalization Options
@@ -154,13 +149,13 @@ Use these flags to reduce flaky tests caused by trivial differences.
 
 ```bash
 # Handle colored output
-mycli status | expect --contains "OK" --strip-ansi
+mycli status | outmatch --contains "OK" --strip-ansi
 
 # Handle Windows line endings
-mycli export | expect --normalize-newlines -f expected.txt
+mycli export | outmatch --normalize-newlines -f expected.txt
 
 # Flexible whitespace matching
-mycli format | expect --trim --collapse-whitespace "hello world"
+mycli format | outmatch --trim --collapse-whitespace "hello world"
 ```
 
 ## Pattern Transformation
@@ -172,8 +167,8 @@ For nondeterministic output (timestamps, durations, IDs, temp paths), use patter
 Replace regex patterns before comparison. Repeatable.
 
 ```bash
-mycli run | expect --replace '\d+\.\d+s' '<time>' "completed in <time>"
-mycli build | expect --replace '/tmp/[a-z0-9]+' '<tmpdir>' "output: <tmpdir>/result.txt"
+mycli run | outmatch --replace '\d+\.\d+s' '<time>' "completed in <time>"
+mycli build | outmatch --replace '/tmp/[a-z0-9]+' '<tmpdir>' "output: <tmpdir>/result.txt"
 ```
 
 ### Redact
@@ -181,7 +176,7 @@ mycli build | expect --replace '/tmp/[a-z0-9]+' '<tmpdir>' "output: <tmpdir>/res
 Replace patterns with `<redacted>`. Repeatable.
 
 ```bash
-mycli token | expect --redact '[a-f0-9]{32}' "token: <redacted>"
+mycli token | outmatch --redact '[a-f0-9]{32}' "token: <redacted>"
 ```
 
 ## JSON Options
@@ -192,13 +187,13 @@ Ignore volatile JSON fields during comparison. Uses JSONPath-like syntax.
 
 ```bash
 # Ignore timestamp field
-mycli audit | expect --json --json-ignore '$.timestamp' '{"status": "ok"}'
+mycli audit | outmatch --json --json-ignore '$.timestamp' '{"status": "ok"}'
 
 # Ignore nested field
-mycli user | expect --json --json-ignore '$.metadata.updated_at' '{"name": "alice"}'
+mycli user | outmatch --json --json-ignore '$.metadata.updated_at' '{"name": "alice"}'
 
 # Multiple ignores
-mycli export | expect --jsonl --json-ignore '$.ts' --json-ignore '$.hash' '{"id": 1}'
+mycli export | outmatch --jsonl --json-ignore '$.ts' --json-ignore '$.hash' '{"id": 1}'
 ```
 
 ## Expected from File
@@ -207,10 +202,10 @@ For multi-line expectations, use `-f`/`--expected-file` instead of command subst
 
 ```bash
 # Much cleaner than heredocs
-mycli help | expect -f docs/expected/help.txt
+mycli help | outmatch -f docs/expected/help.txt
 
 # Works with all modes
-mycli export | expect --jsonl -f expected/records.jsonl
+mycli export | outmatch --jsonl -f expected/records.jsonl
 ```
 
 ## Snapshot Updates
@@ -219,7 +214,7 @@ Automatically update expected files when output changes. Useful for maintaining 
 
 ```bash
 # Update expected file if mismatch
-mycli help | expect -f docs/expected/help.txt --update
+mycli help | outmatch -f docs/expected/help.txt --update
 ```
 
 **Safety**: Only works with `-f`. Requires explicit flag to prevent accidental overwrites.
@@ -234,10 +229,10 @@ mycli help | expect -f docs/expected/help.txt --update
 
 ```bash
 # Quiet mode for CI
-mycli run | expect -q "success"
+mycli run | outmatch -q "success"
 
 # Force colors in CI
-mycli run | expect --color always "success"
+mycli run | outmatch --color always "success"
 ```
 
 ## Exit Codes
@@ -252,13 +247,13 @@ mycli run | expect --color always "success"
 
 ### mktestdocs
 
-With mktestdocs, bash blocks only verify exit code 0. Use `expect` to verify output content:
+With mktestdocs, bash blocks only verify exit code 0. Use `outmatch` to verify output content:
 
 ```markdown
 # Example: Check Python version
 
 ```bash
-python --version 2>&1 | expect --contains "Python 3"
+python --version 2>&1 | outmatch --contains "Python 3"
 ```
 ```
 
@@ -277,7 +272,7 @@ set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
 The command might write to stderr. Redirect both streams:
 ```bash
-python --version 2>&1 | expect --contains "Python"
+python --version 2>&1 | outmatch --contains "Python"
 ```
 
 ### "Why did my pipeline pass when the command failed?"
@@ -285,7 +280,7 @@ python --version 2>&1 | expect --contains "Python"
 Use `pipefail`:
 ```bash
 set -o pipefail
-failing_cmd | expect "never reached"  # Now fails correctly
+failing_cmd | outmatch "never reached"  # Now fails correctly
 ```
 
 ### "Why does it fail on CI but not locally?"
@@ -299,16 +294,9 @@ Common causes:
 ### "My output has ANSI colors"
 
 ```bash
-mycli status | expect --strip-ansi --contains "OK"
+mycli status | outmatch --strip-ansi --contains "OK"
 # Or disable colors at source:
-NO_COLOR=1 mycli status | expect --contains "OK"
-```
-
-### "Conflict with Tcl expect"
-
-Use the unambiguous module invocation:
-```bash
-python -m doctest_expect --contains "test"
+NO_COLOR=1 mycli status | outmatch --contains "OK"
 ```
 
 ## Example: Testing a CLI Tool
@@ -318,20 +306,20 @@ python -m doctest_expect --contains "test"
 set -euo pipefail
 
 # Test help output
-mycli --help | expect --contains "Usage: mycli"
+mycli --help | outmatch --contains "Usage: mycli"
 
 # Test version (with stderr redirect)
-mycli --version 2>&1 | expect --regex 'mycli v\d+\.\d+\.\d+'
+mycli --version 2>&1 | outmatch --regex 'mycli v\d+\.\d+\.\d+'
 
 # Test JSON output (ignoring timestamps)
-mycli status --json | expect --json --json-ignore '$.timestamp' '{"healthy": true}'
+mycli status --json | outmatch --json --json-ignore '$.timestamp' '{"healthy": true}'
 
 # Test list output (order may vary)
-mycli list --jsonl | expect --jsonl-set '{"name": "bob"}
+mycli list --jsonl | outmatch --jsonl-set '{"name": "bob"}
 {"name": "alice"}'
 
 # Test volatile output with replacement
-mycli build | expect --replace '\d+ms' '<time>' "Built in <time>"
+mycli build | outmatch --replace '\d+ms' '<time>' "Built in <time>"
 ```
 
 ## Development

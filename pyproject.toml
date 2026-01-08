@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "doctest-expect"
+name = "outmatch"
 version = "0.2.0"
 description = "CLI output assertion tool for documentation testing"
 readme = "README.md"
@@ -31,11 +31,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/botassembly/doctest-expect"
-Repository = "https://github.com/botassembly/doctest-expect"
+Homepage = "https://github.com/botassembly/outmatch"
+Repository = "https://github.com/botassembly/outmatch"
 
 [project.scripts]
-expect = "doctest_expect:cli"
+outmatch = "outmatch:cli"
 
 [project.optional-dependencies]
 dev = [
@@ -60,9 +60,9 @@ target-version = "py310"
 select = ["E", "F", "I", "W"]
 
 [tool.coverage.run]
-source = ["src/doctest_expect"]
+source = ["src/outmatch"]
 branch = true
-omit = ["src/doctest_expect/__main__.py"]
+omit = ["src/outmatch/__main__.py"]
 
 [tool.coverage.report]
 exclude_lines = [

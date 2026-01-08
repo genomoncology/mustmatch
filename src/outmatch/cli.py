@@ -24,7 +24,7 @@ app = typer.Typer(
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        print(f"expect {__version__}")
+        print(f"outmatch {__version__}")
         raise typer.Exit()
 
 

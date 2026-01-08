@@ -128,32 +128,6 @@ toml = [
 ]
 
 [[package]]
-name = "doctest-expect"
-version = "0.2.0"
-source = { editable = "." }
-dependencies = [
-    { name = "typer" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "mktestdocs" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mktestdocs", marker = "extra == 'dev'", specifier = ">=0.2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typer", specifier = ">=0.9.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -203,6 +177,32 @@ sdist = { url = "https://files.pythonhosted.org/packages/fd/04/aced274f9ea76dfdb
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4f/eb/3686be82dfeb12eb968f002254464e282722e4ac52c465c2998764583f34/mktestdocs-0.2.5-py3-none-any.whl", hash = "sha256:2b20d2387b2025597f3129773edef16d09b08b1b6d31da6cc51af5b693c10430", size = 9096, upload-time = "2025-07-25T12:39:27.985Z" },
 ]
+
+[[package]]
+name = "outmatch"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mktestdocs" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mktestdocs", marker = "extra == 'dev'", specifier = ">=0.2.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "typer", specifier = ">=0.9.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "packaging"
