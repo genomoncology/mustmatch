@@ -370,12 +370,31 @@ Control block behavior with HTML comments:
 echo "skipped"
 ```
 
+<!-- outmatch: skip-if=CI -->
+```bash
+# This block is skipped when CI environment variable is set
+interactive_command
+```
+
 <!-- outmatch: timeout=60 -->
 ```bash
 # This block has a 60 second timeout
 long_running_command
 ```
+
+<!-- outmatch: env=DEBUG=1,VERBOSE=true -->
+```bash
+# This block runs with custom environment variables
+echo $DEBUG $VERBOSE
 ```
+```
+
+| Directive | Effect |
+|-----------|--------|
+| `skip` | Always skip this block |
+| `skip-if=VAR` | Skip if environment variable VAR is set |
+| `timeout=N` | Override timeout to N seconds |
+| `env=K=V,...` | Set environment variables for block |
 
 ### Example Output
 

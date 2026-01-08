@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import subprocess
 import xml.etree.ElementTree as ET
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
@@ -433,9 +433,9 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
         result.duration = time.time() - start_time
         return result
 
-    # Run tests in parallel across files
+    # Run tests in parallel across files (ThreadPool for I/O-bound subprocess work)
     if config.parallel > 1 and len(files) > 1:
-        with ProcessPoolExecutor(max_workers=config.parallel) as executor:
+        with ThreadPoolExecutor(max_workers=config.parallel) as executor:
             futures = {
                 executor.submit(run_file, f, config): f
                 for f in files

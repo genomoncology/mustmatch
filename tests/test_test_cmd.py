@@ -650,3 +650,319 @@ echo "hello"
         run_command([md], config)
         captured = capsys.readouterr()
         assert "TAP version 13" in captured.out
+
+
+class TestErrorPaths:
+    """Tests for error handling paths."""
+
+    def test_run_file_read_error(self, tmp_path):
+        """Test handling of file read errors (OSError)."""
+        # Create a path that doesn't exist
+        nonexistent = tmp_path / "nonexistent.md"
+        config = RunConfig()
+        result = run_file(nonexistent, config)
+        # Should return empty result, not raise
+        assert len(result.blocks) == 0
+
+    def test_execute_block_popen_exception(self, monkeypatch):
+        """Test handling of subprocess.Popen exceptions."""
+        import subprocess
+
+        def mock_popen(*args, **kwargs):
+            raise OSError("Mock Popen failure")
+
+        monkeypatch.setattr(subprocess, "Popen", mock_popen)
+
+        block = Block(content="echo hello", line_start=1, line_end=2)
+        config = RunConfig()
+        result = execute_block(block, config)
+        assert result.status == BlockStatus.FAILED
+        assert "Mock Popen failure" in result.error
+
+    def test_include_pattern_no_match_without_name(self):
+        """Test include pattern on block without name."""
+        block = Block(
+            content="echo world",
+            line_start=1,
+            line_end=2,
+            name=None,  # No name
+        )
+        config = RunConfig(include_pattern="hello")
+        # Should skip because content doesn't match and no name
+        assert should_skip_block(block, config) is True
+
+
+class TestTapOutputEdgeCases:
+    """Additional TAP output tests."""
+
+    def test_format_tap_skipped(self):
+        """Test TAP output for skipped blocks."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="", line_start=1, line_end=2),
+                            status=BlockStatus.SKIPPED,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        output = format_tap(result)
+        assert "# SKIP" in output
+
+    def test_format_tap_timeout(self):
+        """Test TAP output for timeout blocks."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="", line_start=1, line_end=2),
+                            status=BlockStatus.TIMEOUT,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        output = format_tap(result)
+        assert "# TIMEOUT" in output
+
+    def test_format_tap_with_actual_output(self):
+        """Test TAP output includes actual output in failure."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="", line_start=1, line_end=2),
+                            status=BlockStatus.FAILED,
+                            actual="some error output",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        output = format_tap(result)
+        assert "actual:" in output
+
+
+class TestVerboseFormatting:
+    """Additional verbose output tests."""
+
+    def test_format_verbose_timeout(self):
+        """Test verbose output for timeout blocks."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="sleep 100", line_start=1, line_end=2),
+                            status=BlockStatus.TIMEOUT,
+                            error="Block exceeded 30s timeout",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        output = format_result_verbose(result)
+        assert "⏱" in output
+        assert "timeout" in output.lower()
+
+    def test_format_verbose_long_content(self):
+        """Test verbose output truncates long block content."""
+        long_content = "\n".join([f"echo line{i}" for i in range(10)])
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(
+                                content=long_content,
+                                line_start=1,
+                                line_end=12,
+                            ),
+                            status=BlockStatus.FAILED,
+                            error="Exit code 1",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        output = format_result_verbose(result)
+        # Should show ... for truncated content
+        assert "..." in output
+
+    def test_format_verbose_long_output(self):
+        """Test verbose output truncates long actual output."""
+        long_output = "\n".join([f"output line{i}" for i in range(15)])
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="cmd", line_start=1, line_end=2),
+                            status=BlockStatus.FAILED,
+                            error="Exit code 1",
+                            actual=long_output,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        output = format_result_verbose(result)
+        # Should show truncation indicator
+        assert "..." in output
+
+
+class TestQuietFormatting:
+    """Additional quiet output tests."""
+
+    def test_format_quiet_with_failures(self):
+        """Test quiet output shows failure count."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="", line_start=1, line_end=2),
+                            status=BlockStatus.FAILED,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        output = format_result_quiet(result)
+        assert "✗" in output
+        assert "1 failed" in output
+
+
+class TestJunitXmlEdgeCases:
+    """Additional JUnit XML tests."""
+
+    def test_junit_xml_with_failure(self, tmp_path):
+        """Test JUnit XML output for failed tests."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="", line_start=1, line_end=2),
+                            status=BlockStatus.FAILED,
+                            error="Assertion failed",
+                            actual="error output",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        xml_path = tmp_path / "results.xml"
+        write_junit_xml(result, xml_path)
+        content = xml_path.read_text()
+        assert "failure" in content
+        assert "Assertion failed" in content
+
+    def test_junit_xml_with_timeout(self, tmp_path):
+        """Test JUnit XML output for timeout tests."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="", line_start=1, line_end=2),
+                            status=BlockStatus.TIMEOUT,
+                            error="Timeout after 30s",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        xml_path = tmp_path / "results.xml"
+        write_junit_xml(result, xml_path)
+        content = xml_path.read_text()
+        assert "error" in content
+
+    def test_junit_xml_with_skipped(self, tmp_path):
+        """Test JUnit XML output for skipped tests."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(content="", line_start=1, line_end=2),
+                            status=BlockStatus.SKIPPED,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        xml_path = tmp_path / "results.xml"
+        write_junit_xml(result, xml_path)
+        content = xml_path.read_text()
+        assert "skipped" in content
+
+
+class TestJsonReportEdgeCases:
+    """Additional JSON report tests."""
+
+    def test_json_report_with_error(self, tmp_path):
+        """Test JSON report includes error details."""
+        result = RunResult(
+            files=[
+                FileResult(
+                    path=Path("test.md"),
+                    blocks=[
+                        BlockResult(
+                            block=Block(
+                                content="",
+                                line_start=1,
+                                line_end=2,
+                                name="Failed test",
+                            ),
+                            status=BlockStatus.FAILED,
+                            error="Exit code 1",
+                            actual="stderr output",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        json_path = tmp_path / "results.json"
+        write_json_report(result, json_path)
+        data = json.loads(json_path.read_text())
+        block_data = data["files"][0]["blocks"][0]
+        assert block_data["error"] == "Exit code 1"
+        assert block_data["actual"] == "stderr output"
+
+
+class TestRunTestsEdgeCases:
+    """Additional run_tests tests."""
+
+    def test_run_tests_empty_paths(self):
+        """Test run_tests with no matching files."""
+        config = RunConfig()
+        result = run_tests([], config)
+        assert result.total == 0
+
+    def test_run_tests_timeout_exit_code(self, tmp_path, capsys):
+        """Test timeout blocks cause non-zero exit."""
+        md = tmp_path / "test.md"
+        md.write_text("""
+```bash
+sleep 10
+```
+""")
+        config = RunConfig(timeout=1)
+        exit_code = run_command([md], config)
+        assert exit_code == 1
