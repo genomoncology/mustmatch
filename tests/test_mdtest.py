@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from outmatch.test_cmd import (
+from outmatch.mdtest import (
     Block,
     BlockMetadata,
     BlockResult,

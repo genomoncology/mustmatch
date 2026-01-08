@@ -64,7 +64,7 @@ select = ["E", "F", "I", "W"]
 [tool.coverage.run]
 source = ["src/outmatch"]
 branch = true
-omit = ["src/outmatch/__main__.py", "src/outmatch/test_cmd.py"]
+omit = ["src/outmatch/__main__.py", "src/outmatch/mdtest.py", "src/outmatch/config.py"]
 
 [tool.coverage.report]
 exclude_lines = [

@@ -321,7 +321,7 @@ def main(args: list[str] | None = None) -> int:
     if args and args[0] == "test":
         test_args = args[1:]
         try:
-            _run_test_cmd(test_args)
+            _run_mdtest(test_args)
             return 0
         except typer.Exit as e:
             return e.exit_code
@@ -333,12 +333,12 @@ def main(args: list[str] | None = None) -> int:
         return e.exit_code
 
 
-def _run_test_cmd(args: list[str]) -> None:
+def _run_mdtest(args: list[str]) -> None:
     """Direct entry point for test command."""
     import argparse
     from pathlib import Path
 
-    from .test_cmd import TestConfig, test_command
+    from .mdtest import TestConfig, test_command
 
     parser = argparse.ArgumentParser(description="Run bash blocks in markdown files")
     parser.add_argument("paths", nargs="*", type=Path, help="Files or directories")
