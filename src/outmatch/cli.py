@@ -28,8 +28,95 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.command()
-def expect(
+def _run_expect(
+    expected: str | None,
+    expected_file: Path | None,
+    contains: bool,
+    regex: bool,
+    json_mode: bool,
+    jsonl: bool,
+    jsonl_set: bool,
+    jsonl_key: str | None,
+    jsonl_contains: bool,
+    strip_ansi: bool,
+    normalize_newlines_opt: bool,
+    trim: bool,
+    collapse_whitespace_opt: bool,
+    ignore_case: bool,
+    replace: list[str] | None,
+    redact: list[str] | None,
+    json_ignore: list[str] | None,
+    quiet: bool,
+    color: str,
+    diff_context: int,
+    update: bool,
+) -> None:
+    """Run the expect (match) command logic."""
+    # Read actual from stdin
+    actual = sys.stdin.read()
+
+    # Get expected value
+    expected_text = _get_expected(expected, expected_file, update)
+    if expected_text is None:
+        print(
+            "Error: expected value required (argument or -f FILE)",
+            file=sys.stderr,
+        )
+        raise typer.Exit(2)
+
+    # Build config
+    mode = _determine_mode(
+        contains, regex, json_mode, jsonl, jsonl_set, jsonl_key, jsonl_contains
+    )
+    replacements = _parse_replacements(replace or [])
+    norm_opts = NormalizeOptions(
+        strip_ansi=strip_ansi,
+        normalize_newlines=normalize_newlines_opt,
+        trim=trim,
+        collapse_whitespace=collapse_whitespace_opt,
+        ignore_case=ignore_case,
+        replacements=replacements,
+        redactions=tuple(redact or []),
+    )
+    config = ExpectConfig(
+        mode=mode,
+        normalize=norm_opts,
+        json_ignore_paths=tuple(json_ignore or []),
+        jsonl_key_field=jsonl_key,
+        quiet=quiet,
+        color=ColorMode(color),
+        diff_context=diff_context,
+        update_file=update,
+    )
+
+    # Preprocess
+    actual_processed = preprocess(actual, norm_opts)
+    expected_processed = preprocess(expected_text, norm_opts)
+
+    # Compare
+    result = compare(actual_processed, expected_processed, config)
+
+    if result.success:
+        raise typer.Exit(0)
+
+    # Handle update mode
+    if update and expected_file:
+        expected_file.write_text(actual)
+        print(f"Updated: {expected_file}", file=sys.stderr)
+        raise typer.Exit(0)
+
+    # Output error
+    if not quiet:
+        print(format_error(result, config), file=sys.stderr)
+    raise typer.Exit(1)
+
+
+@app.callback(
+    invoke_without_command=True,
+    context_settings={"allow_interspersed_args": False},
+)
+def callback(
+    ctx: typer.Context,
     # Expected value sources
     expected: Annotated[
         Optional[str],
@@ -77,17 +164,17 @@ def expect(
         bool,
         typer.Option(help="Remove ANSI escape sequences"),
     ] = False,
-    normalize_newlines: Annotated[
+    normalize_newlines_opt: Annotated[
         bool,
-        typer.Option(help="Convert CRLF to LF"),
+        typer.Option("--normalize-newlines", help="Convert CRLF to LF"),
     ] = False,
     trim: Annotated[
         bool,
         typer.Option(help="Strip leading/trailing whitespace"),
     ] = False,
-    collapse_whitespace: Annotated[
+    collapse_whitespace_opt: Annotated[
         bool,
-        typer.Option(help="Collapse whitespace runs"),
+        typer.Option("--collapse-whitespace", help="Collapse whitespace runs"),
     ] = False,
     ignore_case: Annotated[
         bool,
@@ -137,63 +224,133 @@ def expect(
     ] = None,
 ) -> None:
     """Assert CLI output matches expected value."""
-    # Read actual from stdin
-    actual = sys.stdin.read()
+    # If a subcommand is invoked, don't run the default expect behavior
+    if ctx.invoked_subcommand is not None:
+        return
 
-    # Get expected value
-    expected_text = _get_expected(expected, expected_file, update)
-    if expected_text is None:
-        print(
-            "Error: expected value required (argument or -f FILE)",
-            file=sys.stderr,
-        )
-        raise typer.Exit(2)
+    # Run expect logic
+    _run_expect(
+        expected,
+        expected_file,
+        contains,
+        regex,
+        json_mode,
+        jsonl,
+        jsonl_set,
+        jsonl_key,
+        jsonl_contains,
+        strip_ansi,
+        normalize_newlines_opt,
+        trim,
+        collapse_whitespace_opt,
+        ignore_case,
+        replace,
+        redact,
+        json_ignore,
+        quiet,
+        color,
+        diff_context,
+        update,
+    )
 
-    # Build config
-    mode = _determine_mode(
-        contains, regex, json_mode, jsonl, jsonl_set, jsonl_key, jsonl_contains
-    )
-    replacements = _parse_replacements(replace or [])
-    norm_opts = NormalizeOptions(
-        strip_ansi=strip_ansi,
-        normalize_newlines=normalize_newlines,
-        trim=trim,
-        collapse_whitespace=collapse_whitespace,
-        ignore_case=ignore_case,
-        replacements=replacements,
-        redactions=tuple(redact or []),
-    )
-    config = ExpectConfig(
-        mode=mode,
-        normalize=norm_opts,
-        json_ignore_paths=tuple(json_ignore or []),
-        jsonl_key_field=jsonl_key,
+
+@app.command()
+def test(
+    paths: Annotated[
+        Optional[list[Path]],
+        typer.Argument(help="Markdown files or directories to test"),
+    ] = None,
+    # Verbosity
+    quiet: Annotated[
+        bool,
+        typer.Option("-q", "--quiet", help="Only show pass/fail counts"),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("-v", "--verbose", help="Show full diffs for failures"),
+    ] = False,
+    # Execution control
+    fail_fast: Annotated[
+        bool,
+        typer.Option("--fail-fast", help="Stop on first failure"),
+    ] = False,
+    parallel: Annotated[
+        int,
+        typer.Option("--parallel", help="Max concurrent files"),
+    ] = 4,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Per-block timeout in seconds"),
+    ] = 30,
+    shell: Annotated[
+        str,
+        typer.Option("--shell", help="Shell to use"),
+    ] = "/bin/bash",
+    # Filtering
+    include: Annotated[
+        Optional[str],
+        typer.Option("--include", help="Only run blocks matching pattern"),
+    ] = None,
+    exclude: Annotated[
+        Optional[str],
+        typer.Option("--exclude", help="Skip blocks matching pattern"),
+    ] = None,
+    line: Annotated[
+        Optional[int],
+        typer.Option("--line", help="Only run block at line N"),
+    ] = None,
+    # Output format
+    junit_xml: Annotated[
+        Optional[Path],
+        typer.Option("--junit-xml", help="Write JUnit XML report"),
+    ] = None,
+    json_out: Annotated[
+        Optional[Path],
+        typer.Option("--json", help="Write JSON report"),
+    ] = None,
+    tap: Annotated[
+        bool,
+        typer.Option("--tap", help="TAP output"),
+    ] = False,
+    # Environment
+    env: Annotated[
+        Optional[list[str]],
+        typer.Option("--env", help="Set environment variable (KEY=VALUE)"),
+    ] = None,
+    cwd: Annotated[
+        Optional[Path],
+        typer.Option("--cwd", help="Working directory for blocks"),
+    ] = None,
+) -> None:
+    """Run bash blocks in markdown files and report results."""
+    from .test_cmd import TestConfig, test_command
+
+    # Parse env variables
+    env_dict: dict[str, str] = {}
+    for item in env or []:
+        if "=" in item:
+            key, val = item.split("=", 1)
+            env_dict[key] = val
+
+    config = TestConfig(
         quiet=quiet,
-        color=ColorMode(color),
-        diff_context=diff_context,
-        update_file=update,
+        verbose=verbose,
+        fail_fast=fail_fast,
+        parallel=parallel,
+        timeout=timeout,
+        shell=shell,
+        include_pattern=include,
+        exclude_pattern=exclude,
+        line_filter=line,
+        env=env_dict,
+        cwd=cwd,
+        junit_xml=junit_xml,
+        json_output=json_out,
+        tap_output=tap,
     )
 
-    # Preprocess
-    actual_processed = preprocess(actual, norm_opts)
-    expected_processed = preprocess(expected_text, norm_opts)
-
-    # Compare
-    result = compare(actual_processed, expected_processed, config)
-
-    if result.success:
-        raise typer.Exit(0)
-
-    # Handle update mode
-    if update and expected_file:
-        expected_file.write_text(actual)
-        print(f"Updated: {expected_file}", file=sys.stderr)
-        raise typer.Exit(0)
-
-    # Output error
-    if not quiet:
-        print(format_error(result, config), file=sys.stderr)
-    raise typer.Exit(1)
+    exit_code = test_command(paths or [], config)
+    raise typer.Exit(exit_code)
 
 
 def _get_expected(
@@ -253,12 +410,86 @@ def _parse_replacements(args: list[str]) -> tuple[tuple[str, str], ...]:
 
 def main(args: list[str] | None = None) -> int:
     """Main entry point for backwards compatibility."""
+    # Use sys.argv if args not provided
+    if args is None:
+        args = sys.argv[1:]
+
+    # Handle special case where "test" is the first argument
+    # We need to explicitly route to test command since Typer captures it
+    # as the expected argument value
+    if args and args[0] == "test":
+        # Create a minimal test app just for the test command
+        test_args = args[1:]  # Remove "test" from args
+        try:
+            # Call test command directly
+            _run_test_cmd(test_args)
+            return 0
+        except typer.Exit as e:
+            return e.exit_code
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 2
+
     try:
         result = app(args, standalone_mode=False)
         return result if result is not None else 0
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
+
+
+def _run_test_cmd(args: list[str]) -> None:
+    """Direct entry point for test command."""
+    import argparse
+    from pathlib import Path
+
+    from .test_cmd import TestConfig, test_command
+
+    parser = argparse.ArgumentParser(description="Run bash blocks in markdown files")
+    parser.add_argument("paths", nargs="*", type=Path, help="Files or directories")
+    parser.add_argument("-q", "--quiet", action="store_true")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument("--parallel", type=int, default=4)
+    parser.add_argument("--timeout", type=int, default=30)
+    parser.add_argument("--shell", default="/bin/bash")
+    parser.add_argument("--include")
+    parser.add_argument("--exclude")
+    parser.add_argument("--line", type=int)
+    parser.add_argument("--junit-xml", type=Path)
+    parser.add_argument("--json", type=Path, dest="json_out")
+    parser.add_argument("--tap", action="store_true")
+    parser.add_argument("--env", action="append", default=[])
+    parser.add_argument("--cwd", type=Path)
+
+    parsed = parser.parse_args(args)
+
+    # Parse env variables
+    env_dict: dict[str, str] = {}
+    for item in parsed.env:
+        if "=" in item:
+            key, val = item.split("=", 1)
+            env_dict[key] = val
+
+    config = TestConfig(
+        quiet=parsed.quiet,
+        verbose=parsed.verbose,
+        fail_fast=parsed.fail_fast,
+        parallel=parsed.parallel,
+        timeout=parsed.timeout,
+        shell=parsed.shell,
+        include_pattern=parsed.include,
+        exclude_pattern=parsed.exclude,
+        line_filter=parsed.line,
+        env=env_dict,
+        cwd=parsed.cwd,
+        junit_xml=parsed.junit_xml,
+        json_output=parsed.json_out,
+        tap_output=parsed.tap,
+    )
+
+    exit_code = test_command(parsed.paths or [], config)
+    raise typer.Exit(exit_code)
 
 
 if __name__ == "__main__":
