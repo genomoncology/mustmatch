@@ -1,0 +1,265 @@
+"""CLI interface using Typer."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from typing import Annotated, Optional
+
+import typer
+
+from .compare import compare
+from .config import ColorMode, CompareMode, ExpectConfig, NormalizeOptions
+from .normalize import preprocess
+from .output import format_error
+from .version import __version__
+
+app = typer.Typer(
+    help="Assert CLI output matches expected value.",
+    add_completion=False,
+    no_args_is_help=False,
+)
+
+
+def version_callback(value: bool) -> None:
+    """Print version and exit."""
+    if value:
+        print(f"expect {__version__}")
+        raise typer.Exit()
+
+
+@app.command()
+def expect(
+    # Expected value sources
+    expected: Annotated[
+        Optional[str],
+        typer.Argument(help="Expected output"),
+    ] = None,
+    expected_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "-f",
+            "--expected-file",
+            help="Read expected from file",
+        ),
+    ] = None,
+    # Comparison modes
+    contains: Annotated[
+        bool,
+        typer.Option(help="Check substring containment"),
+    ] = False,
+    regex: Annotated[
+        bool,
+        typer.Option(help="Match against regex pattern"),
+    ] = False,
+    json_mode: Annotated[
+        bool,
+        typer.Option("--json", help="Compare as JSON (semantic)"),
+    ] = False,
+    jsonl: Annotated[
+        bool,
+        typer.Option(help="Compare as JSONL (semantic)"),
+    ] = False,
+    jsonl_set: Annotated[
+        bool,
+        typer.Option(help="Compare JSONL as unordered set"),
+    ] = False,
+    jsonl_key: Annotated[
+        Optional[str],
+        typer.Option(help="Compare JSONL by key field"),
+    ] = None,
+    jsonl_contains: Annotated[
+        bool,
+        typer.Option(help="Check JSONL contains expected records"),
+    ] = False,
+    # Normalization options
+    strip_ansi: Annotated[
+        bool,
+        typer.Option(help="Remove ANSI escape sequences"),
+    ] = False,
+    normalize_newlines: Annotated[
+        bool,
+        typer.Option(help="Convert CRLF to LF"),
+    ] = False,
+    trim: Annotated[
+        bool,
+        typer.Option(help="Strip leading/trailing whitespace"),
+    ] = False,
+    collapse_whitespace: Annotated[
+        bool,
+        typer.Option(help="Collapse whitespace runs"),
+    ] = False,
+    ignore_case: Annotated[
+        bool,
+        typer.Option("-i", "--ignore-case", help="Case-insensitive"),
+    ] = False,
+    # Pattern transformation
+    replace: Annotated[
+        Optional[list[str]],
+        typer.Option(help="Replace REGEX with REPL (use twice)"),
+    ] = None,
+    redact: Annotated[
+        Optional[list[str]],
+        typer.Option(help="Replace REGEX with <redacted>"),
+    ] = None,
+    # JSON options
+    json_ignore: Annotated[
+        Optional[list[str]],
+        typer.Option(help="Ignore JSON path (repeatable)"),
+    ] = None,
+    # Output options
+    quiet: Annotated[
+        bool,
+        typer.Option("-q", "--quiet", help="Suppress error output"),
+    ] = False,
+    color: Annotated[
+        str,
+        typer.Option(help="Color mode: auto, always, never"),
+    ] = "auto",
+    diff_context: Annotated[
+        int,
+        typer.Option(help="Diff context lines"),
+    ] = 3,
+    # Update mode
+    update: Annotated[
+        bool,
+        typer.Option(help="Update expected file on mismatch"),
+    ] = False,
+    # Version
+    version: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--version",
+            callback=version_callback,
+            is_eager=True,
+            help="Show version",
+        ),
+    ] = None,
+) -> None:
+    """Assert CLI output matches expected value."""
+    # Read actual from stdin
+    actual = sys.stdin.read()
+
+    # Get expected value
+    expected_text = _get_expected(expected, expected_file, update)
+    if expected_text is None:
+        print(
+            "Error: expected value required (argument or -f FILE)",
+            file=sys.stderr,
+        )
+        raise typer.Exit(2)
+
+    # Build config
+    mode = _determine_mode(
+        contains, regex, json_mode, jsonl, jsonl_set, jsonl_key, jsonl_contains
+    )
+    replacements = _parse_replacements(replace or [])
+    norm_opts = NormalizeOptions(
+        strip_ansi=strip_ansi,
+        normalize_newlines=normalize_newlines,
+        trim=trim,
+        collapse_whitespace=collapse_whitespace,
+        ignore_case=ignore_case,
+        replacements=replacements,
+        redactions=tuple(redact or []),
+    )
+    config = ExpectConfig(
+        mode=mode,
+        normalize=norm_opts,
+        json_ignore_paths=tuple(json_ignore or []),
+        jsonl_key_field=jsonl_key,
+        quiet=quiet,
+        color=ColorMode(color),
+        diff_context=diff_context,
+        update_file=update,
+    )
+
+    # Preprocess
+    actual_processed = preprocess(actual, norm_opts)
+    expected_processed = preprocess(expected_text, norm_opts)
+
+    # Compare
+    result = compare(actual_processed, expected_processed, config)
+
+    if result.success:
+        raise typer.Exit(0)
+
+    # Handle update mode
+    if update and expected_file:
+        expected_file.write_text(actual)
+        print(f"Updated: {expected_file}", file=sys.stderr)
+        raise typer.Exit(0)
+
+    # Output error
+    if not quiet:
+        print(format_error(result, config), file=sys.stderr)
+    raise typer.Exit(1)
+
+
+def _get_expected(
+    arg: str | None,
+    file_path: Path | None,
+    update_mode: bool,
+) -> str | None:
+    """Get expected value from argument or file."""
+    if file_path:
+        try:
+            return file_path.read_text()
+        except FileNotFoundError:
+            if update_mode:
+                return ""  # Will create on update
+            print(f"Error: file not found: {file_path}", file=sys.stderr)
+            raise typer.Exit(2)
+        except OSError as e:
+            print(f"Error reading file: {e}", file=sys.stderr)
+            raise typer.Exit(2)
+    return arg
+
+
+def _determine_mode(
+    contains: bool,
+    regex: bool,
+    json_mode: bool,
+    jsonl: bool,
+    jsonl_set: bool,
+    jsonl_key: str | None,
+    jsonl_contains: bool,
+) -> CompareMode:
+    """Determine comparison mode from flags."""
+    if jsonl_key:
+        return CompareMode.JSONL_KEY
+    if jsonl_set:
+        return CompareMode.JSONL_SET
+    if jsonl_contains:
+        return CompareMode.JSONL_CONTAINS
+    if jsonl:
+        return CompareMode.JSONL
+    if json_mode:
+        return CompareMode.JSON
+    if regex:
+        return CompareMode.REGEX
+    if contains:
+        return CompareMode.CONTAINS
+    return CompareMode.EXACT
+
+
+def _parse_replacements(args: list[str]) -> tuple[tuple[str, str], ...]:
+    """Parse --replace arguments into tuples."""
+    if len(args) % 2 != 0:
+        print("Error: --replace requires pairs of REGEX REPL", file=sys.stderr)
+        raise typer.Exit(2)
+    return tuple(zip(args[::2], args[1::2]))
+
+
+def main(args: list[str] | None = None) -> int:
+    """Main entry point for backwards compatibility."""
+    try:
+        result = app(args, standalone_mode=False)
+        return result if result is not None else 0
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
