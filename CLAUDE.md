@@ -1,4 +1,4 @@
-# doctest-expect
+# outmatchall
 
 **CLI output assertion tool for documentation testing**
 
@@ -18,12 +18,12 @@ uv run ruff check src tests  # Lint
 ## Project Structure
 
 ```
-doctest-expect/
-├── src/doctest_expect/    # Package source
+outmatchall/
+├── src/outmatchall/       # Package source
 │   ├── __init__.py        # Main module (all logic here)
 │   └── __main__.py        # python -m support
 ├── tests/                 # Test suite
-│   └── test_expect.py     # Unit tests
+│   └── test_coverage.py   # Unit tests
 ├── docs/                  # Documentation
 │   └── usage.md           # Usage guide
 └── pyproject.toml         # Package config
@@ -37,16 +37,16 @@ doctest-expect/
 
 ```bash
 # Exact match
-echo "hello" | expect "hello"
+echo "hello" | outmatchall "hello"
 
 # Contains substring
-cmd --help | expect --contains "Usage:"
+cmd --help | outmatchall --contains "Usage:"
 
 # JSONL semantic (field order independent)
-echo '{"b": 2, "a": 1}' | expect --jsonl '{"a": 1, "b": 2}'
+echo '{"b": 2, "a": 1}' | outmatchall --jsonl '{"a": 1, "b": 2}'
 
 # JSONL contains (subset match)
-cat data.jsonl | expect --jsonl-contains '{"id": 1}'
+cat data.jsonl | outmatchall --jsonl-contains '{"id": 1}'
 ```
 
 ### Exit Codes
@@ -59,7 +59,7 @@ cat data.jsonl | expect --jsonl-contains '{"id": 1}'
 
 ## Documentation Testing
 
-Uses pytest to test itself. Tests are in `tests/test_expect.py`.
+Uses pytest to test itself. Tests are in `tests/test_coverage.py`.
 
 To run: `uv run pytest -v`
 
@@ -75,4 +75,4 @@ To run: `uv run pytest -v`
 
 ## Version
 
-Current: **0.1.0**
+Current: **0.2.0**

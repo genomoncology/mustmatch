@@ -19,13 +19,13 @@ echo "user: alice, id: 12345" | \
 ## Replace with empty string
 
 ```bash
-echo "hello123world" | expect --replace '\d+' '' "helloworld"
+echo "hello123world" | outmatchall --replace '\d+' '' "helloworld"
 ```
 
 ## Basic redact
 
 ```bash
-echo "token: abc123xyz" | expect --redact 'abc\w+xyz' "token: <redacted>"
+echo "token: abc123xyz" | outmatchall --redact 'abc\w+xyz' "token: <redacted>"
 ```
 
 ## Multiple redactions

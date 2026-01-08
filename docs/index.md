@@ -1,4 +1,4 @@
-# doctest-expect
+# outmatchall
 
 CLI output assertion tool for documentation testing.
 
@@ -6,14 +6,14 @@ CLI output assertion tool for documentation testing.
 
 When testing CLI examples in documentation with mktestdocs, bash code blocks only verify that commands exit with code 0 (success). They don't verify the actual output.
 
-doctest-expect solves this by letting you pipe output to `expect` to verify it matches:
+outmatchall solves this by letting you pipe output to `outmatchall` to verify it matches:
 
 ```bash
-# Without expect: only checks exit code
+# Without outmatchall: only checks exit code
 echo "hello"
 
-# With expect: checks exit code AND output
-echo "hello" | expect "hello"
+# With outmatchall: checks exit code AND output
+echo "hello" | outmatchall "hello"
 ```
 
 ## Documentation
@@ -25,11 +25,11 @@ echo "hello" | expect "hello"
 
 ```bash
 # Exact match
-echo "hello world" | expect "hello world"
+echo "hello world" | outmatchall "hello world"
 
 # Contains substring
-python --version | expect --contains "Python"
+python --version | outmatchall --contains "Python"
 
 # JSONL semantic comparison (field order independent)
-echo '{"b": 2, "a": 1}' | expect --jsonl '{"a": 1, "b": 2}'
+echo '{"b": 2, "a": 1}' | outmatchall --jsonl '{"a": 1, "b": 2}'
 ```

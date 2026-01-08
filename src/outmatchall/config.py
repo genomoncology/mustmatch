@@ -1,11 +1,11 @@
-"""Configuration dataclasses for doctest-expect."""
+"""Configuration dataclasses for outmatchall."""
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
 
 class CompareMode(Enum):
-    """Comparison mode for expect."""
+    """Comparison mode for outmatchall."""
 
     EXACT = auto()
     CONTAINS = auto()

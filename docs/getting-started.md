@@ -2,16 +2,16 @@
 
 ## Installation
 
-Add doctest-expect as a dev dependency:
+Add outmatchall as a dev dependency:
 
 ```bash
-uv add --group dev doctest-expect
+uv add --group dev outmatchall
 ```
 
 Or install from source:
 
 ```bash
-uv pip install -e path/to/doctest-expect
+uv pip install -e path/to/outmatchall
 ```
 
 ## First Example
@@ -19,30 +19,30 @@ uv pip install -e path/to/doctest-expect
 Verify a command produces expected output:
 
 ```bash
-echo "hello world" | expect "hello world"
+echo "hello world" | outmatchall "hello world"
 ```
 
 If the output matches, the command exits with code 0. If it doesn't match, it exits with code 1 and prints a diff.
 
 ## Integration with mktestdocs
 
-Use `expect` in your documentation examples:
+Use `outmatchall` in your documentation examples:
 
 ````markdown
 ## Check Version
 
 ```bash
-mycommand --version | expect --contains "1.0"
+mycommand --version | outmatchall --contains "1.0"
 ```
 
 ## Process Data
 
 ```bash
-echo '{"input": "data"}' | mycommand process | expect --jsonl '{"output": "result"}'
+echo '{"input": "data"}' | mycommand process | outmatchall --jsonl '{"output": "result"}'
 ```
 ````
 
-When mktestdocs runs these bash blocks, the `expect` assertions verify the output.
+When mktestdocs runs these bash blocks, the `outmatchall` assertions verify the output.
 
 ## Next Steps
 

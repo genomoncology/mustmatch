@@ -7,13 +7,13 @@ Tests for text normalization options.
 Remove color codes:
 
 ```bash
-printf '\033[31mred\033[0m' | expect --strip-ansi "red"
+printf '\033[31mred\033[0m' | outmatchall --strip-ansi "red"
 ```
 
 ## Strip ANSI with contains
 
 ```bash
-printf '\033[32mSuccess\033[0m' | expect --strip-ansi --contains "Success"
+printf '\033[32mSuccess\033[0m' | outmatchall --strip-ansi --contains "Success"
 ```
 
 ## Normalize newlines
@@ -21,38 +21,38 @@ printf '\033[32mSuccess\033[0m' | expect --strip-ansi --contains "Success"
 Convert CRLF to LF:
 
 ```bash
-printf "line1\r\nline2" | expect --normalize-newlines "line1
+printf "line1\r\nline2" | outmatchall --normalize-newlines "line1
 line2"
 ```
 
 ## Trim whitespace
 
 ```bash
-printf "  hello world  \n" | expect --trim "hello world"
+printf "  hello world  \n" | outmatchall --trim "hello world"
 ```
 
 ## Collapse whitespace
 
 ```bash
-printf "hello    world\n\nfoo" | expect --collapse-whitespace "hello world foo"
+printf "hello    world\n\nfoo" | outmatchall --collapse-whitespace "hello world foo"
 ```
 
 ## Ignore case
 
 ```bash
-echo "Hello World" | expect --ignore-case "hello world"
+echo "Hello World" | outmatchall --ignore-case "hello world"
 ```
 
 ## Ignore case short flag
 
 ```bash
-echo "HELLO" | expect -i "hello"
+echo "HELLO" | outmatchall -i "hello"
 ```
 
 ## Contains with ignore case
 
 ```bash
-echo "Hello World" | expect --contains --ignore-case "hello"
+echo "Hello World" | outmatchall --contains --ignore-case "hello"
 ```
 
 ## Combined normalization
@@ -69,5 +69,5 @@ printf '\033[32m  HELLO   WORLD  \033[0m' | \
 Expected is also normalized:
 
 ```bash
-echo "hello world" | expect --collapse-whitespace "hello    world"
+echo "hello world" | outmatchall --collapse-whitespace "hello    world"
 ```

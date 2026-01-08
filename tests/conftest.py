@@ -7,7 +7,7 @@ import sys
 def pytest_configure(config):
     """Enable coverage for subprocesses."""
     # Import the module to ensure it's in coverage
-    import doctest_expect  # noqa: F401
+    import outmatchall  # noqa: F401
 
     # Set up coverage for subprocesses
     if "COVERAGE_PROCESS_START" not in os.environ:
