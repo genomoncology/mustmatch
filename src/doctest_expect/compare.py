@@ -11,13 +11,13 @@ from .json_utils import normalize_json, parse_jsonl, remove_json_paths
 from .output import unified_diff
 
 
-def compare_exact(actual: str, expected: str) -> CompareResult:
+def compare_exact(actual: str, expected: str, context: int = 3) -> CompareResult:
     """Exact string comparison with trailing newline normalization."""
     actual = actual.rstrip("\n")
     expected = expected.rstrip("\n")
     if actual == expected:
         return CompareResult(success=True)
-    diff = unified_diff(actual, expected)
+    diff = unified_diff(actual, expected, context=context)
     return CompareResult(success=False, message=f"Exact match failed.\n\n{diff}")
 
 
@@ -212,7 +212,7 @@ def compare_jsonl_key(
             remove_json_paths(r, ignore_paths) for r in expected_records
         ]
 
-    # Build dicts by key
+    # Build dicts by key, detecting duplicates
     actual_by_key: dict[Any, Any] = {}
     for r in actual_records:
         if not isinstance(r, dict) or key_field not in r:
@@ -220,7 +220,13 @@ def compare_jsonl_key(
                 success=False,
                 message=f"Record missing key field '{key_field}': {json.dumps(r)}",
             )
-        actual_by_key[r[key_field]] = r
+        key_val = r[key_field]
+        if key_val in actual_by_key:
+            return CompareResult(
+                success=False,
+                message=f"Duplicate key '{key_val}' in actual records",
+            )
+        actual_by_key[key_val] = r
 
     expected_by_key: dict[Any, Any] = {}
     for r in expected_records:
@@ -229,7 +235,13 @@ def compare_jsonl_key(
                 success=False,
                 message=f"Expected record missing key '{key_field}': {json.dumps(r)}",
             )
-        expected_by_key[r[key_field]] = r
+        key_val = r[key_field]
+        if key_val in expected_by_key:
+            return CompareResult(
+                success=False,
+                message=f"Duplicate key '{key_val}' in expected records",
+            )
+        expected_by_key[key_val] = r
 
     actual_keys = set(actual_by_key.keys())
     expected_keys = set(expected_by_key.keys())
@@ -309,7 +321,7 @@ def compare(
 
     match config.mode:
         case CompareMode.EXACT:
-            return compare_exact(actual, expected)
+            return compare_exact(actual, expected, context=config.diff_context)
         case CompareMode.CONTAINS:
             return compare_contains(actual, expected)
         case CompareMode.REGEX:

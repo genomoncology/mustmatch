@@ -175,6 +175,15 @@ class TestCompare:
         assert not result.success
         assert "Exact match failed" in result.message
 
+    def test_compare_exact_diff_context(self):
+        # Test that context parameter affects diff output
+        actual = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nCHANGED\nline9"
+        expected = "line1\nline2\nline3\nline4\nline5\nline6\nline7\noriginal\nline9"
+        result_ctx1 = compare_exact(actual, expected, context=1)
+        result_ctx5 = compare_exact(actual, expected, context=5)
+        # With smaller context, fewer surrounding lines shown
+        assert result_ctx1.message.count("line") < result_ctx5.message.count("line")
+
     def test_compare_contains_success(self):
         result = compare_contains("hello world", "world")
         assert result.success
@@ -306,6 +315,18 @@ class TestCompare:
         result = compare_jsonl_key('{"id":1}', '{"id":1}\n{"id":2}', "id")
         assert not result.success
         assert "Missing keys" in result.message
+
+    def test_compare_jsonl_key_duplicate_actual(self):
+        result = compare_jsonl_key('{"id":1}\n{"id":1}', '{"id":1}', "id")
+        assert not result.success
+        assert "Duplicate key" in result.message
+        assert "actual" in result.message.lower()
+
+    def test_compare_jsonl_key_duplicate_expected(self):
+        result = compare_jsonl_key('{"id":1}', '{"id":1}\n{"id":1}', "id")
+        assert not result.success
+        assert "Duplicate key" in result.message
+        assert "expected" in result.message.lower()
 
     def test_compare_jsonl_contains_success(self):
         result = compare_jsonl_contains('{"a":1,"b":2}', '{"a":1}')
