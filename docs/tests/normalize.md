@@ -69,5 +69,5 @@ printf '\033[32m  HELLO   WORLD  \033[0m' | \
 Expected is also normalized:
 
 ```bash
-echo "hello world" | outmatch --collapse-whitespace "hello    world"
+printf "hello world" | outmatch --collapse-whitespace "hello    world"
 ```
