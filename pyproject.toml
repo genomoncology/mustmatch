@@ -64,6 +64,7 @@ select = ["E", "F", "I", "W"]
 [tool.coverage.run]
 source = ["src/outmatch"]
 branch = true
+parallel = true
 omit = ["src/outmatch/__main__.py", "src/outmatch/config.py"]
 
 [tool.coverage.report]

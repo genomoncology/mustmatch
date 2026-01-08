@@ -27,5 +27,8 @@ venv/
 ENV/
 .pytest_cache/
 .coverage
+.coverage.*
+.coveragerc
 htmlcov/
+sitecustomize.py
 .ruff_cache/
