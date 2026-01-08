@@ -376,8 +376,10 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
         tap_output=config.tap_output,
     )
 
-    # Execute blocks sequentially (they may have dependencies)
-    accumulated_env: dict[str, str] = {}
+    # Execute blocks sequentially in isolated subprocesses
+    # Note: Each block runs in a fresh shell, so environment changes
+    # (like `export FOO=bar`) don't persist between blocks.
+    # Put dependent commands in a single block if state sharing is needed.
     for block in blocks:
         if should_skip_block(block, file_config):
             result.blocks.append(BlockResult(
@@ -386,7 +388,7 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
             ))
             continue
 
-        block_result = execute_block(block, file_config, accumulated_env)
+        block_result = execute_block(block, file_config)
         result.blocks.append(block_result)
 
         # Stop on first failure if fail-fast
