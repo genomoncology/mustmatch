@@ -393,5 +393,10 @@ def _run_test_cmd(args: list[str]) -> None:
     raise typer.Exit(exit_code)
 
 
-if __name__ == "__main__":
+def cli() -> None:
+    """CLI entry point."""
     raise SystemExit(main())
+
+
+if __name__ == "__main__":
+    cli()

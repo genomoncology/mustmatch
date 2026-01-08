@@ -16,7 +16,6 @@ from outmatch import (
     CompareResult,
     ExpectConfig,
     NormalizeOptions,
-    cli,
     compare,
     main,
     preprocess,
@@ -26,6 +25,7 @@ from outmatch.cli import (
     _get_expected,
     _parse_replacements,
     app,
+    cli,
     version_callback,
 )
 from outmatch.compare import (

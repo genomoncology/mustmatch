@@ -30,8 +30,3 @@ __all__ = [
     "NormalizeOptions",
     "MarkdownTest",
 ]
-
-
-def cli() -> None:
-    """CLI entry point."""
-    raise SystemExit(main())

@@ -35,7 +35,7 @@ Homepage = "https://github.com/botassembly/outmatch"
 Repository = "https://github.com/botassembly/outmatch"
 
 [project.scripts]
-outmatch = "outmatch:cli"
+outmatch = "outmatch.cli:cli"
 
 [project.entry-points."pytest11"]
 outmatch = "outmatch.pytest_plugin"
