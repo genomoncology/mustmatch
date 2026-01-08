@@ -1,6 +1,6 @@
-# outmatchall
+# outmatch
 
-CLI output assertion tool for documentation testing. Pipe command output to `outmatchall` to verify it matches expected values.
+CLI output assertion tool for documentation testing. Pipe command output to `outmatch` to verify it matches expected values.
 
 Designed for use with [mktestdocs](https://github.com/koaning/mktestdocs) to test CLI examples in documentation.
 
@@ -17,40 +17,40 @@ Designed for use with [mktestdocs](https://github.com/koaning/mktestdocs) to tes
 ## Installation
 
 ```bash
-uv add --group dev outmatchall
+uv add --group dev outmatch
 ```
 
 Or install globally:
 ```bash
-uv tool install outmatchall
-pipx install outmatchall
+uv tool install outmatch
+pipx install outmatch
 ```
 
 ## Quickstart
 
 ```bash
 # Exact match
-echo "hello world" | outmatchall "hello world"
+echo "hello world" | outmatch "hello world"
 
 # Contains substring
-python --version 2>&1 | outmatchall --contains "Python"
+python --version 2>&1 | outmatch --contains "Python"
 
 # Regex for volatile output
-mycli run | outmatchall --regex 'completed in \d+\.\d+s'
+mycli run | outmatch --regex 'completed in \d+\.\d+s'
 
 # JSON semantic comparison (field order independent)
-echo '{"b": 2, "a": 1}' | outmatchall --json '{"a": 1, "b": 2}'
+echo '{"b": 2, "a": 1}' | outmatch --json '{"a": 1, "b": 2}'
 ```
 
 **Important**: Many commands write to stderr (e.g., `python --version` on some systems). Use `2>&1` to capture both streams:
 ```bash
-python --version 2>&1 | outmatchall --contains "Python"
+python --version 2>&1 | outmatch --contains "Python"
 ```
 
-**Pipeline exit codes**: In bash, `cmd | outmatchall` returns `outmatchall`'s exit code, not `cmd`'s. To fail when `cmd` fails:
+**Pipeline exit codes**: In bash, `cmd | outmatch` returns `outmatch`'s exit code, not `cmd`'s. To fail when `cmd` fails:
 ```bash
 set -o pipefail
-mycli run | outmatchall "success"
+mycli run | outmatch "success"
 ```
 
 ## Comparison Modes
@@ -71,7 +71,7 @@ mycli run | outmatchall "success"
 Compares output exactly, normalizing trailing newlines on both sides.
 
 ```bash
-echo "hello world" | outmatchall "hello world"
+echo "hello world" | outmatch "hello world"
 ```
 
 ### Contains
@@ -79,7 +79,7 @@ echo "hello world" | outmatchall "hello world"
 Checks if output contains the expected substring.
 
 ```bash
-python --help | outmatchall --contains "usage:"
+python --help | outmatch --contains "usage:"
 ```
 
 ### Regex
@@ -87,8 +87,8 @@ python --help | outmatchall --contains "usage:"
 Matches output against a regex pattern. Uses Python's `re` with `MULTILINE` and `DOTALL` flags.
 
 ```bash
-mycli build | outmatchall --regex 'built in \d+ms'
-mycli logs | outmatchall --regex 'ERROR:.*connection refused'
+mycli build | outmatch --regex 'built in \d+ms'
+mycli logs | outmatch --regex 'ERROR:.*connection refused'
 ```
 
 ### JSON
@@ -96,7 +96,7 @@ mycli logs | outmatchall --regex 'ERROR:.*connection refused'
 Compares single JSON values semantically. Field order doesn't matter.
 
 ```bash
-echo '{"name": "alice", "age": 30}' | outmatchall --json '{"age": 30, "name": "alice"}'
+echo '{"name": "alice", "age": 30}' | outmatch --json '{"age": 30, "name": "alice"}'
 ```
 
 ### JSONL
@@ -105,7 +105,7 @@ Compares JSON Lines output. Field order within records doesn't matter, but recor
 
 ```bash
 echo '{"id": 1}
-{"id": 2}' | outmatchall --jsonl '{"id": 1}
+{"id": 2}' | outmatch --jsonl '{"id": 1}
 {"id": 2}'
 ```
 
@@ -114,7 +114,7 @@ echo '{"id": 1}
 Order-independent JSONL comparison (multiset semantics).
 
 ```bash
-mycli list | outmatchall --jsonl-set '{"id": 2}
+mycli list | outmatch --jsonl-set '{"id": 2}
 {"id": 1}'
 ```
 
@@ -123,7 +123,7 @@ mycli list | outmatchall --jsonl-set '{"id": 2}
 Match records by a key field, then compare. Useful for stable docs when record order varies.
 
 ```bash
-mycli users | outmatchall --jsonl-key id '{"id": 2, "name": "bob"}
+mycli users | outmatch --jsonl-key id '{"id": 2, "name": "bob"}
 {"id": 1, "name": "alice"}'
 ```
 
@@ -132,7 +132,7 @@ mycli users | outmatchall --jsonl-key id '{"id": 2, "name": "bob"}
 Check that output contains expected records. Partial field matching supported.
 
 ```bash
-mycli users | outmatchall --jsonl-contains '{"name": "alice"}'
+mycli users | outmatch --jsonl-contains '{"name": "alice"}'
 ```
 
 ## Normalization Options
@@ -149,13 +149,13 @@ Use these flags to reduce flaky tests caused by trivial differences.
 
 ```bash
 # Handle colored output
-mycli status | outmatchall --contains "OK" --strip-ansi
+mycli status | outmatch --contains "OK" --strip-ansi
 
 # Handle Windows line endings
-mycli export | outmatchall --normalize-newlines -f expected.txt
+mycli export | outmatch --normalize-newlines -f expected.txt
 
 # Flexible whitespace matching
-mycli format | outmatchall --trim --collapse-whitespace "hello world"
+mycli format | outmatch --trim --collapse-whitespace "hello world"
 ```
 
 ## Pattern Transformation
@@ -167,8 +167,8 @@ For nondeterministic output (timestamps, durations, IDs, temp paths), use patter
 Replace regex patterns before comparison. Repeatable.
 
 ```bash
-mycli run | outmatchall --replace '\d+\.\d+s' '<time>' "completed in <time>"
-mycli build | outmatchall --replace '/tmp/[a-z0-9]+' '<tmpdir>' "output: <tmpdir>/result.txt"
+mycli run | outmatch --replace '\d+\.\d+s' '<time>' "completed in <time>"
+mycli build | outmatch --replace '/tmp/[a-z0-9]+' '<tmpdir>' "output: <tmpdir>/result.txt"
 ```
 
 ### Redact
@@ -176,7 +176,7 @@ mycli build | outmatchall --replace '/tmp/[a-z0-9]+' '<tmpdir>' "output: <tmpdir
 Replace patterns with `<redacted>`. Repeatable.
 
 ```bash
-mycli token | outmatchall --redact '[a-f0-9]{32}' "token: <redacted>"
+mycli token | outmatch --redact '[a-f0-9]{32}' "token: <redacted>"
 ```
 
 ## JSON Options
@@ -187,13 +187,13 @@ Ignore volatile JSON fields during comparison. Uses JSONPath-like syntax.
 
 ```bash
 # Ignore timestamp field
-mycli audit | outmatchall --json --json-ignore '$.timestamp' '{"status": "ok"}'
+mycli audit | outmatch --json --json-ignore '$.timestamp' '{"status": "ok"}'
 
 # Ignore nested field
-mycli user | outmatchall --json --json-ignore '$.metadata.updated_at' '{"name": "alice"}'
+mycli user | outmatch --json --json-ignore '$.metadata.updated_at' '{"name": "alice"}'
 
 # Multiple ignores
-mycli export | outmatchall --jsonl --json-ignore '$.ts' --json-ignore '$.hash' '{"id": 1}'
+mycli export | outmatch --jsonl --json-ignore '$.ts' --json-ignore '$.hash' '{"id": 1}'
 ```
 
 ## Expected from File
@@ -202,10 +202,10 @@ For multi-line expectations, use `-f`/`--expected-file` instead of command subst
 
 ```bash
 # Much cleaner than heredocs
-mycli help | outmatchall -f docs/expected/help.txt
+mycli help | outmatch -f docs/expected/help.txt
 
 # Works with all modes
-mycli export | outmatchall --jsonl -f expected/records.jsonl
+mycli export | outmatch --jsonl -f expected/records.jsonl
 ```
 
 ## Snapshot Updates
@@ -214,7 +214,7 @@ Automatically update expected files when output changes. Useful for maintaining 
 
 ```bash
 # Update expected file if mismatch
-mycli help | outmatchall -f docs/expected/help.txt --update
+mycli help | outmatch -f docs/expected/help.txt --update
 ```
 
 **Safety**: Only works with `-f`. Requires explicit flag to prevent accidental overwrites.
@@ -229,10 +229,10 @@ mycli help | outmatchall -f docs/expected/help.txt --update
 
 ```bash
 # Quiet mode for CI
-mycli run | outmatchall -q "success"
+mycli run | outmatch -q "success"
 
 # Force colors in CI
-mycli run | outmatchall --color always "success"
+mycli run | outmatch --color always "success"
 ```
 
 ## Exit Codes
@@ -247,13 +247,13 @@ mycli run | outmatchall --color always "success"
 
 ### mktestdocs
 
-With mktestdocs, bash blocks only verify exit code 0. Use `outmatchall` to verify output content:
+With mktestdocs, bash blocks only verify exit code 0. Use `outmatch` to verify output content:
 
 ```markdown
 # Example: Check Python version
 
 ```bash
-python --version 2>&1 | outmatchall --contains "Python 3"
+python --version 2>&1 | outmatch --contains "Python 3"
 ```
 ```
 
@@ -272,7 +272,7 @@ set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
 The command might write to stderr. Redirect both streams:
 ```bash
-python --version 2>&1 | outmatchall --contains "Python"
+python --version 2>&1 | outmatch --contains "Python"
 ```
 
 ### "Why did my pipeline pass when the command failed?"
@@ -280,7 +280,7 @@ python --version 2>&1 | outmatchall --contains "Python"
 Use `pipefail`:
 ```bash
 set -o pipefail
-failing_cmd | outmatchall "never reached"  # Now fails correctly
+failing_cmd | outmatch "never reached"  # Now fails correctly
 ```
 
 ### "Why does it fail on CI but not locally?"
@@ -294,9 +294,9 @@ Common causes:
 ### "My output has ANSI colors"
 
 ```bash
-mycli status | outmatchall --strip-ansi --contains "OK"
+mycli status | outmatch --strip-ansi --contains "OK"
 # Or disable colors at source:
-NO_COLOR=1 mycli status | outmatchall --contains "OK"
+NO_COLOR=1 mycli status | outmatch --contains "OK"
 ```
 
 ## Example: Testing a CLI Tool
@@ -306,20 +306,20 @@ NO_COLOR=1 mycli status | outmatchall --contains "OK"
 set -euo pipefail
 
 # Test help output
-mycli --help | outmatchall --contains "Usage: mycli"
+mycli --help | outmatch --contains "Usage: mycli"
 
 # Test version (with stderr redirect)
-mycli --version 2>&1 | outmatchall --regex 'mycli v\d+\.\d+\.\d+'
+mycli --version 2>&1 | outmatch --regex 'mycli v\d+\.\d+\.\d+'
 
 # Test JSON output (ignoring timestamps)
-mycli status --json | outmatchall --json --json-ignore '$.timestamp' '{"healthy": true}'
+mycli status --json | outmatch --json --json-ignore '$.timestamp' '{"healthy": true}'
 
 # Test list output (order may vary)
-mycli list --jsonl | outmatchall --jsonl-set '{"name": "bob"}
+mycli list --jsonl | outmatch --jsonl-set '{"name": "bob"}
 {"name": "alice"}'
 
 # Test volatile output with replacement
-mycli build | outmatchall --replace '\d+ms' '<time>' "Built in <time>"
+mycli build | outmatch --replace '\d+ms' '<time>' "Built in <time>"
 ```
 
 ## Development

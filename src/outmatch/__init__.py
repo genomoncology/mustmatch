@@ -1,7 +1,7 @@
 """
-outmatchall: CLI output assertion tool for documentation testing.
+outmatch: CLI output assertion tool for documentation testing.
 
-Pipe command output to `outmatchall` to verify it matches expected values.
+Pipe command output to `outmatch` to verify it matches expected values.
 Designed for use with mktestdocs to test CLI examples in documentation.
 """
 

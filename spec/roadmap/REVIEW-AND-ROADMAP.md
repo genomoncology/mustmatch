@@ -1,8 +1,8 @@
-# outmatchall Review and Roadmap
+# outmatch Review and Roadmap
 
 **Date**: 2026-01-08
-**Current name**: `outmatchall` (renamed from `doctest-expect`)
-**CLI command**: `outmatchall`
+**Current name**: `outmatch` (renamed from `doctest-expect`)
+**CLI command**: `outmatch`
 
 ---
 
@@ -53,7 +53,7 @@ The tool evolved from a simple 236-line stdin assertion tool to a comprehensive 
 
 1. **Simple cases are still simple**:
    ```bash
-   echo "hello" | outmatchallall "hello"  # Still works
+   echo "hello" | outmatch "hello"  # Still works
    ```
 
 2. **Complexity is opt-in**:
@@ -113,10 +113,10 @@ The refactor added comprehensive examples but docs need:
 
 #### 1.1 Rename: COMPLETED
 
-Package renamed from `doctest-expect` to `outmatchall`:
-- Package name: `outmatchall`
-- CLI command: `outmatchall`
-- Module: `outmatchall`
+Package renamed from `doctest-expect` to `outmatch`:
+- Package name: `outmatch`
+- CLI command: `outmatch`
+- Module: `outmatch`
 - All docs, imports, examples updated
 
 #### 1.2 Error Message Quality Audit
@@ -144,7 +144,7 @@ Review error messages for:
 
 ### Phase 2: Markdown File Testing (High Priority)
 
-**Goal**: Run `outmatchall` directly on markdown files containing bash blocks.
+**Goal**: Run `outmatch` directly on markdown files containing bash blocks.
 
 **Problem**: Currently requires pytest + mktestdocs integration. Users want standalone markdown testing.
 
@@ -152,20 +152,20 @@ Review error messages for:
 
 ```bash
 # Run all bash blocks in a markdown file
-outmatchall test docs/cli.md
+outmatch test docs/cli.md
 
 # With verbosity
-outmatchall test docs/ --quiet      # Just pass/fail count
-outmatchall test docs/              # Show which blocks failed
-outmatchall test docs/ --verbose    # Show full diffs
+outmatch test docs/ --quiet      # Just pass/fail count
+outmatch test docs/              # Show which blocks failed
+outmatch test docs/ --verbose    # Show full diffs
 ```
 
 **Implementation**:
 
-1. Add `outmatchall test [FILES...]` subcommand
+1. Add `outmatch test [FILES...]` subcommand
 2. Parse markdown for bash blocks (reuse mktestdocs logic or write own)
 3. Execute blocks, capture output
-4. Look for `| outmatchall` patterns in blocks
+4. Look for `| outmatch` patterns in blocks
 5. Report results with block line numbers
 
 **Output format**:
@@ -208,16 +208,16 @@ Results: 2 passed, 1 failed, 3 total
 ```python
 # tests/test_docs.py
 import pytest
-from outmatchall.pytest import collect_markdown_tests
+from outmatch.pytest import collect_markdown_tests
 
 @pytest.mark.parametrize("test", collect_markdown_tests("docs/"))
 def test_bash_blocks(test):
-    test.run()  # Executes block, asserts via outmatchall patterns
+    test.run()  # Executes block, asserts via outmatch patterns
 ```
 
 **Implementation**:
 
-1. Create `outmatchall.pytest` module
+1. Create `outmatch.pytest` module
 2. Implement `collect_markdown_tests(path)` collector
 3. Parse markdown, find bash blocks
 4. Create test items with proper pytest integration
@@ -248,7 +248,7 @@ def test_bash_blocks(test):
 
 **Design**:
 
-Make `outmatchall` completely standalone:
+Make `outmatch` completely standalone:
 - No Python test framework required
 - Reads markdown, runs tests, reports results
 - Exit code 0 (all pass) or 1 (any fail)
@@ -257,10 +257,10 @@ Make `outmatchall` completely standalone:
 
 ```bash
 # In Rust project
-outmatchall test README.md
+outmatch test README.md
 
 # In CI
-outmatchall test docs/ || exit 1
+outmatch test docs/ || exit 1
 ```
 
 **Implementation**:
@@ -281,10 +281,10 @@ Enhance Phase 2 to be completely standalone:
 
 ### 1. **Shell Script Testing** (Rejected for now)
 
-**Idea**: Run a shell script with `outmatchall` assertions, report results.
+**Idea**: Run a shell script with `outmatch` assertions, report results.
 
 **Why rejected**:
-- Shell scripts should just use `outmatchall` directly
+- Shell scripts should just use `outmatch` directly
 - `set -e` already handles failures
 - Adding a test runner is scope creep
 - Better done by shell test frameworks (bats, shunit2)
@@ -296,7 +296,7 @@ Enhance Phase 2 to be completely standalone:
 ### 2. **Watch Mode** (Interesting)
 
 ```bash
-outmatchall watch docs/ --rerun-on-change
+outmatch watch docs/ --rerun-on-change
 ```
 
 **Use case**: TDD workflow for documentation
@@ -311,7 +311,7 @@ outmatchall watch docs/ --rerun-on-change
 
 ```bash
 # Record actual output as expected
-mycli run | outmatchall --record mycli.txt
+mycli run | outmatch --record mycli.txt
 ```
 
 **Use case**: Generate expected files from current output
@@ -325,7 +325,7 @@ mycli run | outmatchall --record mycli.txt
 ### 4. **Approval Testing** (Jest-style)
 
 ```bash
-outmatchall test docs/ --update-snapshots
+outmatch test docs/ --update-snapshots
 ```
 
 **Use case**: Bulk update all expected files
@@ -339,7 +339,7 @@ outmatchall test docs/ --update-snapshots
 ### 5. **Interactive Diff** (Git-style)
 
 ```bash
-outmatchall test docs/ --interactive
+outmatch test docs/ --interactive
 # Shows diff, asks: [A]ccept, [R]eject, [S]kip, [Q]uit
 ```
 
@@ -352,7 +352,7 @@ outmatchall test docs/ --interactive
 ### 6. **Coverage Tracking**
 
 ```bash
-outmatchall test docs/ --coverage
+outmatch test docs/ --coverage
 # Reports which CLI commands/flags are tested
 ```
 
@@ -365,7 +365,7 @@ outmatchall test docs/ --coverage
 ### 7. **Fuzz Testing Integration**
 
 ```bash
-outmatchall fuzz mycli --corpus=inputs/ --oracle=outmatchall_checks.sh
+outmatch fuzz mycli --corpus=inputs/ --oracle=outmatch_checks.sh
 ```
 
 **Use case**: Generate test inputs, assert invariants
@@ -377,7 +377,7 @@ outmatchall fuzz mycli --corpus=inputs/ --oracle=outmatchall_checks.sh
 ### 8. **Performance Regression Detection**
 
 ```bash
-outmatchall bench docs/ --compare-to=baseline.json
+outmatch bench docs/ --compare-to=baseline.json
 ```
 
 **Use case**: Track CLI performance over time
@@ -389,7 +389,7 @@ outmatchall bench docs/ --compare-to=baseline.json
 ### 9. **Multi-Language Docs**
 
 ```bash
-outmatchall test docs/ --lang=python,bash,ruby
+outmatch test docs/ --lang=python,bash,ruby
 ```
 
 **Use case**: Test multiple code block types in same file
@@ -401,7 +401,7 @@ outmatchall test docs/ --lang=python,bash,ruby
 ### 10. **HTTP API Testing** (Most Interesting)
 
 ```bash
-curl /api/users | outmatchall --jsonl-key id users.expected.jsonl
+curl /api/users | outmatch --jsonl-key id users.expected.jsonl
 ```
 
 **Use case**: Test REST APIs in documentation
@@ -411,7 +411,7 @@ curl /api/users | outmatchall --jsonl-key id users.expected.jsonl
 **Enhancement**: Add `--http` mode that handles status codes, headers
 
 ```bash
-outmatchall --http GET /api/users --expect-status 200 --expect-json '{"users": [...]}'
+outmatch --http GET /api/users --expect-status 200 --expect-json '{"users": [...]}'
 ```
 
 **Verdict**: POSSIBLE FUTURE (different tool? `httpatch`?)
@@ -421,11 +421,11 @@ outmatchall --http GET /api/users --expect-status 200 --expect-json '{"users": [
 ## Priorities
 
 ### Must Have (Phase 1)
-1. ✅ Rename to `outmatchall` (COMPLETED)
+1. ✅ Rename to `outmatch` (COMPLETED)
 2. ✅ Error message audit
 
 ### Should Have (Phase 2)
-3. 🎯 Markdown file testing (`outmatchall test docs/`)
+3. 🎯 Markdown file testing (`outmatch test docs/`)
 4. 🎯 Verbosity levels (quiet, default, verbose)
 
 ### Nice to Have (Phase 3+)
@@ -446,18 +446,18 @@ outmatchall --http GET /api/users --expect-status 200 --expect-json '{"users": [
 
 After Phase 2 completion:
 
-1. **Usability**: Run `outmatchall test README.md` in any project
+1. **Usability**: Run `outmatch test README.md` in any project
 2. **Discoverability**: Clear error messages guide users
 3. **Adoption**: Used in FindTerms and BotAssembly docs
-4. **Dogfooding**: All `outmatchall` docs tested by `outmatchall`
+4. **Dogfooding**: All `outmatch` docs tested by `outmatch`
 
 ---
 
 ## Next Actions
 
 1. Review and approve this roadmap
-2. ✅ Rename to `outmatchall` (COMPLETED)
+2. ✅ Rename to `outmatch` (COMPLETED)
 3. Error message audit (PR)
 4. Begin Phase 2: Markdown testing (PR)
-5. Update `spec/mktestdocs-standard.md` to reference `outmatchall`
-6. Publish `outmatchall` to PyPI (not git dependency)
+5. Update `spec/mktestdocs-standard.md` to reference `outmatch`
+6. Publish `outmatch` to PyPI (not git dependency)

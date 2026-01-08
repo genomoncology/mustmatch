@@ -1,4 +1,4 @@
-# outmatchall
+# outmatch
 
 **CLI output assertion tool for documentation testing**
 
@@ -18,8 +18,8 @@ uv run ruff check src tests  # Lint
 ## Project Structure
 
 ```
-outmatchall/
-├── src/outmatchall/       # Package source
+outmatch/
+├── src/outmatch/       # Package source
 │   ├── __init__.py        # Main module (all logic here)
 │   └── __main__.py        # python -m support
 ├── tests/                 # Test suite
@@ -37,16 +37,16 @@ outmatchall/
 
 ```bash
 # Exact match
-echo "hello" | outmatchall "hello"
+echo "hello" | outmatch "hello"
 
 # Contains substring
-cmd --help | outmatchall --contains "Usage:"
+cmd --help | outmatch --contains "Usage:"
 
 # JSONL semantic (field order independent)
-echo '{"b": 2, "a": 1}' | outmatchall --jsonl '{"a": 1, "b": 2}'
+echo '{"b": 2, "a": 1}' | outmatch --jsonl '{"a": 1, "b": 2}'
 
 # JSONL contains (subset match)
-cat data.jsonl | outmatchall --jsonl-contains '{"id": 1}'
+cat data.jsonl | outmatch --jsonl-contains '{"id": 1}'
 ```
 
 ### Exit Codes

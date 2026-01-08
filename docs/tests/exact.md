@@ -5,7 +5,7 @@ Tests for exact string matching (default mode).
 ## Basic exact match
 
 ```bash
-echo "hello world" | outmatchall "hello world"
+echo "hello world" | outmatch "hello world"
 ```
 
 ## Trailing newline normalization
@@ -13,7 +13,7 @@ echo "hello world" | outmatchall "hello world"
 Output with trailing newline should match expected without:
 
 ```bash
-printf "hello world\n" | outmatchall "hello world"
+printf "hello world\n" | outmatch "hello world"
 ```
 
 ## Expected with trailing newline
@@ -21,43 +21,43 @@ printf "hello world\n" | outmatchall "hello world"
 Expected with trailing newline should match output without:
 
 ```bash
-printf "hello world" | outmatchall "hello world
+printf "hello world" | outmatch "hello world
 "
 ```
 
 ## Multi-line exact match
 
 ```bash
-printf "line one\nline two" | outmatchall "line one
+printf "line one\nline two" | outmatch "line one
 line two"
 ```
 
 ## Empty string match
 
 ```bash
-printf "" | outmatchall ""
+printf "" | outmatch ""
 ```
 
 ## Unicode content
 
 ```bash
-printf "Hello 世界 🌍" | outmatchall "Hello 世界 🌍"
+printf "Hello 世界 🌍" | outmatch "Hello 世界 🌍"
 ```
 
 ## Special characters
 
 ```bash
-printf '{"key": "value"}' | outmatchall '{"key": "value"}'
+printf '{"key": "value"}' | outmatch '{"key": "value"}'
 ```
 
 ## Mismatch returns exit code 1
 
 ```bash
-echo "hello" | outmatchall "world" || test $? -eq 1
+echo "hello" | outmatch "world" || test $? -eq 1
 ```
 
 ## Large output
 
 ```bash
-python3 -c "print('x' * 1000)" | outmatchall "$(python3 -c "print('x' * 1000)")"
+python3 -c "print('x' * 1000)" | outmatch "$(python3 -c "print('x' * 1000)")"
 ```

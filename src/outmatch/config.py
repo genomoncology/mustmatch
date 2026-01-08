@@ -1,11 +1,11 @@
-"""Configuration dataclasses for outmatchall."""
+"""Configuration dataclasses for outmatch."""
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
 
 class CompareMode(Enum):
-    """Comparison mode for outmatchall."""
+    """Comparison mode for outmatch."""
 
     EXACT = auto()
     CONTAINS = auto()

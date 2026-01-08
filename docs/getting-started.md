@@ -2,16 +2,16 @@
 
 ## Installation
 
-Add outmatchall as a dev dependency:
+Add outmatch as a dev dependency:
 
 ```bash
-uv add --group dev outmatchall
+uv add --group dev outmatch
 ```
 
 Or install from source:
 
 ```bash
-uv pip install -e path/to/outmatchall
+uv pip install -e path/to/outmatch
 ```
 
 ## First Example
@@ -19,30 +19,30 @@ uv pip install -e path/to/outmatchall
 Verify a command produces expected output:
 
 ```bash
-echo "hello world" | outmatchall "hello world"
+echo "hello world" | outmatch "hello world"
 ```
 
 If the output matches, the command exits with code 0. If it doesn't match, it exits with code 1 and prints a diff.
 
 ## Integration with mktestdocs
 
-Use `outmatchall` in your documentation examples:
+Use `outmatch` in your documentation examples:
 
 ````markdown
 ## Check Version
 
 ```bash
-mycommand --version | outmatchall --contains "1.0"
+mycommand --version | outmatch --contains "1.0"
 ```
 
 ## Process Data
 
 ```bash
-echo '{"input": "data"}' | mycommand process | outmatchall --jsonl '{"output": "result"}'
+echo '{"input": "data"}' | mycommand process | outmatch --jsonl '{"output": "result"}'
 ```
 ````
 
-When mktestdocs runs these bash blocks, the `outmatchall` assertions verify the output.
+When mktestdocs runs these bash blocks, the `outmatch` assertions verify the output.
 
 ## Next Steps
 

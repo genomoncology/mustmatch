@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from outmatchall import (
+from outmatch import (
     ColorMode,
     CompareMode,
     CompareResult,
@@ -21,14 +21,14 @@ from outmatchall import (
     main,
     preprocess,
 )
-from outmatchall.cli import (
+from outmatch.cli import (
     _determine_mode,
     _get_expected,
     _parse_replacements,
     app,
     version_callback,
 )
-from outmatchall.compare import (
+from outmatch.compare import (
     _format_set_diff,
     _record_contained,
     compare_contains,
@@ -40,21 +40,21 @@ from outmatchall.compare import (
     compare_jsonl_set,
     compare_regex,
 )
-from outmatchall.json_utils import (
+from outmatch.json_utils import (
     _navigate,
     _remove_single_path,
     normalize_json,
     parse_jsonl,
     remove_json_paths,
 )
-from outmatchall.normalize import (
+from outmatch.normalize import (
     apply_redactions,
     apply_replacements,
     collapse_whitespace,
     normalize_newlines,
     strip_ansi,
 )
-from outmatchall.output import (
+from outmatch.output import (
     colorize_diff,
     format_error,
     should_use_color,
@@ -593,7 +593,7 @@ class TestCli:
     def test_version(self):
         result = self.runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "outmatchall" in result.output
+        assert "outmatch" in result.output
 
     def test_main_function(self):
         # Test the main() function for backwards compatibility
@@ -734,21 +734,21 @@ class TestEdgeCases:
 
     def test_jsonl_key_expected_missing_key(self):
         # Test when expected record is missing the key field
-        from outmatchall.compare import compare_jsonl_key
+        from outmatch.compare import compare_jsonl_key
         result = compare_jsonl_key('{"id":1}', '{"name":"test"}', "id")
         assert not result.success
         assert "missing key" in result.message.lower()
 
     def test_remove_path_intermediate_none(self):
         # Test early return when navigating through None
-        from outmatchall.json_utils import _remove_single_path
+        from outmatch.json_utils import _remove_single_path
         obj = {"a": {"b": 1}}
         _remove_single_path(obj, "$.x.y.z")  # x doesn't exist
         assert obj == {"a": {"b": 1}}  # Unchanged
 
     def test_navigate_deep_none(self):
         # Navigate through missing intermediate path
-        from outmatchall.json_utils import remove_json_paths
+        from outmatch.json_utils import remove_json_paths
         obj = {"a": 1}
         result = remove_json_paths(obj, ("$.b.c.d",))  # b doesn't exist
         assert result == {"a": 1}

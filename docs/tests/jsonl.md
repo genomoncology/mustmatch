@@ -5,33 +5,33 @@ Tests for JSONL comparison modes.
 ## Basic JSONL match
 
 ```bash
-echo '{"id": 1}' | outmatchall --jsonl '{"id": 1}'
+echo '{"id": 1}' | outmatch --jsonl '{"id": 1}'
 ```
 
 ## Field order independence
 
 ```bash
-echo '{"name": "alice", "age": 30}' | outmatchall --jsonl '{"age": 30, "name": "alice"}'
+echo '{"name": "alice", "age": 30}' | outmatch --jsonl '{"age": 30, "name": "alice"}'
 ```
 
 ## Multiple records
 
 ```bash
-printf '{"id": 1}\n{"id": 2}' | outmatchall --jsonl '{"id": 1}
+printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 1}
 {"id": 2}'
 ```
 
 ## Record order matters
 
 ```bash
-printf '{"id": 1}\n{"id": 2}' | outmatchall --jsonl '{"id": 2}
+printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 2}
 {"id": 1}' || test $? -eq 1
 ```
 
 ## Record count mismatch
 
 ```bash
-printf '{"id": 1}\n{"id": 2}' | outmatchall --jsonl '{"id": 1}' 2>&1 | \
+printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 1}' 2>&1 | \
     expect --contains "count mismatch"
 ```
 
@@ -45,19 +45,19 @@ echo '{"user": {"name": "alice", "age": 30}}' | \
 ## Invalid JSON in JSONL
 
 ```bash
-echo "not json" | outmatchall --jsonl '{"id": 1}' 2>&1 | outmatchall --contains "JSON parse error"
+echo "not json" | outmatch --jsonl '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
 ```
 
 ## JSONL with ignore path
 
 ```bash
-echo '{"id": 1, "ts": "x"}' | outmatchall --jsonl --json-ignore '$.ts' '{"id": 1}'
+echo '{"id": 1, "ts": "x"}' | outmatch --jsonl --json-ignore '$.ts' '{"id": 1}'
 ```
 
 ## Blank lines ignored
 
 ```bash
-printf '{"id": 1}\n\n{"id": 2}' | outmatchall --jsonl '{"id": 1}
+printf '{"id": 1}\n\n{"id": 2}' | outmatch --jsonl '{"id": 1}
 {"id": 2}'
 ```
 
@@ -68,28 +68,28 @@ Order-independent comparison with `--jsonl-set`.
 ## Set order independence
 
 ```bash
-printf '{"id": 1}\n{"id": 2}' | outmatchall --jsonl-set '{"id": 2}
+printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-set '{"id": 2}
 {"id": 1}'
 ```
 
 ## Set duplicate handling
 
 ```bash
-printf '{"id": 1}\n{"id": 1}' | outmatchall --jsonl-set '{"id": 1}
+printf '{"id": 1}\n{"id": 1}' | outmatch --jsonl-set '{"id": 1}
 {"id": 1}'
 ```
 
 ## Set missing record
 
 ```bash
-echo '{"id": 1}' | outmatchall --jsonl-set '{"id": 1}
-{"id": 2}' 2>&1 | outmatchall --contains "Missing"
+echo '{"id": 1}' | outmatch --jsonl-set '{"id": 1}
+{"id": 2}' 2>&1 | outmatch --contains "Missing"
 ```
 
 ## Set extra record
 
 ```bash
-printf '{"id": 1}\n{"id": 2}' | outmatchall --jsonl-set '{"id": 1}' 2>&1 | outmatchall --contains "Extra"
+printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-set '{"id": 1}' 2>&1 | outmatch --contains "Extra"
 ```
 
 # JSONL Key Mode
@@ -107,7 +107,7 @@ printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
 ## Missing key field
 
 ```bash
-echo '{"name": "alice"}' | outmatchall --jsonl-key id '{"id": 1}' 2>&1 | \
+echo '{"name": "alice"}' | outmatch --jsonl-key id '{"id": 1}' 2>&1 | \
     expect --contains "missing key field"
 ```
 
@@ -133,19 +133,19 @@ printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
 ## Multiple expected records
 
 ```bash
-printf '{"id": 1}\n{"id": 2}\n{"id": 3}' | outmatchall --jsonl-contains '{"id": 1}
+printf '{"id": 1}\n{"id": 2}\n{"id": 3}' | outmatch --jsonl-contains '{"id": 1}
 {"id": 3}'
 ```
 
 ## Partial field match
 
 ```bash
-echo '{"id": 1, "name": "alice", "age": 30}' | outmatchall --jsonl-contains '{"name": "alice"}'
+echo '{"id": 1, "name": "alice", "age": 30}' | outmatch --jsonl-contains '{"name": "alice"}'
 ```
 
 ## Missing record fails
 
 ```bash
-printf '{"id": 1}\n{"id": 2}' | outmatchall --jsonl-contains '{"id": 999}' 2>&1 | \
+printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-contains '{"id": 999}' 2>&1 | \
     expect --contains "Missing"
 ```
