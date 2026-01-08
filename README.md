@@ -322,6 +322,73 @@ mycli list --jsonl | outmatch --jsonl-set '{"name": "bob"}
 mycli build | outmatch --replace '\d+ms' '<time>' "Built in <time>"
 ```
 
+## Standalone Markdown Testing
+
+The `outmatch test` command runs bash code blocks in markdown files directly, without requiring pytest or mktestdocs.
+
+```bash
+# Test all markdown files in current directory
+outmatch test
+
+# Test specific file or directory
+outmatch test docs/cli.md
+outmatch test docs/
+
+# Verbose output
+outmatch test -v docs/
+
+# Generate JUnit XML report
+outmatch test --junit-xml results.xml docs/
+```
+
+### Options
+
+| Flag | Effect |
+|------|--------|
+| `-q`, `--quiet` | Only show pass/fail counts |
+| `-v`, `--verbose` | Show full output for failures |
+| `--fail-fast` | Stop on first failure |
+| `--parallel N` | Max concurrent files (default: 4) |
+| `--timeout N` | Per-block timeout in seconds (default: 30) |
+| `--include PATTERN` | Only run blocks matching pattern |
+| `--exclude PATTERN` | Skip blocks matching pattern |
+| `--line N` | Only run block at line N |
+| `--junit-xml PATH` | Write JUnit XML report |
+| `--json PATH` | Write JSON report |
+| `--tap` | Output in TAP format |
+| `--env KEY=VALUE` | Set environment variable |
+| `--cwd PATH` | Working directory for blocks |
+
+### Metadata Directives
+
+Control block behavior with HTML comments:
+
+```markdown
+<!-- outmatch: skip -->
+```bash
+# This block will be skipped
+echo "skipped"
+```
+
+<!-- outmatch: timeout=60 -->
+```bash
+# This block has a 60 second timeout
+long_running_command
+```
+```
+
+### Example Output
+
+```
+Running tests in docs/cli.md...
+
+  ✓ Block (line 10): Installation
+  ✓ Block (line 25): Basic Usage
+  ✗ Block (line 40): JSON Example
+
+Results: 2 passed, 1 failed, 3 total
+```
+
 ## Development
 
 ```bash
