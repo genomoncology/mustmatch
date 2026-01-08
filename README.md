@@ -1,427 +1,339 @@
 # outmatch
 
-CLI output assertion tool for documentation testing. Pipe command output to `outmatch` to verify it matches expected values.
+CLI output assertion tool for documentation testing. Verify command output matches expectations.
 
-Designed for use with [mktestdocs](https://github.com/koaning/mktestdocs) to test CLI examples in documentation.
+## Overview
 
-## Key Features
+| Usage | Description |
+|-------|-------------|
+| `cmd \| outmatch "expected"` | Pipe output to verify it matches |
+| `pytest docs/` | Auto-run bash blocks in markdown via pytest plugin |
+| `outmatch test docs/` | Standalone markdown test runner |
 
-- **Multiple comparison modes**: exact, contains, regex, JSON, JSONL
-- **Normalization options**: handle ANSI colors, whitespace, case sensitivity
-- **Pattern transformation**: replace/redact volatile content (timestamps, IDs)
-- **JSON path ignore**: skip volatile fields in JSON comparisons
-- **Expected from file**: cleaner multi-line expectations
-- **Snapshot updates**: auto-update expected files on mismatch
-- **Colored diff output**: actionable failure messages
+## Capabilities
+
+| Feature | Flags |
+|---------|-------|
+| **Comparison modes** | `--contains`, `--regex`, `--json`, `--jsonl`, `--jsonl-set`, `--jsonl-key`, `--jsonl-contains` |
+| **Normalization** | `--strip-ansi`, `--trim`, `--collapse-whitespace`, `--normalize-newlines`, `-i` |
+| **Transformation** | `--replace 'REGEX=>REPL'`, `--redact 'REGEX'` |
+| **JSON options** | `--json-ignore '$.path'` |
+| **File options** | `-f FILE`, `--update` |
+| **Output** | `-q`, `--color`, `--diff-context` |
 
 ## Installation
 
 ```bash
-uv add --group dev outmatch
+uv add outmatch              # Add to project
+uv tool install outmatch     # Install globally
+pip install outmatch         # Or with pip
 ```
 
-Or install globally:
-```bash
-uv tool install outmatch
-pipx install outmatch
-```
-
-## Quickstart
+## Quick Examples
 
 ```bash
 # Exact match
-echo "hello world" | outmatch "hello world"
+echo "hello" | outmatch "hello"
 
 # Contains substring
 python --version 2>&1 | outmatch --contains "Python"
 
-# Regex for volatile output
-mycli run | outmatch --regex 'completed in \d+\.\d+s'
+# Regex pattern
+date | outmatch --regex '\d{4}'
 
-# JSON semantic comparison (field order independent)
-echo '{"b": 2, "a": 1}' | outmatch --json '{"a": 1, "b": 2}'
+# JSON (field order independent)
+echo '{"b":2,"a":1}' | outmatch --json '{"a":1,"b":2}'
+
+# Replace volatile content
+echo "took 1.5s" | outmatch --replace '\d+\.\d+s=>TIME' "took TIME"
 ```
 
-**Important**: Many commands write to stderr (e.g., `python --version` on some systems). Use `2>&1` to capture both streams:
+---
+
+## Pytest Plugin
+
+The pytest plugin automatically discovers and runs bash blocks in markdown files.
+
+### Setup
+
+Install outmatch in your project - the plugin registers automatically:
+
 ```bash
-python --version 2>&1 | outmatch --contains "Python"
+uv add --dev outmatch
 ```
 
-**Pipeline exit codes**: In bash, `cmd | outmatch` returns `outmatch`'s exit code, not `cmd`'s. To fail when `cmd` fails:
-```bash
-set -o pipefail
-mycli run | outmatch "success"
+Configure pytest to find your docs:
+
+```toml
+# pyproject.toml
+[tool.pytest.ini_options]
+testpaths = ["tests", "docs"]
 ```
+
+### Usage
+
+```bash
+# Run all tests including markdown
+pytest
+
+# Run only markdown tests
+pytest docs/
+
+# Run specific markdown file
+pytest docs/usage.md
+
+# See what tests are collected
+pytest docs/ --collect-only
+```
+
+### How It Works
+
+Every ` ```bash ` block becomes a test:
+
+```markdown
+# My Documentation
+
+## Installation
+
+` ```bash
+pip install mypackage
+` ```
+
+## Usage
+
+` ```bash
+mypackage --version | outmatch --contains "1.0"
+` ```
+```
+
+Running `pytest docs/` executes each bash block. Test names come from the preceding heading.
+
+---
 
 ## Comparison Modes
 
-| Flag | Behavior |
-|------|----------|
-| (default) | Exact string match (trailing newlines normalized) |
-| `--contains` | Substring match |
-| `--regex` | Regex pattern match (multiline, dotall) |
-| `--json` | Single JSON value semantic comparison |
-| `--jsonl` | JSONL semantic comparison (record order matters) |
-| `--jsonl-set` | JSONL as unordered multiset |
-| `--jsonl-key FIELD` | JSONL matched by key field |
-| `--jsonl-contains` | JSONL subset match (partial fields OK) |
+| Mode | Flag | Behavior |
+|------|------|----------|
+| Exact | (default) | Exact string match (trailing newlines normalized) |
+| Contains | `--contains` | Substring match |
+| Regex | `--regex` | Regex pattern match |
+| JSON | `--json` | Semantic JSON comparison |
+| JSONL | `--jsonl` | JSON Lines (order matters) |
+| JSONL Set | `--jsonl-set` | JSON Lines (order independent) |
+| JSONL Key | `--jsonl-key F` | Match by field F, then compare |
+| JSONL Contains | `--jsonl-contains` | Subset match with partial fields |
 
-### Exact Match (default)
-
-Compares output exactly, normalizing trailing newlines on both sides.
+### Examples
 
 ```bash
+# Exact (default)
 echo "hello world" | outmatch "hello world"
-```
 
-### Contains
-
-Checks if output contains the expected substring.
-
-```bash
+# Contains
 python --help | outmatch --contains "usage:"
-```
 
-### Regex
-
-Matches output against a regex pattern. Uses Python's `re` with `MULTILINE` and `DOTALL` flags.
-
-```bash
+# Regex
 mycli build | outmatch --regex 'built in \d+ms'
-mycli logs | outmatch --regex 'ERROR:.*connection refused'
+
+# JSON - field order doesn't matter
+echo '{"name":"alice","age":30}' | outmatch --json '{"age":30,"name":"alice"}'
+
+# JSONL - record order matters
+printf '{"id":1}\n{"id":2}' | outmatch --jsonl '{"id":1}
+{"id":2}'
+
+# JSONL Set - record order doesn't matter
+mycli list | outmatch --jsonl-set '{"id":2}
+{"id":1}'
+
+# JSONL Key - match by id field
+mycli users | outmatch --jsonl-key id '{"id":2,"name":"bob"}
+{"id":1,"name":"alice"}'
+
+# JSONL Contains - partial matching
+mycli users | outmatch --jsonl-contains '{"name":"alice"}'
 ```
 
-### JSON
+---
 
-Compares single JSON values semantically. Field order doesn't matter.
+## Normalization
 
-```bash
-echo '{"name": "alice", "age": 30}' | outmatch --json '{"age": 30, "name": "alice"}'
-```
-
-### JSONL
-
-Compares JSON Lines output. Field order within records doesn't matter, but record order does.
-
-```bash
-echo '{"id": 1}
-{"id": 2}' | outmatch --jsonl '{"id": 1}
-{"id": 2}'
-```
-
-### JSONL Set
-
-Order-independent JSONL comparison (multiset semantics).
-
-```bash
-mycli list | outmatch --jsonl-set '{"id": 2}
-{"id": 1}'
-```
-
-### JSONL Key
-
-Match records by a key field, then compare. Useful for stable docs when record order varies.
-
-```bash
-mycli users | outmatch --jsonl-key id '{"id": 2, "name": "bob"}
-{"id": 1, "name": "alice"}'
-```
-
-### JSONL Contains
-
-Check that output contains expected records. Partial field matching supported.
-
-```bash
-mycli users | outmatch --jsonl-contains '{"name": "alice"}'
-```
-
-## Normalization Options
-
-Use these flags to reduce flaky tests caused by trivial differences.
+Handle trivial differences that cause flaky tests.
 
 | Flag | Effect |
 |------|--------|
-| `--strip-ansi` | Remove ANSI escape sequences (colors) |
+| `--strip-ansi` | Remove ANSI color codes |
 | `--normalize-newlines` | Convert CRLF to LF |
 | `--trim` | Strip leading/trailing whitespace |
-| `--collapse-whitespace` | Collapse whitespace runs to single spaces |
-| `--ignore-case`, `-i` | Case-insensitive comparison |
+| `--collapse-whitespace` | Collapse whitespace runs |
+| `-i`, `--ignore-case` | Case-insensitive comparison |
 
 ```bash
 # Handle colored output
-mycli status | outmatch --contains "OK" --strip-ansi
+mycli status | outmatch --strip-ansi --contains "OK"
 
-# Handle Windows line endings
-mycli export | outmatch --normalize-newlines -f expected.txt
-
-# Flexible whitespace matching
+# Flexible whitespace
 mycli format | outmatch --trim --collapse-whitespace "hello world"
 ```
 
+---
+
 ## Pattern Transformation
 
-For nondeterministic output (timestamps, durations, IDs, temp paths), use pattern replacement.
+Replace volatile content (timestamps, IDs, paths) before comparison.
 
 ### Replace
 
-Replace regex patterns before comparison. Repeatable.
+Syntax: `--replace 'REGEX=>REPLACEMENT'`
 
 ```bash
-mycli run | outmatch --replace '\d+\.\d+s' '<time>' "completed in <time>"
-mycli build | outmatch --replace '/tmp/[a-z0-9]+' '<tmpdir>' "output: <tmpdir>/result.txt"
+# Replace duration
+echo "took 1.5s" | outmatch --replace '\d+\.\d+s=><time>' "took <time>"
+
+# Replace UUID
+echo "id: 550e8400-e29b-41d4-a716-446655440000" | \
+    outmatch --replace '[0-9a-f-]{36}=><uuid>' "id: <uuid>"
+
+# Multiple replacements
+echo "user alice, id 123" | \
+    outmatch --replace '\d+=><id>' --replace 'alice=><user>' "user <user>, id <id>"
+
+# Replace with empty string
+echo "hello123world" | outmatch --replace '\d+=>' "helloworld"
 ```
 
 ### Redact
 
-Replace patterns with `<redacted>`. Repeatable.
+Replace patterns with `<redacted>`:
 
 ```bash
-mycli token | outmatch --redact '[a-f0-9]{32}' "token: <redacted>"
+echo "token: abc123xyz" | outmatch --redact 'abc\w+xyz' "token: <redacted>"
 ```
+
+---
 
 ## JSON Options
 
 ### Ignore Paths
 
-Ignore volatile JSON fields during comparison. Uses JSONPath-like syntax.
+Skip volatile JSON fields during comparison:
 
 ```bash
-# Ignore timestamp field
-mycli audit | outmatch --json --json-ignore '$.timestamp' '{"status": "ok"}'
+# Ignore timestamp
+mycli status | outmatch --json --json-ignore '$.timestamp' '{"status":"ok"}'
 
 # Ignore nested field
-mycli user | outmatch --json --json-ignore '$.metadata.updated_at' '{"name": "alice"}'
+mycli user | outmatch --json --json-ignore '$.meta.updated_at' '{"name":"alice"}'
 
 # Multiple ignores
-mycli export | outmatch --jsonl --json-ignore '$.ts' --json-ignore '$.hash' '{"id": 1}'
+mycli export | outmatch --jsonl --json-ignore '$.ts' --json-ignore '$.hash' '{"id":1}'
 ```
 
-## Expected from File
+---
 
-For multi-line expectations, use `-f`/`--expected-file` instead of command substitution.
+## File Options
+
+### Expected from File
 
 ```bash
-# Much cleaner than heredocs
-mycli help | outmatch -f docs/expected/help.txt
-
-# Works with all modes
+mycli help | outmatch -f expected/help.txt
 mycli export | outmatch --jsonl -f expected/records.jsonl
 ```
 
-## Snapshot Updates
+### Snapshot Updates
 
-Automatically update expected files when output changes. Useful for maintaining documentation.
-
-```bash
-# Update expected file if mismatch
-mycli help | outmatch -f docs/expected/help.txt --update
-```
-
-**Safety**: Only works with `-f`. Requires explicit flag to prevent accidental overwrites.
-
-## Output Options
-
-| Flag | Effect |
-|------|--------|
-| `-q`, `--quiet` | Suppress diff output on failure |
-| `--color auto\|always\|never` | Colorize output (default: auto) |
-| `--diff-context N` | Lines of context in diff (default: 3) |
+Update expected file when output changes:
 
 ```bash
-# Quiet mode for CI
-mycli run | outmatch -q "success"
-
-# Force colors in CI
-mycli run | outmatch --color always "success"
+mycli help | outmatch -f expected/help.txt --update
 ```
 
-## Exit Codes
+---
 
-| Code | Meaning |
-|------|---------|
-| `0` | Match |
-| `1` | Mismatch (prints diff to stderr) |
-| `2` | Invalid arguments or file error |
+## Standalone Test Runner
 
-## Using with Documentation Tools
-
-### mktestdocs
-
-With mktestdocs, bash blocks only verify exit code 0. Use `outmatch` to verify output content:
-
-```markdown
-# Example: Check Python version
+Run markdown tests without pytest:
 
 ```bash
-python --version 2>&1 | outmatch --contains "Python 3"
-```
-```
-
-### Recommended Shell Settings
-
-For reliable documentation tests:
-
-```bash
-#!/bin/bash
-set -euo pipefail  # Exit on error, undefined vars, pipe failures
-```
-
-## Troubleshooting
-
-### "Why is output empty?"
-
-The command might write to stderr. Redirect both streams:
-```bash
-python --version 2>&1 | outmatch --contains "Python"
-```
-
-### "Why did my pipeline pass when the command failed?"
-
-Use `pipefail`:
-```bash
-set -o pipefail
-failing_cmd | outmatch "never reached"  # Now fails correctly
-```
-
-### "Why does it fail on CI but not locally?"
-
-Common causes:
-- **Colors**: CI might enable/disable colors differently. Use `--strip-ansi`.
-- **Locale**: Different systems might have different sorting. Be specific in expectations.
-- **Newlines**: Windows vs Unix. Use `--normalize-newlines`.
-- **Timestamps**: Use `--replace` or `--json-ignore`.
-
-### "My output has ANSI colors"
-
-```bash
-mycli status | outmatch --strip-ansi --contains "OK"
-# Or disable colors at source:
-NO_COLOR=1 mycli status | outmatch --contains "OK"
-```
-
-## Example: Testing a CLI Tool
-
-```bash
-#!/bin/bash
-set -euo pipefail
-
-# Test help output
-mycli --help | outmatch --contains "Usage: mycli"
-
-# Test version (with stderr redirect)
-mycli --version 2>&1 | outmatch --regex 'mycli v\d+\.\d+\.\d+'
-
-# Test JSON output (ignoring timestamps)
-mycli status --json | outmatch --json --json-ignore '$.timestamp' '{"healthy": true}'
-
-# Test list output (order may vary)
-mycli list --jsonl | outmatch --jsonl-set '{"name": "bob"}
-{"name": "alice"}'
-
-# Test volatile output with replacement
-mycli build | outmatch --replace '\d+ms' '<time>' "Built in <time>"
-```
-
-## Standalone Markdown Testing
-
-The `outmatch test` command runs bash code blocks in markdown files directly, without requiring pytest or mktestdocs.
-
-```bash
-# Test all markdown files in current directory
-outmatch test
-
-# Test specific file or directory
-outmatch test docs/cli.md
-outmatch test docs/
-
-# Verbose output
-outmatch test -v docs/
-
-# Generate JUnit XML report
-outmatch test --junit-xml results.xml docs/
+outmatch test docs/           # Test directory
+outmatch test docs/usage.md   # Test file
+outmatch test -v docs/        # Verbose
+outmatch test --fail-fast     # Stop on first failure
 ```
 
 ### Options
 
 | Flag | Effect |
 |------|--------|
-| `-q`, `--quiet` | Only show pass/fail counts |
-| `-v`, `--verbose` | Show full output for failures |
+| `-q` | Quiet - only counts |
+| `-v` | Verbose - full output |
 | `--fail-fast` | Stop on first failure |
-| `--parallel N` | Max concurrent files (default: 4) |
-| `--timeout N` | Per-block timeout in seconds (default: 30) |
-| `--include PATTERN` | Only run blocks matching pattern |
-| `--exclude PATTERN` | Skip blocks matching pattern |
-| `--line N` | Only run block at line N |
-| `--junit-xml PATH` | Write JUnit XML report |
-| `--json PATH` | Write JSON report |
-| `--tap` | Output in TAP format |
-| `--env KEY=VALUE` | Set environment variable |
-| `--cwd PATH` | Working directory for blocks |
+| `--parallel N` | Concurrent files (default: 4) |
+| `--timeout N` | Per-block timeout (default: 30s) |
+| `--junit-xml PATH` | JUnit XML report |
+| `--json PATH` | JSON report |
+| `--tap` | TAP format output |
 
-### Metadata Directives
+### Block Directives
 
-Control block behavior with HTML comments:
+Control blocks with HTML comments:
 
 ```markdown
 <!-- outmatch: skip -->
-```bash
-# This block will be skipped
-echo "skipped"
-```
-
-<!-- outmatch: skip-if=CI -->
-```bash
-# This block is skipped when CI environment variable is set
-interactive_command
-```
+` ```bash
+echo "this block is skipped"
+` ```
 
 <!-- outmatch: timeout=60 -->
-```bash
-# This block has a 60 second timeout
+` ```bash
 long_running_command
+` ```
 ```
 
-<!-- outmatch: env=DEBUG=1,VERBOSE=true -->
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Match |
+| `1` | Mismatch |
+| `2` | Invalid arguments |
+
+---
+
+## Tips
+
+### Capture stderr
+
+Many commands write to stderr:
+
 ```bash
-# This block runs with custom environment variables
-echo $DEBUG $VERBOSE
-```
+python --version 2>&1 | outmatch --contains "Python"
 ```
 
-| Directive | Effect |
-|-----------|--------|
-| `skip` | Always skip this block |
-| `skip-if=VAR` | Skip if environment variable VAR is set |
-| `timeout=N` | Override timeout to N seconds |
-| `env=K=V,...` | Set environment variables for block |
+### Handle pipe failures
 
-### Example Output
-
+```bash
+set -o pipefail
+failing_cmd | outmatch "never reached"  # Now fails correctly
 ```
-Running tests in docs/cli.md...
 
-  ✓ Block (line 10): Installation
-  ✓ Block (line 25): Basic Usage
-  ✗ Block (line 40): JSON Example
+### CI considerations
 
-Results: 2 passed, 1 failed, 3 total
-```
+- **Colors**: Use `--strip-ansi` or `NO_COLOR=1`
+- **Newlines**: Use `--normalize-newlines` for cross-platform
+- **Timestamps**: Use `--replace` or `--json-ignore`
+
+---
 
 ## Development
 
 ```bash
-# Install dev dependencies
-uv sync --extra dev
-
-# Run tests
-uv run pytest
-
-# Run tests with coverage
-uv run pytest --cov
-
-# Lint
-uv run ruff check src tests
+uv sync --extra dev       # Install dependencies
+uv run pytest             # Run tests (includes markdown docs)
+uv run pytest --cov       # With coverage
+uv run ruff check src     # Lint
 ```
 
 ## License

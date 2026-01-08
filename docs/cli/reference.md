@@ -114,12 +114,12 @@ mycli status | outmatch --strip-ansi --collapse-whitespace "status: OK"
 
 ## Pattern Transformation
 
-### Replace (`--replace REGEX REPL`)
+### Replace (`--replace 'REGEX=>REPL'`)
 
 Replace patterns before comparison (repeatable):
 
 ```bash
-mycli run | outmatch --replace '\d+ms' '<time>' "completed in <time>"
+mycli run | outmatch --replace '\d+ms=><time>' "completed in <time>"
 ```
 
 ### Redact (`--redact REGEX`)
@@ -185,7 +185,7 @@ mycli help | outmatch -f expected/help.txt --update
 | `--trim` | Strip leading/trailing whitespace |
 | `--collapse-whitespace` | Collapse whitespace runs |
 | `--ignore-case`, `-i` | Case-insensitive |
-| `--replace REGEX REPL` | Replace pattern (repeatable) |
+| `--replace 'REGEX=>REPL'` | Replace pattern (repeatable) |
 | `--redact REGEX` | Redact pattern (repeatable) |
 | `--json-ignore PATH` | Ignore JSON path (repeatable) |
 | `-q`, `--quiet` | Suppress error output |
@@ -252,7 +252,7 @@ echo '{"id": 1}
 
 4. **Use `--replace` for volatile content**:
    ```bash
-   mycli build | outmatch --replace '\d+ms' '<time>' "Built in <time>"
+   mycli build | outmatch --replace '\d+ms=><time>' "Built in <time>"
    ```
 
 5. **Use `--json-ignore` for timestamps**:
