@@ -18,7 +18,7 @@ echo '{"name": "alice", "age": 30}' | outmatch --json '{"age": 30, "name": "alic
 
 ```bash
 echo '{"user": {"name": "alice", "age": 30}}' | \
-    expect --json '{"user": {"age": 30, "name": "alice"}}'
+    outmatch --json '{"user": {"age": 30, "name": "alice"}}'
 ```
 
 ## Arrays
@@ -77,12 +77,12 @@ echo '{"id": 1, "ts": "2024-01-01"}' | outmatch --json --json-ignore '$.ts' '{"i
 
 ```bash
 echo '{"id": 1, "ts": "x", "hash": "y"}' | \
-    expect --json --json-ignore '$.ts' --json-ignore '$.hash' '{"id": 1}'
+    outmatch --json --json-ignore '$.ts' --json-ignore '$.hash' '{"id": 1}'
 ```
 
 ## Nested ignore path
 
 ```bash
 echo '{"user": {"name": "alice", "created": "2024-01-01"}}' | \
-    expect --json --json-ignore '$.user.created' '{"user": {"name": "alice"}}'
+    outmatch --json --json-ignore '$.user.created' '{"user": {"name": "alice"}}'
 ```

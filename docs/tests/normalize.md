@@ -61,7 +61,7 @@ Multiple flags work together:
 
 ```bash
 printf '\033[32m  HELLO   WORLD  \033[0m' | \
-    expect --strip-ansi --trim --collapse-whitespace --ignore-case "hello world"
+    outmatch --strip-ansi --trim --collapse-whitespace --ignore-case "hello world"
 ```
 
 ## Normalization applies to both sides

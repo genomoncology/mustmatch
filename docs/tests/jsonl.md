@@ -32,14 +32,14 @@ printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 2}
 
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 1}' 2>&1 | \
-    expect --contains "count mismatch"
+    outmatch --contains "count mismatch"
 ```
 
 ## Nested objects in JSONL
 
 ```bash
 echo '{"user": {"name": "alice", "age": 30}}' | \
-    expect --jsonl '{"user": {"age": 30, "name": "alice"}}'
+    outmatch --jsonl '{"user": {"age": 30, "name": "alice"}}'
 ```
 
 ## Invalid JSON in JSONL
@@ -100,7 +100,7 @@ Match by key field with `--jsonl-key`.
 
 ```bash
 printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
-    expect --jsonl-key id '{"id": 2, "name": "bob"}
+    outmatch --jsonl-key id '{"id": 2, "name": "bob"}
 {"id": 1, "name": "alice"}'
 ```
 
@@ -108,15 +108,15 @@ printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
 
 ```bash
 echo '{"name": "alice"}' | outmatch --jsonl-key id '{"id": 1}' 2>&1 | \
-    expect --contains "missing key field"
+    outmatch --contains "missing key field"
 ```
 
 ## Key value mismatch
 
 ```bash
 echo '{"id": 1, "name": "alice"}' | \
-    expect --jsonl-key id '{"id": 1, "name": "bob"}' 2>&1 | \
-    expect --contains "Mismatch"
+    outmatch --jsonl-key id '{"id": 1, "name": "bob"}' 2>&1 | \
+    outmatch --contains "Mismatch"
 ```
 
 # JSONL Contains Mode
@@ -127,7 +127,7 @@ Subset matching with `--jsonl-contains`.
 
 ```bash
 printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
-    expect --jsonl-contains '{"id": 1}'
+    outmatch --jsonl-contains '{"id": 1}'
 ```
 
 ## Multiple expected records
@@ -147,5 +147,5 @@ echo '{"id": 1, "name": "alice", "age": 30}' | outmatch --jsonl-contains '{"name
 
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-contains '{"id": 999}' 2>&1 | \
-    expect --contains "Missing"
+    outmatch --contains "Missing"
 ```
