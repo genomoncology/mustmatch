@@ -521,7 +521,7 @@ class TestCli:
 
     def test_replace(self):
         result = self.runner.invoke(
-            app, ["--replace", r"\d+", "--replace", "N", "xNy"], input="x123y\n"
+            app, ["--replace", r"\d+=>N", "xNy"], input="x123y\n"
         )
         assert result.exit_code == 0
 
@@ -609,16 +609,19 @@ class TestCli:
 
     def test_cli_entry_point(self):
         # Test cli() raises SystemExit
+        import sys
+        from io import StringIO
+        old_stdin = sys.stdin
+        old_argv = sys.argv
         try:
-            import sys
-            from io import StringIO
-            old_stdin = sys.stdin
             sys.stdin = StringIO("hello\n")
+            sys.argv = ["outmatch", "hello"]
             cli()
         except SystemExit:
             pass
         finally:
             sys.stdin = old_stdin
+            sys.argv = old_argv
 
 
 # Helper function tests
@@ -659,14 +662,14 @@ class TestHelperFunctions:
         assert _parse_replacements([]) == ()
 
     def test_parse_replacements_pairs(self):
-        result = _parse_replacements(["a", "b", "c", "d"])
+        result = _parse_replacements(["a=>b", "c=>d"])
         assert result == (("a", "b"), ("c", "d"))
 
-    def test_parse_replacements_odd(self):
-        # This should raise typer.Exit
+    def test_parse_replacements_invalid(self):
+        # Missing => separator should raise typer.Exit
         import typer
         with pytest.raises(typer.Exit):
-            _parse_replacements(["a", "b", "c"])
+            _parse_replacements(["a", "b"])
 
     def test_get_expected_arg(self):
         result = _get_expected("hello", None, False)
@@ -706,16 +709,15 @@ class TestHelperFunctions:
 class TestEdgeCases:
     runner = CliRunner()
 
-    def test_main_exception_handler(self):
-        # Test the generic exception handler in main()
+    def test_main_invalid_color_raises(self):
+        # Invalid color mode now raises instead of catching all exceptions
         import sys
         from io import StringIO
         old_stdin = sys.stdin
         sys.stdin = StringIO("test\n")
         try:
-            # Invalid color mode triggers exception
-            result = main(["--color", "invalid", "test"])
-            assert result == 2
+            with pytest.raises(ValueError):
+                main(["--color", "invalid", "test"])
         finally:
             sys.stdin = old_stdin
 
