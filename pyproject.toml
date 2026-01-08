@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doctest-expect"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI output assertion tool for documentation testing"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,9 @@ classifiers = [
     "Topic :: Software Development :: Testing",
     "Topic :: Documentation",
 ]
+dependencies = [
+    "typer>=0.9.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/botassembly/doctest-expect"
@@ -39,17 +42,18 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.1.0",
+    "mktestdocs>=0.2.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "docs"]
 pythonpath = ["src"]
 
 [tool.ruff]
-line-length = 100
+line-length = 88
 target-version = "py310"
 
 [tool.ruff.lint]
@@ -58,6 +62,7 @@ select = ["E", "F", "I", "W"]
 [tool.coverage.run]
 source = ["src/doctest_expect"]
 branch = true
+omit = ["src/doctest_expect/__main__.py"]
 
 [tool.coverage.report]
 exclude_lines = [
