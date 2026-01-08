@@ -15,6 +15,7 @@ from .config import (
     NormalizeOptions,
 )
 from .normalize import preprocess
+from .pytest import MarkdownTest
 from .version import __version__
 
 __all__ = [
@@ -27,9 +28,5 @@ __all__ = [
     "ColorMode",
     "ExpectConfig",
     "NormalizeOptions",
+    "MarkdownTest",
 ]
-
-
-def cli() -> None:
-    """CLI entry point."""
-    raise SystemExit(main())
