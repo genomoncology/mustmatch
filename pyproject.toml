@@ -37,6 +37,9 @@ Repository = "https://github.com/botassembly/outmatch"
 [project.scripts]
 outmatch = "outmatch:cli"
 
+[project.entry-points."pytest11"]
+outmatch = "outmatch.pytest_plugin"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
