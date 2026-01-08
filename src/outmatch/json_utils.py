@@ -24,9 +24,6 @@ def parse_jsonl(text: str) -> list[Any]:
 
 def remove_json_paths(obj: Any, paths: tuple[str, ...]) -> Any:
     """Remove paths from JSON object (returns new object)."""
-    if not paths:
-        return obj
-
     obj = json.loads(json.dumps(obj))  # Deep copy
 
     for path in paths:

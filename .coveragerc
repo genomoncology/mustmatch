@@ -1,0 +1,11 @@
+[run]
+source = src/outmatch
+parallel = true
+branch = true
+omit = 
+    src/outmatch/__main__.py
+    src/outmatch/mdtest.py
+    src/outmatch/config.py
+
+[report]
+show_missing = true
