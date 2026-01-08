@@ -8,15 +8,14 @@ Comparing different ways to show AND verify CLI output in documentation.
 
 ```bash
 # Simple text output
-findterms --version | expect "findterms 0.1.0"
+mycommand --version | expect "mycommand 1.0.0"
 
 # JSONL output
-echo '{"text": "diabetes mellitus"}' \
-  | findterms extract --format jsonl \
-  | expect --jsonl '{"entity_id": "D003920", "term": "diabetes mellitus"}'
+echo '{"input": "data"}' | mycommand process --format jsonl \
+  | expect --jsonl '{"output": "result", "status": "ok"}'
 
 # Check output contains substring
-findterms --help | expect --contains "Usage:"
+mycommand --help | expect --contains "Usage:"
 ```
 
 **Pros:**
@@ -34,11 +33,11 @@ findterms --help | expect --contains "Usage:"
 
 ````markdown
 ```bash
-findterms --version
+mycommand --version
 ```
 
 ```expected
-findterms 0.1.0
+mycommand 1.0.0
 ```
 ````
 
@@ -56,8 +55,8 @@ findterms 0.1.0
 ## Approach C: Inline comment (needs custom executor)
 
 ```bash
-findterms --version
-# OUTPUT: findterms 0.1.0
+mycommand --version
+# OUTPUT: mycommand 1.0.0
 ```
 
 **Pros:**
@@ -75,12 +74,12 @@ findterms --version
 
 ````markdown
 ```bash
-findterms --version
+mycommand --version
 ```
 
 Output:
 ```text
-findterms 0.1.0
+mycommand 1.0.0
 ```
 ````
 
@@ -109,25 +108,25 @@ The documentation reads as: "Run this command, expect this output."
 
 ### Making it cleaner
 
-If we name the tool `expect` (or `chk` for even shorter), docs look like:
+If we name the tool `expect`, docs look like:
 
 ```bash
 # Version check
-findterms --version | expect "findterms 0.1.0"
+mycommand --version | expect "mycommand 1.0.0"
 
-# Extract entities
-echo '{"text": "diabetes mellitus"}' | findterms extract --format jsonl \
-  | expect --jsonl '{"entity_id": "D003920", "term": "diabetes mellitus", "start": 0, "end": 17}'
+# Process data
+echo '{"input": "data"}' | mycommand process --format jsonl \
+  | expect --jsonl '{"output": "result", "status": "ok"}'
 
 # Help contains usage
-findterms --help | expect --contains "Usage:"
+mycommand --help | expect --contains "Usage:"
 ```
 
 This is reasonably readable AND actually tests the output.
 
 ---
 
-## What `expect` needs to support
+## What `expect` supports
 
 1. **Exact match** (default): `cmd | expect "output"`
 2. **Contains**: `cmd | expect --contains "substring"`
@@ -135,8 +134,9 @@ This is reasonably readable AND actually tests the output.
 4. **JSONL subset**: `cmd | expect --jsonl-contains '{"id": 1}'`
 5. **Multi-line via heredoc**:
    ```bash
-   cmd | expect <<'EOF'
+   cmd | expect "$(cat <<'EOF'
    line 1
    line 2
    EOF
+   )"
    ```

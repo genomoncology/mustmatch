@@ -2,56 +2,61 @@
 
 CLI output assertion tool for documentation testing. Pipe command output to `expect` to verify it matches expected values.
 
+Designed for use with [mktestdocs](https://github.com/koaning/mktestdocs) to test CLI examples in documentation.
+
 ## Installation
 
 ```bash
 uv add --group dev doctest-expect
 ```
 
-Or install from path:
+Or install from source:
 ```bash
-uv pip install -e /path/to/doctest-expect
+uv pip install -e path/to/doctest-expect
 ```
 
-## Usage in Documentation
+## Usage
 
 ### Exact match
 
 ```bash
-findterms --version | expect "findterms 0.1.0"
+echo "hello world" | expect "hello world"
 ```
 
 ### Contains substring
 
 ```bash
-findterms --help | expect --contains "Usage:"
+python --version | expect --contains "Python"
 ```
 
 ### JSONL semantic comparison
 
-Field order doesn't matter:
+Field order doesn't matter - these are equivalent:
 
 ```bash
-echo '{"text": "hello"}' | findterms extract --format jsonl \
-  | expect --jsonl '{"term": "hello", "start": 0, "end": 5}'
+echo '{"name": "alice", "age": 30}' | expect --jsonl '{"age": 30, "name": "alice"}'
 ```
 
 ### JSONL subset check
 
-Verify output contains expected records:
+Verify output contains expected records (useful for filtering):
 
 ```bash
-findterms scan doc.txt --format jsonl \
-  | expect --jsonl-contains '{"entity_id": "D001234"}'
+echo '{"id": 1, "name": "alice"}
+{"id": 2, "name": "bob"}' | expect --jsonl-contains '{"id": 1}'
 ```
 
 ### Multi-line expected output
 
+Use heredoc for multi-line expectations:
+
 ```bash
-findterms scan doc.txt --format jsonl | expect <<'EOF'
-{"entity_id": "D001234", "term": "diabetes"}
-{"entity_id": "D005678", "term": "insulin"}
+echo "line one
+line two" | expect "$(cat <<'EOF'
+line one
+line two
 EOF
+)"
 ```
 
 ## Modes
@@ -67,21 +72,41 @@ EOF
 ## Exit Codes
 
 - `0` - Match
-- `1` - Mismatch
+- `1` - Mismatch (prints diff to stderr)
 - `2` - Invalid arguments
 
 ## Why?
 
-When testing CLI documentation with mktestdocs, bash blocks only verify exit code 0 (command didn't crash). They don't verify output.
+When testing CLI documentation with mktestdocs, bash blocks only verify exit code 0 (command didn't crash). They don't verify output content.
 
-This tool lets you show AND verify expected output in documentation:
+This tool lets you **show AND verify** expected output in documentation:
 
 ```bash
-# This just verifies the command runs
-findterms --version
+# This just verifies the command runs without error
+python --version
 
-# This verifies the command runs AND produces correct output
-findterms --version | expect "findterms 0.1.0"
+# This verifies the command runs AND produces expected output
+python --version | expect --contains "Python 3"
 ```
 
-Both forms are valid documentation. Use `expect` when the output is important to show readers.
+Both forms are valid documentation. Use `expect` when the output content is important to demonstrate to readers.
+
+## Development
+
+```bash
+# Install dev dependencies
+uv sync --extra dev
+
+# Run tests
+uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov
+
+# Lint
+uv run ruff check src tests
+```
+
+## License
+
+MIT
