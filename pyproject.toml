@@ -67,6 +67,7 @@ branch = true
 omit = ["src/outmatch/__main__.py", "src/outmatch/mdtest.py", "src/outmatch/config.py"]
 
 [tool.coverage.report]
+fail_under = 95
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
