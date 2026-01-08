@@ -193,42 +193,6 @@ def parse_jsonl(text: str) -> list[Any]:
     return [json.loads(line) for line in lines]
 
 
-def get_json_path(obj: Any, path: str) -> Any:
-    """Get value at JSON path (simple dot notation or bracket notation).
-
-    Args:
-        obj: JSON-like object
-        path: Path like "$.user.name" or "user.name" or "$[0].id"
-
-    Returns:
-        Value at path or None if not found
-    """
-    # Remove leading $ if present
-    if path.startswith('$.'):
-        path = path[2:]
-    elif path.startswith('$'):
-        path = path[1:]
-
-    parts = re.split(r'\.|\[(\d+)\]', path)
-    parts = [p for p in parts if p]
-
-    current = obj
-    for part in parts:
-        if current is None:
-            return None
-        if part.isdigit():
-            idx = int(part)
-            if isinstance(current, list) and 0 <= idx < len(current):
-                current = current[idx]
-            else:
-                return None
-        elif isinstance(current, dict):
-            current = current.get(part)
-        else:
-            return None
-    return current
-
-
 def remove_json_paths(obj: Any, paths: list[str]) -> Any:
     """Remove paths from JSON object (returns new object).
 
