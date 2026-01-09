@@ -22,12 +22,15 @@ def pytest_configure(config):
         import site
         site_packages = site.getsitepackages()
         if site_packages:
-            sitecustomize_path = Path(site_packages[0]) / "sitecustomize.py"
-            sitecustomize_content = "import coverage; coverage.process_startup()\n"
+            sc_path = Path(site_packages[0]) / "sitecustomize.py"
+            sc_content = "import coverage; coverage.process_startup()\n"
             try:
                 # Only write if different or missing
-                if not sitecustomize_path.exists() or sitecustomize_path.read_text() != sitecustomize_content:
-                    sitecustomize_path.write_text(sitecustomize_content)
+                needs_write = not sc_path.exists()
+                if not needs_write:
+                    needs_write = sc_path.read_text() != sc_content
+                if needs_write:
+                    sc_path.write_text(sc_content)
             except (OSError, PermissionError):
                 # Can't write to site-packages, skip subprocess coverage
                 pass
