@@ -183,7 +183,7 @@ def callback(
     # Pattern transformation
     replace: Annotated[
         Optional[list[str]],
-        typer.Option(help="Replace REGEX with REPL (use twice)"),
+        typer.Option(help="Replace REGEX=>REPL (repeatable)"),
     ] = None,
     redact: Annotated[
         Optional[list[str]],
@@ -261,14 +261,14 @@ def _get_expected(
 ) -> str | None:
     """Get expected value from argument or file."""
     if file_path:
-        try:
-            return file_path.read_text()
-        except FileNotFoundError:
+        if not file_path.exists():
             if update_mode:
                 return ""  # Will create on update
             print(f"Error: file not found: {file_path}", file=sys.stderr)
             raise typer.Exit(2)
-        except OSError as e:
+        try:
+            return file_path.read_text()
+        except (OSError, UnicodeDecodeError) as e:
             print(f"Error reading file: {e}", file=sys.stderr)
             raise typer.Exit(2)
     return arg
@@ -302,11 +302,15 @@ def _determine_mode(
 
 
 def _parse_replacements(args: list[str]) -> tuple[tuple[str, str], ...]:
-    """Parse --replace arguments into tuples."""
-    if len(args) % 2 != 0:
-        print("Error: --replace requires pairs of REGEX REPL", file=sys.stderr)
-        raise typer.Exit(2)
-    return tuple(zip(args[::2], args[1::2]))
+    """Parse --replace arguments (REGEX=>REPL format) into tuples."""
+    result = []
+    for arg in args:
+        if "=>" not in arg:
+            print(f"Error: --replace needs REGEX=>REPL: {arg}", file=sys.stderr)
+            raise typer.Exit(2)
+        pattern, repl = arg.split("=>", 1)
+        result.append((pattern, repl))
+    return tuple(result)
 
 
 def main(args: list[str] | None = None) -> int:
@@ -319,32 +323,26 @@ def main(args: list[str] | None = None) -> int:
     # We need to explicitly route to test command since Typer captures it
     # as the expected argument value
     if args and args[0] == "test":
-        # Create a minimal test app just for the test command
-        test_args = args[1:]  # Remove "test" from args
+        test_args = args[1:]
         try:
-            # Call test command directly
-            _run_test_cmd(test_args)
+            _run_mdtest(test_args)
             return 0
         except typer.Exit as e:
             return e.exit_code
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return 2
 
     try:
         result = app(args, standalone_mode=False)
         return result if result is not None else 0
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 2
+    except typer.Exit as e:
+        return e.exit_code
 
 
-def _run_test_cmd(args: list[str]) -> None:
+def _run_mdtest(args: list[str]) -> None:
     """Direct entry point for test command."""
     import argparse
     from pathlib import Path
 
-    from .test_cmd import TestConfig, test_command
+    from .mdtest import TestConfig, test_command
 
     parser = argparse.ArgumentParser(description="Run bash blocks in markdown files")
     parser.add_argument("paths", nargs="*", type=Path, help="Files or directories")

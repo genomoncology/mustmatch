@@ -86,3 +86,44 @@ echo '{"id": 1, "ts": "x", "hash": "y"}' | \
 echo '{"user": {"name": "alice", "created": "2024-01-01"}}' | \
     outmatch --json --json-ignore '$.user.created' '{"user": {"name": "alice"}}'
 ```
+
+## Ignore array element
+
+The ignore is applied to both sides, so both inputs have the element to remove:
+
+```bash
+echo '{"items": [1, 2, 3]}' | outmatch --json --json-ignore '$.items[0]' '{"items": [1, 2, 3]}'
+```
+
+## Ignore nested array element
+
+```bash
+echo '{"data": {"items": ["a", "b", "c"]}}' | \
+    outmatch --json --json-ignore '$.data.items[1]' '{"data": {"items": ["a", "b", "c"]}}'
+```
+
+## Ignore path without dot
+
+```bash
+echo '{"name": "alice", "id": 1}' | outmatch --json --json-ignore '$name' '{"id": 1}'
+```
+
+## Ignore non-existent path
+
+Ignoring a path that doesn't exist should succeed silently:
+
+```bash
+echo '{"id": 1}' | outmatch --json --json-ignore '$.nonexistent' '{"id": 1}'
+```
+
+## Ignore nested non-existent path
+
+```bash
+echo '{"id": 1}' | outmatch --json --json-ignore '$.a.b.c' '{"id": 1}'
+```
+
+## Ignore array index out of bounds
+
+```bash
+echo '{"items": [1]}' | outmatch --json --json-ignore '$.items[99]' '{"items": [1]}'
+```

@@ -2,48 +2,45 @@
 
 ## Installation
 
-Add outmatch as a dev dependency:
+Install outmatch with pip or uv:
 
-```bash
-uv add --group dev outmatch
+```
+pip install outmatch
+uv add outmatch
 ```
 
-Or install from source:
+## Basic Usage
 
-```bash
-uv pip install -e path/to/outmatch
-```
-
-## First Example
-
-Verify a command produces expected output:
+Verify exact output:
 
 ```bash
 echo "hello world" | outmatch "hello world"
 ```
 
-If the output matches, the command exits with code 0. If it doesn't match, it exits with code 1 and prints a diff.
-
-## Integration with mktestdocs
-
-Use `outmatch` in your documentation examples:
-
-````markdown
-## Check Version
+Check output contains a substring:
 
 ```bash
-mycommand --version | outmatch --contains "1.0"
+echo "version 1.2.3" | outmatch --contains "1.2"
 ```
 
-## Process Data
+Match with regex:
 
 ```bash
-echo '{"input": "data"}' | mycommand process | outmatch --jsonl '{"output": "result"}'
+echo "completed in 42ms" | outmatch --regex 'completed in \d+ms'
 ```
-````
 
-When mktestdocs runs these bash blocks, the `outmatch` assertions verify the output.
+## JSON Comparison
 
-## Next Steps
+Compare JSON regardless of field order:
 
-See [CLI Reference](cli/reference.md) for all available options.
+```bash
+echo '{"b":2,"a":1}' | outmatch --json '{"a":1,"b":2}'
+```
+
+## Handling Volatile Output
+
+Replace timestamps before comparison:
+
+```bash
+echo "time: 1.5s" | outmatch --replace '\d+\.\d+s=>TIME' "time: TIME"
+```
