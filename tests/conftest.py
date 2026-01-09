@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 
 
 def pytest_configure(config):
@@ -9,12 +10,29 @@ def pytest_configure(config):
     # Import the module to ensure it's in coverage
     import outmatch  # noqa: F401
 
+    # Find the project root (where pyproject.toml is)
+    project_root = Path(__file__).parent.parent
+    pyproject_path = project_root / "pyproject.toml"
+
     # Set up coverage for subprocesses
-    if "COVERAGE_PROCESS_START" not in os.environ:
-        # Create a .coveragerc-like config
-        os.environ["COVERAGE_PROCESS_START"] = ""
+    if pyproject_path.exists():
+        os.environ["COVERAGE_PROCESS_START"] = str(pyproject_path)
+
+        # Create sitecustomize.py in site-packages to auto-start coverage
+        import site
+        site_packages = site.getsitepackages()
+        if site_packages:
+            sitecustomize_path = Path(site_packages[0]) / "sitecustomize.py"
+            sitecustomize_content = "import coverage; coverage.process_startup()\n"
+            try:
+                # Only write if different or missing
+                if not sitecustomize_path.exists() or sitecustomize_path.read_text() != sitecustomize_content:
+                    sitecustomize_path.write_text(sitecustomize_content)
+            except (OSError, PermissionError):
+                # Can't write to site-packages, skip subprocess coverage
+                pass
 
     # Ensure the package is importable in subprocesses
-    src_path = os.path.join(os.path.dirname(__file__), "..", "src")
+    src_path = str(project_root / "src")
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
