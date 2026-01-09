@@ -266,7 +266,11 @@ def _get_expected(
                 return ""  # Will create on update
             print(f"Error: file not found: {file_path}", file=sys.stderr)
             raise typer.Exit(2)
-        return file_path.read_text()
+        try:
+            return file_path.read_text()
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"Error reading file: {e}", file=sys.stderr)
+            raise typer.Exit(2)
     return arg
 
 
