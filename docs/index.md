@@ -21,15 +21,13 @@ If it matches, exit 0. If it doesn't, exit 1 with a helpful diff. Simple enough 
 ## Quick Tour
 
 **Exact matching** - The default. Output must match exactly.
-<!-- outmatch: skip -->
 ```bash
-mycli --version | outmatch "mycli 2.1.0"
+outmatch --version | outmatch --contains "0.2.0"
 ```
 
 **Substring matching** - Check that output contains expected text.
-<!-- outmatch: skip -->
 ```bash
-mycli --help | outmatch --contains "Usage:"
+outmatch --help | outmatch --contains "Usage:"
 ```
 
 **Pattern matching** - Handle dynamic values like timestamps.
@@ -46,8 +44,9 @@ echo '{"b":2,"a":1}' | outmatch --json '{"a":1,"b":2}'
 
 The real power: test your markdown documentation directly.
 
-```bash
-outmatch test docs/
+```console
+$ outmatch test docs/
+✓ 42 passed, 42 total
 ```
 
 Every `bash` code block becomes a test. Your docs become executable specifications. See [Getting Started](getting-started.md) to begin.
