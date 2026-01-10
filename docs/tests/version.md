@@ -1,6 +1,6 @@
-# Version Tests
+# Version
 
-Tests for version information.
+Check the installed version of outmatch.
 
 ## Version flag
 

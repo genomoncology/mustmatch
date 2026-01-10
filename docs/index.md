@@ -1,29 +1,60 @@
 # outmatch
 
-CLI output assertion tool for documentation testing.
+**Keep your documentation honest.**
 
-## What It Does
+Every code example in your docs is a promise. When those examples stop working, your users discover it the hard way. outmatch tests command-line output against expected values, catching broken examples before your users do.
 
-Verify command output matches expectations:
+## The Problem
 
-```bash
-echo "hello" | outmatch "hello"
-```
+Documentation rots. You refactor a CLI flag, update an output format, or fix a bug that changes behavior. Your docs still show the old output. Users copy-paste examples that don't work. Issues pile up. Trust erodes.
 
-## Quick Examples
+## The Solution
+
+Pipe any command through outmatch to verify its output:
 
 ```bash
 echo "hello world" | outmatch "hello world"
 ```
 
+If it matches, exit 0. If it doesn't, exit 1 with a helpful diff. Simple enough to use anywhere: CI pipelines, pre-commit hooks, or embedded in your markdown documentation itself.
+
+## Quick Tour
+
+**Exact matching** - The default. Output must match exactly.
+<!-- outmatch: skip -->
 ```bash
-echo "version 2.0" | outmatch --contains "2.0"
+mycli --version | outmatch "mycli 2.1.0"
 ```
 
+**Substring matching** - Check that output contains expected text.
+<!-- outmatch: skip -->
+```bash
+mycli --help | outmatch --contains "Usage:"
+```
+
+**Pattern matching** - Handle dynamic values like timestamps.
+```bash
+echo "Completed in 1.23s" | outmatch --regex 'Completed in \d+\.\d+s'
+```
+
+**JSON comparison** - Compare structure, not formatting.
 ```bash
 echo '{"b":2,"a":1}' | outmatch --json '{"a":1,"b":2}'
 ```
 
-## Documentation
+## Documentation as Tests
 
-See [Getting Started](getting-started.md) for installation and usage.
+The real power: test your markdown documentation directly.
+
+```bash
+outmatch test docs/
+```
+
+Every `bash` code block becomes a test. Your docs become executable specifications. See [Getting Started](getting-started.md) to begin.
+
+## When to Use outmatch
+
+- **Documentation testing** - Verify code examples in README, tutorials, API docs
+- **CLI testing** - Assertion library for command-line tool output
+- **Snapshot testing** - Store expected output in files, update with `--update`
+- **CI pipelines** - Fast, dependency-free output verification

@@ -1,55 +1,73 @@
-# Contains Mode Tests
+# Contains Matching
 
-Tests for substring matching with `--contains`.
+Check if output includes a substring with `--contains`.
 
-## Basic contains
+Use contains matching when you care about specific content but not the surrounding text. Help messages, log output, error messages - anything with boilerplate or variable content you want to ignore.
+
+## When should I use contains instead of exact matching?
+
+When the output includes information you don't control or don't care about:
 
 ```bash
 echo "hello world" | outmatch --contains "world"
 ```
 
-## Contains at start
+The output has "hello" too, but you only wanted to verify "world" is present.
+
+## Where in the output does it look?
+
+Anywhere. Beginning, middle, or end:
 
 ```bash
 echo "hello world" | outmatch --contains "hello"
 ```
 
-## Contains in middle
-
 ```bash
 echo "the quick brown fox" | outmatch --contains "quick brown"
 ```
 
-## Multi-line contains
+## Does it work across multiple lines?
+
+Yes. The substring can appear on any line:
 
 ```bash
 printf "line one\nline two\nline three" | outmatch --contains "line two"
 ```
 
-## Case sensitive by default
+## Is matching case-sensitive?
 
-Contains should be case-sensitive (this should fail):
+Yes, by default:
 
 ```bash
 echo "Hello World" | outmatch --contains "hello" || test $? -eq 1
 ```
 
-## Missing substring fails
+Add `--ignore-case` or `-i` for case-insensitive matching:
+
+```bash
+echo "Hello World" | outmatch --contains --ignore-case "hello"
+```
+
+## What about whitespace in the expected value?
+
+Leading and trailing whitespace is stripped from the expected value:
+
+```bash
+echo "hello world" | outmatch --contains "  world  "
+```
+
+This makes tests more readable and less fragile.
+
+## What happens when the substring isn't found?
+
+Exit code 1:
 
 ```bash
 echo "hello world" | outmatch --contains "goodbye" || test $? -eq 1
 ```
 
-## Empty actual with non-empty expected fails
+Empty output with non-empty expected also fails:
 
 ```bash
 printf "" | outmatch --contains "something" || test $? -eq 1
-```
-
-## Whitespace handling
-
-Leading/trailing whitespace in expected is stripped:
-
-```bash
-echo "hello world" | outmatch --contains "  world  "
 ```

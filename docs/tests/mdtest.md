@@ -1,136 +1,41 @@
-# outmatch test Command
+# Markdown Test Runner
 
-Tests for the standalone markdown test runner (`outmatch test`).
+Run bash code blocks in your markdown documentation as tests with `outmatch test`.
 
-## Basic Execution
+Your documentation contains executable examples. The test runner extracts every fenced `bash` block and runs it. If any command exits non-zero, that test fails. Your docs become a living test suite.
 
-### Run tests on a markdown file
+---
+
+## Getting Started
+
+### How do I run tests on my documentation?
+
+Point `outmatch test` at a file or directory:
 
 ```bash
 printf '```bash\necho hello\n```\n' > /tmp/basic.md
 outmatch test /tmp/basic.md --quiet
 ```
 
-### Passing tests exit 0
+### What exit codes does it return?
+
+Exit 0 for all tests passing:
 
 ```bash
 printf '```bash\ntrue\n```\n' > /tmp/pass.md
 outmatch test /tmp/pass.md --quiet && echo "exit 0" | outmatch "exit 0"
 ```
 
-### Failing tests exit 1
+Exit 1 if any test fails:
 
 ```bash
 printf '```bash\nexit 1\n```\n' > /tmp/fail.md
 outmatch test /tmp/fail.md --quiet 2>&1 || test $? -eq 1
 ```
 
-## Output Modes
+### Can I test an entire directory?
 
-### Quiet mode shows summary only
-
-```bash
-printf '```bash\necho a\n```\n```bash\necho b\n```\n' > /tmp/quiet.md
-outmatch test /tmp/quiet.md --quiet | outmatch --contains "2 passed"
-```
-
-### Verbose mode shows block details
-
-```bash
-printf '# Section\n```bash\necho test\n```\n' > /tmp/verbose.md
-outmatch test /tmp/verbose.md --verbose 2>&1 | outmatch --contains "Block (line"
-```
-
-### TAP output format
-
-```bash
-printf '```bash\necho ok\n```\n' > /tmp/tap.md
-outmatch test /tmp/tap.md --tap | outmatch --contains "TAP version 13"
-```
-
-### TAP shows test count
-
-```bash
-printf '```bash\necho a\n```\n```bash\necho b\n```\n' > /tmp/tap2.md
-outmatch test /tmp/tap2.md --tap | outmatch --contains "1..2"
-```
-
-## Report Files
-
-### JUnit XML output
-
-```bash
-printf '```bash\necho test\n```\n' > /tmp/junit.md
-outmatch test /tmp/junit.md --junit-xml /tmp/report.xml --quiet
-cat /tmp/report.xml | outmatch --contains "testsuite"
-```
-
-### JSON output
-
-```bash
-printf '```bash\necho test\n```\n' > /tmp/json.md
-outmatch test /tmp/json.md --json /tmp/report.json --quiet
-cat /tmp/report.json | outmatch --contains '"passed": 1'
-```
-
-## Filtering
-
-### Include pattern
-
-```bash
-printf '```bash\n# include-me\necho yes\n```\n```bash\necho no\n```\n' > /tmp/include.md
-outmatch test /tmp/include.md --include "include-me" --quiet | outmatch --contains "1 passed"
-```
-
-### Exclude pattern
-
-```bash
-printf '```bash\necho run\n```\n```bash\n# exclude-me\necho skip\n```\n' > /tmp/exclude.md
-outmatch test /tmp/exclude.md --exclude "exclude-me" --quiet | outmatch --contains "1 passed"
-```
-
-### Line filter
-
-```bash
-printf '```bash\necho first\n```\n```bash\necho second\n```\n' > /tmp/line.md
-outmatch test /tmp/line.md --line 2 --quiet | outmatch --contains "1 passed"
-```
-
-## Skip Directives
-
-### Skip directive
-
-```bash
-printf '<!-- outmatch: skip -->\n```bash\nexit 1\n```\n```bash\necho runs\n```\n' > /tmp/skip.md
-outmatch test /tmp/skip.md --quiet | outmatch --contains "1 skipped"
-```
-
-### Timeout directive in metadata
-
-```bash
-printf '<!-- outmatch: timeout=5 -->\n```bash\nsleep 0.1\n```\n' > /tmp/timeout.md
-outmatch test /tmp/timeout.md --quiet
-```
-
-## Error Handling
-
-### Verbose shows failed block error
-
-```bash
-printf '```bash\nexit 42\n```\n' > /tmp/error.md
-outmatch test /tmp/error.md --verbose 2>&1 | outmatch --contains "Exit code 42"
-```
-
-### Timeout handling
-
-```bash
-printf '```bash\nsleep 10\n```\n' > /tmp/slow.md
-outmatch test /tmp/slow.md --timeout 1 --verbose 2>&1 | outmatch --contains "timeout"
-```
-
-## Directory Discovery
-
-### Discovers markdown files in directories
+Yes. It discovers markdown files recursively:
 
 ```bash
 rm -rf /tmp/testdir
@@ -140,7 +45,7 @@ printf '```bash\necho b\n```\n' > /tmp/testdir/b.md
 outmatch test /tmp/testdir --quiet | outmatch --contains "2 passed"
 ```
 
-### Excludes node_modules
+`node_modules` and similar directories are automatically excluded:
 
 ```bash
 rm -rf /tmp/testdir2
@@ -150,43 +55,161 @@ printf '```bash\nexit 1\n```\n' > /tmp/testdir2/node_modules/skip.md
 outmatch test /tmp/testdir2 --quiet | outmatch --contains "1 passed"
 ```
 
-## Environment Variables
+---
 
-### Env option passes variables
+## Output Formats
+
+### What output modes are available?
+
+**Default mode** - Progress and summary:
+
+```bash
+printf '```bash\necho hi\n```\n' > /tmp/default.md
+outmatch test /tmp/default.md 2>&1 | outmatch --contains "Results:"
+```
+
+**Quiet mode** - Summary only:
+
+```bash
+printf '```bash\necho a\n```\n```bash\necho b\n```\n' > /tmp/quiet.md
+outmatch test /tmp/quiet.md --quiet | outmatch --contains "2 passed"
+```
+
+**Verbose mode** - Full block details:
+
+```bash
+printf '# Section\n```bash\necho test\n```\n' > /tmp/verbose.md
+outmatch test /tmp/verbose.md --verbose 2>&1 | outmatch --contains "Block (line"
+```
+
+**TAP format** - Machine-readable:
+
+```bash
+printf '```bash\necho ok\n```\n' > /tmp/tap.md
+outmatch test /tmp/tap.md --tap | outmatch --contains "TAP version 13"
+```
+
+```bash
+printf '```bash\necho a\n```\n```bash\necho b\n```\n' > /tmp/tap2.md
+outmatch test /tmp/tap2.md --tap | outmatch --contains "1..2"
+```
+
+### How do I generate report files?
+
+**JUnit XML** for CI integration:
+
+```bash
+printf '```bash\necho test\n```\n' > /tmp/junit.md
+outmatch test /tmp/junit.md --junit-xml /tmp/report.xml --quiet
+cat /tmp/report.xml | outmatch --contains "testsuite"
+```
+
+**JSON** for custom processing:
+
+```bash
+printf '```bash\necho test\n```\n' > /tmp/json.md
+outmatch test /tmp/json.md --json /tmp/report.json --quiet
+cat /tmp/report.json | outmatch --contains '"passed": 1'
+```
+
+---
+
+## Filtering Tests
+
+### How do I run specific tests?
+
+**By content pattern** - Include blocks containing text:
+
+```bash
+printf '```bash\n# include-me\necho yes\n```\n```bash\necho no\n```\n' > /tmp/include.md
+outmatch test /tmp/include.md --include "include-me" --quiet | outmatch --contains "1 passed"
+```
+
+```bash
+printf '# IncludeThis\n```bash\necho hi\n```\n# OtherTest\n```bash\necho bye\n```\n' > /tmp/incname.md
+outmatch test /tmp/incname.md --include "IncludeThis" --quiet | outmatch --contains "1 passed"
+```
+
+**By exclusion** - Skip blocks containing text:
+
+```bash
+printf '```bash\necho run\n```\n```bash\n# exclude-me\necho skip\n```\n' > /tmp/exclude.md
+outmatch test /tmp/exclude.md --exclude "exclude-me" --quiet | outmatch --contains "1 passed"
+```
+
+```bash
+printf '# SkipThis\n```bash\nexit 1\n```\n# RunThis\n```bash\necho ok\n```\n' > /tmp/excname.md
+outmatch test /tmp/excname.md --exclude "SkipThis" --quiet | outmatch --contains "1 passed"
+```
+
+**By line number** - Run block at specific line:
+
+```bash
+printf '```bash\necho first\n```\n```bash\necho second\n```\n' > /tmp/line.md
+outmatch test /tmp/line.md --line 2 --quiet | outmatch --contains "1 passed"
+```
+
+---
+
+## Skip Directives
+
+### How do I skip a test block?
+
+Add an HTML comment before the block:
+
+```bash
+printf '<!-- outmatch: skip -->\n```bash\nexit 1\n```\n```bash\necho runs\n```\n' > /tmp/skip.md
+outmatch test /tmp/skip.md --quiet | outmatch --contains "1 skipped"
+```
+
+### How do I skip conditionally?
+
+Use `skip-if` with an environment variable:
+
+```bash
+printf '<!-- outmatch: skip-if=SKIP_ME -->\n```bash\nexit 1\n```\n' > /tmp/skipif.md
+SKIP_ME=1 outmatch test /tmp/skipif.md --quiet | outmatch --contains "1 skipped"
+```
+
+---
+
+## Test Configuration
+
+### How do I set a timeout?
+
+Per-block with a directive:
+
+```bash
+printf '<!-- outmatch: timeout=5 -->\n```bash\nsleep 0.1\n```\n' > /tmp/timeout.md
+outmatch test /tmp/timeout.md --quiet
+```
+
+Globally with `--timeout`:
+
+```bash
+printf '```bash\nsleep 10\n```\n' > /tmp/slow.md
+outmatch test /tmp/slow.md --timeout 1 --verbose 2>&1 | outmatch --contains "timeout"
+```
+
+### How do I pass environment variables?
+
+Via `--env`:
 
 ```bash
 printf '```bash\ntest -n "$MY_VAR" && echo "has var"\n```\n' > /tmp/env.md
 outmatch test /tmp/env.md --env MY_VAR=hello --quiet 2>&1 | outmatch --contains "1 passed"
 ```
 
-## Fail Fast
-
-### Stop on first failure
+Via directive:
 
 ```bash
-printf '```bash\nexit 1\n```\n```bash\necho second\n```\n' > /tmp/failfast.md
-outmatch test /tmp/failfast.md --fail-fast --quiet | outmatch --contains "1 failed"
+printf '<!-- outmatch: env=FOO=bar -->\n```bash\ntest "$FOO" = "bar"\n```\n' > /tmp/envmeta.md
+outmatch test /tmp/envmeta.md --quiet
 ```
 
-## Headings and Names
+### How do I change the working directory?
 
-### Block names from headings
-
-```bash
-printf '# My Test\n```bash\necho hello\n```\n' > /tmp/heading.md
-outmatch test /tmp/heading.md --verbose 2>&1 | outmatch --contains "My Test"
-```
-
-### Block names from comments
-
-```bash
-printf '```bash\n# Custom Name\necho hello\n```\n' > /tmp/comment.md
-outmatch test /tmp/comment.md --verbose 2>&1 | outmatch --contains "Custom Name"
-```
-
-## Current Directory
-
-### Tests run in file directory
+Tests run in the markdown file's directory by default:
 
 ```bash
 mkdir -p /tmp/testcwd
@@ -194,86 +217,84 @@ printf '```bash\npwd | grep -q testcwd\n```\n' > /tmp/testcwd/cwd.md
 outmatch test /tmp/testcwd/cwd.md --quiet
 ```
 
-### Custom cwd option
+Override with `--cwd`:
 
 ```bash
 printf '```bash\npwd\n```\n' > /tmp/cwd.md
 outmatch test /tmp/cwd.md --cwd /tmp --quiet
 ```
 
-## Empty Results
+---
 
-### No markdown files is not an error
+## Debugging Failures
 
-```bash
-rm -rf /tmp/emptydir
-mkdir -p /tmp/emptydir
-outmatch test /tmp/emptydir --quiet
-```
+### How do I see what failed?
 
-## TAP Failure Output
-
-### TAP shows failed test
-
-```bash
-printf '```bash\nexit 1\n```\n' > /tmp/tapfail.md
-outmatch test /tmp/tapfail.md --tap 2>&1 | outmatch --contains "not ok 1"
-```
-
-## Verbose Failure Details
-
-### Shows command on failure
+Verbose mode shows command and output:
 
 ```bash
 printf '```bash\nfalse\n```\n' > /tmp/vcmd.md
 outmatch test /tmp/vcmd.md --verbose 2>&1 | outmatch --contains "Command:"
 ```
 
-## Additional Edge Cases
-
-### Skip-if directive with env var set
-
 ```bash
-printf '<!-- outmatch: skip-if=SKIP_ME -->\n```bash\nexit 1\n```\n' > /tmp/skipif.md
-SKIP_ME=1 outmatch test /tmp/skipif.md --quiet | outmatch --contains "1 skipped"
+printf '```bash\nexit 42\n```\n' > /tmp/error.md
+outmatch test /tmp/error.md --verbose 2>&1 | outmatch --contains "Exit code 42"
 ```
 
-### Env in metadata directive
+### How do I stop on first failure?
+
+Use `--fail-fast`:
 
 ```bash
-printf '<!-- outmatch: env=FOO=bar -->\n```bash\ntest "$FOO" = "bar"\n```\n' > /tmp/envmeta.md
-outmatch test /tmp/envmeta.md --quiet
+printf '```bash\nexit 1\n```\n```bash\necho second\n```\n' > /tmp/failfast.md
+outmatch test /tmp/failfast.md --fail-fast --quiet | outmatch --contains "1 failed"
 ```
 
-### Include matches heading name
+---
+
+## Test Names
+
+### Where do test names come from?
+
+From the nearest heading above the block:
 
 ```bash
-printf '# IncludeThis\n```bash\necho hi\n```\n# OtherTest\n```bash\necho bye\n```\n' > /tmp/incname.md
-outmatch test /tmp/incname.md --include "IncludeThis" --quiet | outmatch --contains "1 passed"
+printf '# My Test\n```bash\necho hello\n```\n' > /tmp/heading.md
+outmatch test /tmp/heading.md --verbose 2>&1 | outmatch --contains "My Test"
 ```
 
-### Exclude matches heading name
+From a comment on the first line:
 
 ```bash
-printf '# SkipThis\n```bash\nexit 1\n```\n# RunThis\n```bash\necho ok\n```\n' > /tmp/excname.md
-outmatch test /tmp/excname.md --exclude "SkipThis" --quiet | outmatch --contains "1 passed"
+printf '```bash\n# Custom Name\necho hello\n```\n' > /tmp/comment.md
+outmatch test /tmp/comment.md --verbose 2>&1 | outmatch --contains "Custom Name"
 ```
 
-### Verbose shows truncated long command
+---
+
+## TAP and Report Details
+
+### What does TAP output look like on failure?
 
 ```bash
-printf '```bash\necho line1\necho line2\necho line3\necho line4\necho line5\necho line6\nexit 1\n```\n' > /tmp/longcmd.md
-outmatch test /tmp/longcmd.md --verbose 2>&1 | outmatch --contains "..."
+printf '```bash\nexit 1\n```\n' > /tmp/tapfail.md
+outmatch test /tmp/tapfail.md --tap 2>&1 | outmatch --contains "not ok 1"
 ```
-
-### Verbose shows truncated long output
 
 ```bash
-printf '```bash\nfor i in $(seq 1 20); do echo "line $i"; done; exit 1\n```\n' > /tmp/longout.md
-outmatch test /tmp/longout.md --verbose 2>&1 | outmatch --contains "..."
+printf '<!-- outmatch: skip -->\n```bash\necho hi\n```\n' > /tmp/tapskip.md
+outmatch test /tmp/tapskip.md --tap 2>&1 | outmatch --contains "SKIP"
 ```
 
-### JUnit XML with failure
+```bash
+printf '```bash\nsleep 10\n```\n' > /tmp/tapto.md
+outmatch test /tmp/tapto.md --tap --timeout 1 2>&1 | outmatch --contains "TIMEOUT"
+```
+
+### What does JUnit XML include?
+
+Failures:
 
 ```bash
 printf '```bash\nexit 1\n```\n' > /tmp/junitfail.md
@@ -281,7 +302,7 @@ outmatch test /tmp/junitfail.md --junit-xml /tmp/jfail.xml --quiet 2>&1 || true
 cat /tmp/jfail.xml | outmatch --contains "failure"
 ```
 
-### JUnit XML with timeout
+Timeouts:
 
 ```bash
 printf '```bash\nsleep 10\n```\n' > /tmp/junitto.md
@@ -289,7 +310,7 @@ outmatch test /tmp/junitto.md --junit-xml /tmp/jto.xml --timeout 1 --quiet 2>&1 
 cat /tmp/jto.xml | outmatch --contains "error"
 ```
 
-### JUnit XML with skip
+Skips:
 
 ```bash
 printf '<!-- outmatch: skip -->\n```bash\necho hi\n```\n' > /tmp/junitskip.md
@@ -297,36 +318,39 @@ outmatch test /tmp/junitskip.md --junit-xml /tmp/jskip.xml --quiet
 cat /tmp/jskip.xml | outmatch --contains "skipped"
 ```
 
-### TAP with skip
+---
+
+## Edge Cases
+
+Long commands and output are truncated in verbose mode:
 
 ```bash
-printf '<!-- outmatch: skip -->\n```bash\necho hi\n```\n' > /tmp/tapskip.md
-outmatch test /tmp/tapskip.md --tap 2>&1 | outmatch --contains "SKIP"
+printf '```bash\necho line1\necho line2\necho line3\necho line4\necho line5\necho line6\nexit 1\n```\n' > /tmp/longcmd.md
+outmatch test /tmp/longcmd.md --verbose 2>&1 | outmatch --contains "..."
 ```
-
-### TAP with timeout
 
 ```bash
-printf '```bash\nsleep 10\n```\n' > /tmp/tapto.md
-outmatch test /tmp/tapto.md --tap --timeout 1 2>&1 | outmatch --contains "TIMEOUT"
+printf '```bash\nfor i in $(seq 1 20); do echo "line $i"; done; exit 1\n```\n' > /tmp/longout.md
+outmatch test /tmp/longout.md --verbose 2>&1 | outmatch --contains "..."
 ```
 
-### Default mode output
-
-```bash
-printf '```bash\necho hi\n```\n' > /tmp/default.md
-outmatch test /tmp/default.md 2>&1 | outmatch --contains "Results:"
-```
-
-### Invalid timeout in metadata
+Invalid timeout in metadata is ignored:
 
 ```bash
 printf '<!-- outmatch: timeout=abc -->\n```bash\necho hi\n```\n' > /tmp/badto.md
 outmatch test /tmp/badto.md --quiet
 ```
 
-### Run without path argument uses cwd
+Running without a path uses current directory:
 
 ```bash
 rm -rf /tmp/cwdtest && mkdir /tmp/cwdtest && cd /tmp/cwdtest && printf '```bash\necho test\n```\n' > test.md && outmatch test --quiet
+```
+
+Empty directories are not an error:
+
+```bash
+rm -rf /tmp/emptydir
+mkdir -p /tmp/emptydir
+outmatch test /tmp/emptydir --quiet
 ```

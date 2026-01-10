@@ -1,73 +1,91 @@
-# Normalization Tests
+# Text Normalization
 
-Tests for text normalization options.
+Normalize output before comparison to handle formatting differences.
 
-## Strip ANSI
+Real-world output often includes ANSI color codes, inconsistent whitespace, or case variations. Normalization flags let you ignore these differences and focus on the content that matters.
 
-Remove color codes:
+## What normalization options are available?
+
+| Flag | Effect |
+|------|--------|
+| `--strip-ansi` | Remove ANSI escape codes (colors, formatting) |
+| `--normalize-newlines` | Convert CRLF to LF |
+| `--trim` | Remove leading/trailing whitespace |
+| `--collapse-whitespace` | Replace runs of whitespace with single space |
+| `--ignore-case` / `-i` | Case-insensitive comparison |
+
+## How do I remove color codes from output?
+
+Use `--strip-ansi` to remove ANSI escape sequences:
 
 ```bash
 printf '\033[31mred\033[0m' | outmatch --strip-ansi "red"
 ```
 
-## Strip ANSI with contains
+Works with any mode:
 
 ```bash
 printf '\033[32mSuccess\033[0m' | outmatch --strip-ansi --contains "Success"
 ```
 
-## Normalize newlines
+## How do I handle Windows line endings?
 
-Convert CRLF to LF:
+Use `--normalize-newlines` to convert CRLF to LF:
 
 ```bash
 printf "line1\r\nline2" | outmatch --normalize-newlines "line1
 line2"
 ```
 
-## Trim whitespace
+## How do I ignore leading and trailing whitespace?
+
+Use `--trim`:
 
 ```bash
 printf "  hello world  \n" | outmatch --trim "hello world"
 ```
 
-## Collapse whitespace
+## How do I handle inconsistent spacing?
+
+Use `--collapse-whitespace` to normalize all whitespace runs to single spaces:
 
 ```bash
 printf "hello    world\n\nfoo" | outmatch --collapse-whitespace "hello world foo"
 ```
 
-## Ignore case
+## How do I ignore case differences?
+
+Use `--ignore-case` or `-i`:
 
 ```bash
 echo "Hello World" | outmatch --ignore-case "hello world"
 ```
 
-## Ignore case short flag
-
 ```bash
 echo "HELLO" | outmatch -i "hello"
 ```
 
-## Contains with ignore case
+Works with contains mode:
 
 ```bash
 echo "Hello World" | outmatch --contains --ignore-case "hello"
 ```
 
-## Combined normalization
+## Can I combine multiple normalization flags?
 
-Multiple flags work together:
+Yes. All flags work together:
 
 ```bash
 printf '\033[32m  HELLO   WORLD  \033[0m' | \
     outmatch --strip-ansi --trim --collapse-whitespace --ignore-case "hello world"
 ```
 
-## Normalization applies to both sides
+## Does normalization apply to both sides?
 
-Expected is also normalized:
+Yes. Both actual output and expected value are normalized:
 
 ```bash
 printf "hello world" | outmatch --collapse-whitespace "hello    world"
 ```
+
+This makes expected values more readable without requiring perfect formatting.

@@ -1,102 +1,92 @@
-# JSONL Mode Tests
+# JSONL Comparison
 
-Tests for JSONL comparison modes.
+Compare line-delimited JSON (JSONL) with multiple modes for different use cases.
 
-## Basic JSONL match
+JSONL is JSON with one object per line. Log files, data exports, and streaming APIs often use this format. outmatch provides four comparison modes depending on whether order matters and how you want to match records.
+
+## Choosing a JSONL Mode
+
+| Mode | Order | Matching | Use when... |
+|------|-------|----------|-------------|
+| `--jsonl` | Matters | Exact | Output order is deterministic |
+| `--jsonl-set` | Ignored | Exact | Order varies but records are stable |
+| `--jsonl-key` | Ignored | By key | Records have unique IDs |
+| `--jsonl-contains` | Ignored | Subset | You only care about specific records |
+
+---
+
+## Basic JSONL (`--jsonl`)
+
+Compares records in order with field-order independence within each record.
 
 ```bash
 echo '{"id": 1}' | outmatch --jsonl '{"id": 1}'
 ```
 
-## Field order independence
-
-```bash
-echo '{"name": "alice", "age": 30}' | outmatch --jsonl '{"age": 30, "name": "alice"}'
-```
-
-## Multiple records
+Multiple records must appear in the same order:
 
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 1}
 {"id": 2}'
 ```
 
-## Record order matters
+Wrong order fails:
 
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 2}
 {"id": 1}' || test $? -eq 1
 ```
 
-## Record count mismatch
+Record count must match:
 
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl '{"id": 1}' 2>&1 | \
     outmatch --contains "count mismatch"
 ```
 
-## Nested objects in JSONL
-
-```bash
-echo '{"user": {"name": "alice", "age": 30}}' | \
-    outmatch --jsonl '{"user": {"age": 30, "name": "alice"}}'
-```
-
-## Invalid JSON in JSONL
-
-```bash
-echo "not json" | outmatch --jsonl '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
-```
-
-## JSONL with ignore path
-
-```bash
-echo '{"id": 1, "ts": "x"}' | outmatch --jsonl --json-ignore '$.ts' '{"id": 1}'
-```
-
-## Blank lines ignored
+Blank lines are ignored:
 
 ```bash
 printf '{"id": 1}\n\n{"id": 2}' | outmatch --jsonl '{"id": 1}
 {"id": 2}'
 ```
 
-# JSONL Set Mode
+---
 
-Order-independent comparison with `--jsonl-set`.
+## Set Mode (`--jsonl-set`)
 
-## Set order independence
+Compares records regardless of order. Both sides must have the same records.
 
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-set '{"id": 2}
 {"id": 1}'
 ```
 
-## Set duplicate handling
+Duplicates are compared as-is:
 
 ```bash
 printf '{"id": 1}\n{"id": 1}' | outmatch --jsonl-set '{"id": 1}
 {"id": 1}'
 ```
 
-## Set missing record
+Missing records are reported:
 
 ```bash
 echo '{"id": 1}' | outmatch --jsonl-set '{"id": 1}
 {"id": 2}' 2>&1 | outmatch --contains "Missing"
 ```
 
-## Set extra record
+Extra records are reported:
 
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-set '{"id": 1}' 2>&1 | outmatch --contains "Extra"
 ```
 
-# JSONL Key Mode
+---
 
-Match by key field with `--jsonl-key`.
+## Key Mode (`--jsonl-key`)
 
-## Key-based matching
+Matches records by a key field, allowing different order but requiring matching keys.
 
 ```bash
 printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
@@ -104,21 +94,19 @@ printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
 {"id": 1, "name": "alice"}'
 ```
 
-## Missing key field in actual
+Missing key field is an error:
 
 ```bash
 echo '{"name": "alice"}' | outmatch --jsonl-key id '{"id": 1}' 2>&1 | \
     outmatch --contains "missing key field"
 ```
 
-## Missing key field in expected
-
 ```bash
 echo '{"id": 1}' | outmatch --jsonl-key id '{"name": "alice"}' 2>&1 | \
     outmatch --contains "missing key"
 ```
 
-## Key value mismatch
+Value mismatch for same key is reported:
 
 ```bash
 echo '{"id": 1, "name": "alice"}' | \
@@ -126,88 +114,12 @@ echo '{"id": 1, "name": "alice"}' | \
     outmatch --contains "Mismatch"
 ```
 
-# JSONL Contains Mode
-
-Subset matching with `--jsonl-contains`.
-
-## Single record contains
-
-```bash
-printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
-    outmatch --jsonl-contains '{"id": 1}'
-```
-
-## Multiple expected records
-
-```bash
-printf '{"id": 1}\n{"id": 2}\n{"id": 3}' | outmatch --jsonl-contains '{"id": 1}
-{"id": 3}'
-```
-
-## Partial field match
-
-```bash
-echo '{"id": 1, "name": "alice", "age": 30}' | outmatch --jsonl-contains '{"name": "alice"}'
-```
-
-## Missing record fails
-
-```bash
-printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-contains '{"id": 999}' 2>&1 | \
-    outmatch --contains "Missing"
-```
-
-# Edge Cases
-
-## Invalid JSON in jsonl-set mode
-
-```bash
-echo "not json" | outmatch --jsonl-set '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
-```
-
-## Invalid JSON in jsonl-key mode
-
-```bash
-echo "not json" | outmatch --jsonl-key id '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
-```
-
-## Invalid JSON in jsonl-contains mode
-
-```bash
-echo "not json" | outmatch --jsonl-contains '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
-```
-
-## JSONL set with json-ignore
-
-```bash
-printf '{"id": 1, "ts": "x"}\n{"id": 2, "ts": "y"}' | \
-    outmatch --jsonl-set --json-ignore '$.ts' '{"id": 2}
-{"id": 1}'
-```
-
-## JSONL key with json-ignore
-
-```bash
-printf '{"id": 1, "ts": "x"}\n{"id": 2, "ts": "y"}' | \
-    outmatch --jsonl-key id --json-ignore '$.ts' '{"id": 2}
-{"id": 1}'
-```
-
-## JSONL contains with json-ignore
-
-```bash
-printf '{"id": 1, "ts": "x"}\n{"id": 2, "ts": "y"}' | \
-    outmatch --jsonl-contains --json-ignore '$.ts' '{"id": 1}'
-```
-
-## Duplicate key in actual records
+Duplicate keys are rejected:
 
 ```bash
 printf '{"id": 1}\n{"id": 1}' | outmatch --jsonl-key id '{"id": 1}' 2>&1 | \
     outmatch --contains "Duplicate key"
 ```
-
-## Duplicate key in expected records
 
 ```bash
 echo '{"id": 1}' | outmatch --jsonl-key id '{"id": 1}
@@ -215,27 +127,122 @@ echo '{"id": 1}' | outmatch --jsonl-key id '{"id": 1}
     outmatch --contains "Duplicate key"
 ```
 
-## Missing and extra keys reported
+Missing and extra keys are reported:
 
 ```bash
 printf '{"id": 1}\n{"id": 3}' | outmatch --jsonl-key id '{"id": 1}
 {"id": 2}' 2>&1 | outmatch --contains "Missing keys"
 ```
 
-## Extra keys reported
-
 ```bash
 printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-key id '{"id": 1}' 2>&1 | \
     outmatch --contains "Extra keys"
 ```
 
-## Non-dict records in jsonl-contains
+---
+
+## Contains Mode (`--jsonl-contains`)
+
+Checks that expected records exist somewhere in the output. Order and extra records don't matter.
+
+Find a single record by partial match:
+
+```bash
+printf '{"id": 1, "name": "alice"}\n{"id": 2, "name": "bob"}' | \
+    outmatch --jsonl-contains '{"id": 1}'
+```
+
+Find multiple records:
+
+```bash
+printf '{"id": 1}\n{"id": 2}\n{"id": 3}' | outmatch --jsonl-contains '{"id": 1}
+{"id": 3}'
+```
+
+Match by any fields:
+
+```bash
+echo '{"id": 1, "name": "alice", "age": 30}' | outmatch --jsonl-contains '{"name": "alice"}'
+```
+
+Missing record fails:
+
+```bash
+printf '{"id": 1}\n{"id": 2}' | outmatch --jsonl-contains '{"id": 999}' 2>&1 | \
+    outmatch --contains "Missing"
+```
+
+Non-dict values work too:
 
 ```bash
 printf '1\n2\n3' | outmatch --jsonl-contains '2'
 ```
 
-## Many missing records truncated
+---
+
+## Using json-ignore with JSONL
+
+All JSONL modes support `--json-ignore` for volatile fields:
+
+```bash
+echo '{"id": 1, "ts": "x"}' | outmatch --jsonl --json-ignore '$.ts' '{"id": 1}'
+```
+
+```bash
+printf '{"id": 1, "ts": "x"}\n{"id": 2, "ts": "y"}' | \
+    outmatch --jsonl-set --json-ignore '$.ts' '{"id": 2}
+{"id": 1}'
+```
+
+```bash
+printf '{"id": 1, "ts": "x"}\n{"id": 2, "ts": "y"}' | \
+    outmatch --jsonl-key id --json-ignore '$.ts' '{"id": 2}
+{"id": 1}'
+```
+
+```bash
+printf '{"id": 1, "ts": "x"}\n{"id": 2, "ts": "y"}' | \
+    outmatch --jsonl-contains --json-ignore '$.ts' '{"id": 1}'
+```
+
+---
+
+## Nested Objects
+
+Field order independence applies at all nesting levels:
+
+```bash
+echo '{"user": {"name": "alice", "age": 30}}' | \
+    outmatch --jsonl '{"user": {"age": 30, "name": "alice"}}'
+```
+
+---
+
+## Error Handling
+
+Invalid JSON produces a parse error:
+
+```bash
+echo "not json" | outmatch --jsonl '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
+```
+
+```bash
+echo "not json" | outmatch --jsonl-set '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
+```
+
+```bash
+echo "not json" | outmatch --jsonl-key id '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
+```
+
+```bash
+echo "not json" | outmatch --jsonl-contains '{"id": 1}' 2>&1 | outmatch --contains "JSON parse error"
+```
+
+---
+
+## Edge Cases
+
+Many missing/extra records are truncated in output:
 
 ```bash
 echo '{"id": 1}' | outmatch --jsonl-set '{"id": 1}
@@ -246,8 +253,6 @@ echo '{"id": 1}' | outmatch --jsonl-set '{"id": 1}
 {"id": 6}
 {"id": 7}' 2>&1 | outmatch --contains "and 1 more"
 ```
-
-## Many extra records truncated
 
 ```bash
 printf '{"id": 1}\n{"id": 2}\n{"id": 3}\n{"id": 4}\n{"id": 5}\n{"id": 6}\n{"id": 7}' | \
