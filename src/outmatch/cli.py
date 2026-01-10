@@ -9,7 +9,15 @@ from typing import Annotated, Optional
 import typer
 
 from .compare import compare
-from .config import ColorMode, CompareMode, ExpectConfig, NormalizeOptions
+from .config import (
+    ColorMode,
+    CompareMode,
+    ExpectConfig,
+    NormalizeOptions,
+    RegexError,
+    compile_redactions,
+    compile_replacements,
+)
 from .normalize import preprocess
 from .output import format_error
 from .version import __version__
@@ -68,15 +76,24 @@ def _run_expect(
     mode = _determine_mode(
         contains, regex, json_mode, jsonl, jsonl_set, jsonl_key, jsonl_contains
     )
-    replacements = _parse_replacements(replace or [])
+
+    # Parse and compile regex patterns with validation
+    try:
+        raw_replacements = _parse_replacements(replace or [])
+        compiled_replacements = compile_replacements(raw_replacements)
+        compiled_redactions = compile_redactions(tuple(redact or []))
+    except RegexError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        raise typer.Exit(2)
+
     norm_opts = NormalizeOptions(
         strip_ansi=strip_ansi,
         normalize_newlines=normalize_newlines_opt,
         trim=trim,
         collapse_whitespace=collapse_whitespace_opt,
         ignore_case=ignore_case,
-        replacements=replacements,
-        redactions=tuple(redact or []),
+        replacements=compiled_replacements,
+        redactions=compiled_redactions,
     )
     config = ExpectConfig(
         mode=mode,

@@ -332,13 +332,23 @@ def execute_block(
             duration=duration,
         )
 
-    except Exception as e:
+    except OSError as e:
+        # Handle file not found, permission errors, etc.
         duration = time.time() - start_time
         return BlockResult(
             block=block,
             status=BlockStatus.FAILED,
             duration=duration,
-            error=str(e),
+            error=f"OS error: {e}",
+        )
+    except subprocess.SubprocessError as e:
+        # Handle subprocess-specific errors
+        duration = time.time() - start_time
+        return BlockResult(
+            block=block,
+            status=BlockStatus.FAILED,
+            duration=duration,
+            error=f"Subprocess error: {e}",
         )
 
 
