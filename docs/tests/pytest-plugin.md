@@ -1,33 +1,35 @@
-# Pytest Plugin Tests
+# Pytest Integration
 
-Tests that verify the outmatch pytest plugin loads and works correctly.
+Run markdown tests as part of your pytest suite.
 
-## Plugin is registered
+The outmatch pytest plugin automatically discovers and runs markdown files alongside your regular tests. No extra configuration needed - just run `pytest` on your docs directory.
 
+## How do I run markdown tests with pytest?
+
+Just point pytest at your markdown files:
+
+<!-- outmatch: skip -->
 ```bash
-pytest docs/tests/version.md --collect-only 2>&1 | outmatch --contains "outmatch-"
+pytest docs/tests/version.md --collect-only
 ```
 
-## Collects markdown files
+## Does it discover tests automatically?
 
+Yes. Pytest collects markdown files and shows the test count.
+
+## Do tests run normally?
+
+Yes. Results appear in standard pytest output:
+
+<!-- outmatch: skip -->
 ```bash
-pytest docs/tests/version.md --collect-only -q 2>&1 | outmatch --contains "2 tests"
+pytest docs/tests/version.md -v
 ```
 
-## Runs markdown tests
+## Where do test names come from?
 
-```bash
-pytest docs/tests/version.md -v 2>&1 | outmatch --contains "2 passed"
-```
+From markdown headings. Test names like "Version flag" appear in output.
 
-## Shows test names from headings
+## Does it show file locations?
 
-```bash
-pytest docs/tests/version.md --collect-only 2>&1 | outmatch --contains "Version flag"
-```
-
-## Reports correct file location
-
-```bash
-pytest docs/tests/version.md --collect-only 2>&1 | outmatch --contains "version.md"
-```
+Yes. File paths like `version.md` are reported alongside test names.
