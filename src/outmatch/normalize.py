@@ -1,11 +1,16 @@
 """Text normalization and preprocessing functions."""
 
+from __future__ import annotations
+
 import re
 
 from .config import NormalizeOptions
 
 # ANSI escape sequence pattern
 _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+# Pre-compiled pattern for whitespace collapsing
+_WHITESPACE = re.compile(r"\s+")
 
 
 def strip_ansi(text: str) -> str:
@@ -20,23 +25,42 @@ def normalize_newlines(text: str) -> str:
 
 def collapse_whitespace(text: str) -> str:
     """Collapse runs of whitespace into single spaces."""
-    return re.sub(r"\s+", " ", text)
+    return _WHITESPACE.sub(" ", text)
 
 
 def apply_replacements(
     text: str,
-    replacements: tuple[tuple[str, str], ...],
+    replacements: tuple[tuple[re.Pattern[str], str], ...],
 ) -> str:
-    """Apply regex replacements to text."""
+    """Apply pre-compiled regex replacements to text.
+
+    Args:
+        text: The text to transform.
+        replacements: Tuple of (compiled_pattern, replacement_string) pairs.
+
+    Returns:
+        Text with all replacements applied.
+    """
     for pattern, repl in replacements:
-        text = re.sub(pattern, repl, text)
+        text = pattern.sub(repl, text)
     return text
 
 
-def apply_redactions(text: str, patterns: tuple[str, ...]) -> str:
-    """Replace regex patterns with <redacted>."""
+def apply_redactions(
+    text: str,
+    patterns: tuple[re.Pattern[str], ...],
+) -> str:
+    """Replace patterns with <redacted>.
+
+    Args:
+        text: The text to redact.
+        patterns: Tuple of pre-compiled regex patterns.
+
+    Returns:
+        Text with all matches replaced by '<redacted>'.
+    """
     for pattern in patterns:
-        text = re.sub(pattern, "<redacted>", text)
+        text = pattern.sub("<redacted>", text)
     return text
 
 

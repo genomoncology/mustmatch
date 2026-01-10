@@ -1,4 +1,25 @@
-"""JSON and JSONL utility functions."""
+r"""JSON and JSONL utility functions.
+
+JSON Path Support
+-----------------
+The ``--json-ignore`` option uses a simplified JSON path syntax:
+
+Supported syntax:
+    - ``$.field`` or ``field`` - Access object field
+    - ``$.field.nested`` - Access nested field
+    - ``$.array[0]`` - Access array element by index
+    - ``$.field[0].nested`` - Combined access
+
+Limitations (not supported):
+    - Escaped dots in field names (e.g., ``a\.b`` for key "a.b")
+    - Bracket notation for keys (e.g., ``["key-with-dashes"]``)
+    - Wildcards or recursive descent (``*``, ``..*``)
+    - Filter expressions (``[?(@.price < 10)]``)
+    - Slice notation (``[0:5]``)
+
+For keys containing special characters, consider using ``--replace`` to
+transform the output before comparison instead.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +44,22 @@ def parse_jsonl(text: str) -> list[Any]:
 
 
 def remove_json_paths(obj: Any, paths: tuple[str, ...]) -> Any:
-    """Remove paths from JSON object (returns new object)."""
+    """Remove paths from JSON object (returns new object).
+
+    Args:
+        obj: JSON-serializable object to modify.
+        paths: Tuple of JSON paths to remove. See module docstring for
+            supported path syntax and limitations.
+
+    Returns:
+        A deep copy of the object with specified paths removed.
+        Non-existent paths are silently ignored.
+
+    Example:
+        >>> obj = {"a": 1, "b": {"c": 2}}
+        >>> remove_json_paths(obj, ("$.b.c",))
+        {'a': 1, 'b': {}}
+    """
     obj = json.loads(json.dumps(obj))  # Deep copy
 
     for path in paths:

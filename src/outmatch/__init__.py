@@ -13,6 +13,10 @@ from .config import (
     CompareResult,
     ExpectConfig,
     NormalizeOptions,
+    RegexError,
+    compile_pattern,
+    compile_redactions,
+    compile_replacements,
 )
 from .normalize import preprocess
 from .pytest import MarkdownTest
@@ -28,5 +32,9 @@ __all__ = [
     "ColorMode",
     "ExpectConfig",
     "NormalizeOptions",
+    "RegexError",
+    "compile_pattern",
+    "compile_redactions",
+    "compile_replacements",
     "MarkdownTest",
 ]

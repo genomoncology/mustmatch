@@ -1,5 +1,8 @@
 """Configuration dataclasses for outmatch."""
 
+from __future__ import annotations
+
+import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -25,17 +28,110 @@ class ColorMode(Enum):
     NEVER = "never"
 
 
+class RegexError(Exception):
+    """Error raised when a regex pattern is invalid or potentially unsafe."""
+
+    pass
+
+
+# Patterns that are known to cause catastrophic backtracking (ReDoS)
+# These are simplified heuristics - not exhaustive but catch common cases
+_REDOS_PATTERNS = [
+    # Nested quantifiers on overlapping groups: (a+)+, (a*)*+, (a+)*
+    re.compile(r"\([^)]*[+*][^)]*\)[+*]"),
+    # Overlapping alternations with quantifiers: (a|a)+
+    re.compile(r"\(([^|)]+)\|+\1[^)]*\)[+*]"),
+]
+
+
+def compile_pattern(pattern: str, name: str = "pattern") -> re.Pattern[str]:
+    """Compile a regex pattern with validation.
+
+    Args:
+        pattern: The regex pattern string to compile.
+        name: Human-readable name for error messages.
+
+    Returns:
+        Compiled regex pattern.
+
+    Raises:
+        RegexError: If the pattern is invalid or potentially unsafe.
+    """
+    # Check for potentially dangerous patterns (ReDoS)
+    for dangerous in _REDOS_PATTERNS:
+        if dangerous.search(pattern):
+            raise RegexError(
+                f"Potentially unsafe regex {name}: '{pattern}' - "
+                "pattern may cause catastrophic backtracking (ReDoS). "
+                "Avoid nested quantifiers like (a+)+ or (a|a)+."
+            )
+
+    try:
+        return re.compile(pattern)
+    except re.error as e:
+        raise RegexError(f"Invalid regex {name}: '{pattern}' - {e}") from e
+
+
+def compile_replacements(
+    replacements: tuple[tuple[str, str], ...],
+) -> tuple[tuple[re.Pattern[str], str], ...]:
+    """Compile replacement patterns with validation.
+
+    Args:
+        replacements: Tuple of (pattern, replacement) string pairs.
+
+    Returns:
+        Tuple of (compiled_pattern, replacement) pairs.
+
+    Raises:
+        RegexError: If any pattern is invalid or potentially unsafe.
+    """
+    result = []
+    for i, (pattern, repl) in enumerate(replacements):
+        compiled = compile_pattern(pattern, f"replacement[{i}]")
+        result.append((compiled, repl))
+    return tuple(result)
+
+
+def compile_redactions(
+    redactions: tuple[str, ...],
+) -> tuple[re.Pattern[str], ...]:
+    """Compile redaction patterns with validation.
+
+    Args:
+        redactions: Tuple of pattern strings.
+
+    Returns:
+        Tuple of compiled patterns.
+
+    Raises:
+        RegexError: If any pattern is invalid or potentially unsafe.
+    """
+    result = []
+    for i, pattern in enumerate(redactions):
+        compiled = compile_pattern(pattern, f"redaction[{i}]")
+        result.append(compiled)
+    return tuple(result)
+
+
 @dataclass(frozen=True)
 class NormalizeOptions:
-    """Options for text normalization/preprocessing."""
+    """Options for text normalization/preprocessing.
+
+    Use compile_replacements() and compile_redactions() to create
+    validated, pre-compiled patterns for the replacements and redactions
+    fields.
+    """
 
     strip_ansi: bool = False
     normalize_newlines: bool = False
     trim: bool = False
     collapse_whitespace: bool = False
     ignore_case: bool = False
-    replacements: tuple[tuple[str, str], ...] = ()
-    redactions: tuple[str, ...] = ()
+    # Pre-compiled patterns for replacements: tuple of (compiled_pattern, repl)
+    replacements: tuple[tuple[re.Pattern[str], str], ...] = ()
+    # Pre-compiled patterns for redactions
+    redactions: tuple[re.Pattern[str], ...] = ()
 
 
 @dataclass(frozen=True)
