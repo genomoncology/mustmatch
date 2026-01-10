@@ -111,8 +111,8 @@ dangerous-command
 
 ## Next Steps
 
-- [Exact Matching](tests/exact.md) - Newline handling, unicode, edge cases
-- [Pattern Matching](tests/regex.md) - Regex syntax, multiline patterns
+- [Matching Modes](tests/matching.md) - Exact, contains, regex
 - [JSON Modes](tests/json.md) - Deep comparison, field ignoring
-- [Transformations](tests/transform.md) - Replace, redact, normalize
-- [Test Runner](tests/mdtest.md) - Full `outmatch test` documentation
+- [Preprocessing](tests/preprocessing.md) - Normalization, replace, redact
+- [CLI Options](tests/cli.md) - Files, output, errors
+- [Test Runner](tests/mdtest.md) - `outmatch test` documentation
