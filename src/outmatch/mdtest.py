@@ -19,8 +19,6 @@ METADATA_PATTERN = re.compile(
     r'<!--\s*outmatch:\s*(.*?)\s*-->',
     re.IGNORECASE
 )
-OUTMATCH_PATTERN = re.compile(r'\|\s*outmatch\b')
-
 # Default exclusion patterns
 DEFAULT_EXCLUDE_DIRS = frozenset({
     'node_modules', '.git', '_site', 'build', 'dist',
@@ -94,6 +92,7 @@ class FileResult:
     path: Path
     blocks: list[BlockResult] = field(default_factory=list)
     duration: float = 0.0
+    error: str | None = None  # File-level error (e.g., read failure)
 
     @property
     def passed(self) -> int:
@@ -138,6 +137,11 @@ class RunResult:
     def timeout(self) -> int:
         return sum(f.timeout for f in self.files)
 
+    @property
+    def errors(self) -> int:
+        """Count of files with read/execution errors."""
+        return sum(1 for f in self.files if f.error is not None)
+
 
 # Alias for backward compatibility
 TestResult = RunResult
@@ -160,6 +164,22 @@ class RunConfig:
     junit_xml: Path | None = None
     json_output: Path | None = None
     tap_output: bool = False
+    # Pre-compiled patterns (computed in __post_init__)
+    _include_re: re.Pattern[str] | None = field(default=None, repr=False)
+    _exclude_re: re.Pattern[str] | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Pre-compile regex patterns for efficient reuse."""
+        if self.include_pattern and self._include_re is None:
+            object.__setattr__(
+                self, '_include_re',
+                re.compile(self.include_pattern, re.IGNORECASE)
+            )
+        if self.exclude_pattern and self._exclude_re is None:
+            object.__setattr__(
+                self, '_exclude_re',
+                re.compile(self.exclude_pattern, re.IGNORECASE)
+            )
 
 
 # Alias for backward compatibility
@@ -248,21 +268,19 @@ def should_skip_block(block: Block, config: TestConfig) -> bool:
         if not (block.line_start <= config.line_filter <= block.line_end):
             return True
 
-    # Include pattern
-    if config.include_pattern:
-        pattern = re.compile(config.include_pattern, re.IGNORECASE)
-        if not pattern.search(block.content):
-            if block.name and not pattern.search(block.name):
+    # Include pattern (use pre-compiled regex)
+    if config._include_re:
+        if not config._include_re.search(block.content):
+            if block.name and not config._include_re.search(block.name):
                 return True
             elif not block.name:
                 return True
 
-    # Exclude pattern
-    if config.exclude_pattern:
-        pattern = re.compile(config.exclude_pattern, re.IGNORECASE)
-        if pattern.search(block.content):
+    # Exclude pattern (use pre-compiled regex)
+    if config._exclude_re:
+        if config._exclude_re.search(block.content):
             return True
-        if block.name and pattern.search(block.name):
+        if block.name and config._exclude_re.search(block.name):
             return True
 
     return False
@@ -361,9 +379,13 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
 
     try:
         content = path.read_text()
-    except OSError:
-        # Return empty result with error
+    except OSError as e:
         result.duration = time.time() - start_time
+        result = FileResult(
+            path=path,
+            duration=result.duration,
+            error=f"Failed to read file: {e}",
+        )
         return result
 
     blocks = parse_markdown(content)
@@ -456,13 +478,16 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
                 try:
                     file_result = future.result()
                     result.files.append(file_result)
-                except Exception:
-                    # Handle execution errors
+                except Exception as e:
+                    # Preserve error information for debugging
                     path = futures[future]
-                    result.files.append(FileResult(path=path))
+                    result.files.append(FileResult(
+                        path=path,
+                        error=f"Execution error: {type(e).__name__}: {e}",
+                    ))
 
-                # Check fail-fast
-                if config.fail_fast and result.failed > 0:
+                # Check fail-fast (include errors as failures)
+                if config.fail_fast and (result.failed > 0 or result.errors > 0):
                     # Cancel remaining futures
                     for f in futures:
                         f.cancel()
@@ -473,7 +498,7 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
             file_result = run_file(path, config)
             result.files.append(file_result)
 
-            if config.fail_fast and result.failed > 0:
+            if config.fail_fast and (result.failed > 0 or result.errors > 0):
                 break
 
     result.duration = time.time() - start_time
@@ -495,11 +520,14 @@ def format_result_quiet(result: TestResult) -> str:
     passed = result.passed
     failed = result.failed
     skipped = result.skipped
+    errors = result.errors
 
-    status = "✓" if failed == 0 else "✗"
+    status = "✓" if (failed == 0 and errors == 0) else "✗"
     parts = [f"{status} {passed} passed"]
     if failed > 0:
         parts.append(f"✗ {failed} failed")
+    if errors > 0:
+        parts.append(f"⚠ {errors} errors")
     if skipped > 0:
         parts.append(f"⊘ {skipped} skipped")
     parts.append(f"{total} total")
@@ -514,6 +542,11 @@ def format_result_default(result: TestResult) -> str:
     for file_result in result.files:
         lines.append(f"\nRunning tests in {file_result.path}...")
         lines.append("")
+
+        # Show file-level errors
+        if file_result.error:
+            lines.append(f"  ✗ {file_result.error}")
+            continue
 
         for block_result in file_result.blocks:
             name = format_block_name(block_result.block)
@@ -539,6 +572,12 @@ def format_result_verbose(result: TestResult) -> str:
     for file_result in result.files:
         lines.append(f"\nRunning tests in {file_result.path}...")
         lines.append("")
+
+        # Show file-level errors
+        if file_result.error:
+            lines.append(f"  ✗ {file_result.error}")
+            lines.append("")
+            continue
 
         for block_result in file_result.blocks:
             name = format_block_name(block_result.block)
@@ -716,7 +755,7 @@ def run_command(
         print(format_result(result, config))
 
     # Exit code
-    if result.failed > 0 or result.timeout > 0:
+    if result.failed > 0 or result.timeout > 0 or result.errors > 0:
         return 1
     return 0
 

@@ -79,7 +79,7 @@ class TestMarkdownTestInternals:
         with pytest.raises(TimeoutError) as exc:
             tests[0].run(timeout=0.01)
 
-        assert "timed out" in str(exc.value)
+        assert "Timeout:" in str(exc.value)
 
     def test_error_formatting(self, tmp_path: Path) -> None:
         """Test error message formatting - lines 110-117.

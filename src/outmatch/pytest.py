@@ -11,6 +11,8 @@ import subprocess
 from pathlib import Path
 from typing import Iterator
 
+from .parsing import parse_markdown_file
+
 
 class MarkdownTest:
     """Represents a single bash block from markdown."""
@@ -32,52 +34,18 @@ class MarkdownTest:
 
     @classmethod
     def _parse_file(cls, file: Path) -> Iterator[MarkdownTest]:
-        """Parse markdown file and yield bash blocks."""
-        content = file.read_text()
-        lines = content.split("\n")
+        """Parse markdown file and yield bash blocks.
 
-        in_bash_block = False
-        block_start = 0
-        block_content: list[str] = []
-        block_name = "Unnamed block"
-
-        for i, line in enumerate(lines, 1):
-            stripped = line.strip()
-
-            if stripped in ("```bash", "```sh", "```shell"):
-                in_bash_block = True
-                block_start = i + 1
-                block_content = []
-                block_name = cls._find_block_name(lines, i - 1)
-
-            elif stripped == "```" and in_bash_block:
-                in_bash_block = False
-                block_text = "\n".join(block_content)
-                if block_text.strip():
-                    yield cls(
-                        file=file,
-                        line=block_start,
-                        content=block_text,
-                        name=block_name,
-                    )
-
-            elif in_bash_block:
-                block_content.append(line)
-
-    @classmethod
-    def _find_block_name(cls, lines: list[str], end_index: int) -> str:
-        """Find the name for a bash block from preceding heading or comment."""
-        start = max(end_index - 10, 0)
-        for i in range(end_index - 1, start - 1, -1):
-            line = lines[i].strip()
-
-            if line.startswith("#"):
-                return line.lstrip("#").strip()
-
-            if line.startswith("<!--") and line.endswith("-->"):
-                return line[4:-3].strip()
-
-        return "Unnamed block"
+        Uses shared parsing module to avoid code duplication with mdtest.py.
+        """
+        for block in parse_markdown_file(file, include_name=True):
+            if block.content.strip():
+                yield cls(
+                    file=file,
+                    line=block.line_start,
+                    content=block.content,
+                    name=block.name or "Unnamed block",
+                )
 
     def run(
         self,
@@ -103,7 +71,7 @@ class MarkdownTest:
         except subprocess.TimeoutExpired as e:
             error_msg = f"{self.file}:{self.line} ({self.name})\n\n"
             error_msg += f"Command:\n  {self.content}\n\n"
-            error_msg += f"Error: Execution timed out after {timeout}s"
+            error_msg += f"Timeout: Execution exceeded {timeout}s limit"
             raise TimeoutError(error_msg) from e
 
         if proc.returncode != 0:
