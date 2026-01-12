@@ -36,7 +36,6 @@ class DiffFormat(Enum):
     UNIFIED = "unified"  # Default unified diff
     SIDE_BY_SIDE = "side-by-side"  # Side-by-side comparison
     INLINE = "inline"  # Word-level inline diff
-    JSON_PATH = "json-path"  # JSON path-based diff (for JSON mode)
     NONE = "none"  # No diff output
 
 
