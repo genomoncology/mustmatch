@@ -253,7 +253,7 @@ outmatch test /tmp/fail-test.md -v 2>&1 | \
 Stop on first failure to focus on one issue:
 
 ```bash
-outmatch test docs/ --fail-fast -q 2>&1 | \
+outmatch test docs/cli.md --fail-fast -q 2>&1 | \
     outmatch --contains "passed"
 ```
 
