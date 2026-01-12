@@ -25,6 +25,7 @@ transform the output before comparison instead.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from typing import Any
@@ -173,7 +174,7 @@ def remove_json_paths(obj: Any, paths: tuple[str, ...]) -> Any:
         >>> remove_json_paths(obj, ("$.b.c",))
         {'a': 1, 'b': {}}
     """
-    obj = json.loads(json.dumps(obj))  # Deep copy
+    obj = copy.deepcopy(obj)
 
     for path in paths:
         _remove_single_path(obj, path)

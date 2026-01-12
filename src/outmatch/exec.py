@@ -102,7 +102,7 @@ def check_assertions(result: ExecResult, config: ExecConfig) -> list[CompareResu
 
     Returns list of failed assertions (empty if all pass).
     """
-    failures = []
+    failures: list[CompareResult] = []
 
     # Exit code check
     if config.expected_exit_code is not None:
@@ -117,77 +117,30 @@ def check_assertions(result: ExecResult, config: ExecConfig) -> list[CompareResu
                 )
             )
 
-    # Stdout assertions
-    if config.stdout_exact is not None:
-        r = compare_exact(result.stdout, config.stdout_exact)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stdout: {r.message}")
-            )
+    # Define assertions as (config_attr, compare_func, label, stream)
+    # This data-driven approach eliminates repetitive assertion blocks
+    stream_assertions = [
+        ("stdout_exact", compare_exact, "Stdout", "stdout"),
+        ("stdout_contains", compare_contains, "Stdout", "stdout"),
+        ("stdout_not_contains", compare_not_contains, "Stdout", "stdout"),
+        ("stdout_regex", compare_regex, "Stdout", "stdout"),
+        ("stdout_not_regex", compare_not_regex, "Stdout", "stdout"),
+        ("stderr_exact", compare_exact, "Stderr", "stderr"),
+        ("stderr_contains", compare_contains, "Stderr", "stderr"),
+        ("stderr_not_contains", compare_not_contains, "Stderr", "stderr"),
+        ("stderr_regex", compare_regex, "Stderr", "stderr"),
+        ("stderr_not_regex", compare_not_regex, "Stderr", "stderr"),
+    ]
 
-    if config.stdout_contains is not None:
-        r = compare_contains(result.stdout, config.stdout_contains)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stdout: {r.message}")
-            )
-
-    if config.stdout_not_contains is not None:
-        r = compare_not_contains(result.stdout, config.stdout_not_contains)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stdout: {r.message}")
-            )
-
-    if config.stdout_regex is not None:
-        r = compare_regex(result.stdout, config.stdout_regex)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stdout: {r.message}")
-            )
-
-    if config.stdout_not_regex is not None:
-        r = compare_not_regex(result.stdout, config.stdout_not_regex)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stdout: {r.message}")
-            )
-
-    # Stderr assertions
-    if config.stderr_exact is not None:
-        r = compare_exact(result.stderr, config.stderr_exact)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stderr: {r.message}")
-            )
-
-    if config.stderr_contains is not None:
-        r = compare_contains(result.stderr, config.stderr_contains)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stderr: {r.message}")
-            )
-
-    if config.stderr_not_contains is not None:
-        r = compare_not_contains(result.stderr, config.stderr_not_contains)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stderr: {r.message}")
-            )
-
-    if config.stderr_regex is not None:
-        r = compare_regex(result.stderr, config.stderr_regex)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stderr: {r.message}")
-            )
-
-    if config.stderr_not_regex is not None:
-        r = compare_not_regex(result.stderr, config.stderr_not_regex)
-        if not r.success:
-            failures.append(
-                CompareResult(success=False, message=f"Stderr: {r.message}")
-            )
+    for config_attr, compare_func, label, stream in stream_assertions:
+        expected = getattr(config, config_attr)
+        if expected is not None:
+            actual = getattr(result, stream)
+            r = compare_func(actual, expected)
+            if not r.success:
+                failures.append(
+                    CompareResult(success=False, message=f"{label}: {r.message}")
+                )
 
     # Combined JSON assertion
     if config.output_json is not None:

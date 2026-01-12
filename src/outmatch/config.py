@@ -46,7 +46,16 @@ class RegexError(Exception):
 
 
 # Patterns that are known to cause catastrophic backtracking (ReDoS)
-# These are simplified heuristics - not exhaustive but catch common cases
+#
+# NOTE: This is a best-effort heuristic, NOT a comprehensive ReDoS detector.
+# It catches common dangerous patterns but cannot detect all problematic regexes.
+# More sophisticated patterns like overlapping greedy quantifiers (.*.*), nested
+# alternations ((a|b)*)*), or backreference loops may still cause issues.
+#
+# For untrusted input, consider:
+# - Using the `regex` library with timeout support
+# - Adding execution timeouts to regex operations
+# - Restricting allowed regex syntax
 _REDOS_PATTERNS = [
     # Nested quantifiers on overlapping groups: (a+)+, (a*)*+, (a+)*
     re.compile(r"\([^)]*[+*][^)]*\)[+*]"),
