@@ -76,8 +76,8 @@ printf '{"id":1}\n{"id":2}' | outmatch --jsonl '{"id":1}
 {"id":2}'
 ```
 
-[**All modes → docs/tests/matching.md**](docs/tests/matching.md) ·
-[**JSON details → docs/tests/json.md**](docs/tests/json.md)
+[**All modes → docs/matching.md**](docs/matching.md) ·
+[**JSON details → docs/json.md**](docs/json.md)
 
 ---
 
@@ -105,7 +105,7 @@ echo '{"data":"x","ts":123}' | outmatch --json \
     --json-ignore '$.ts' '{"data":"x"}'
 ```
 
-[**Preprocessing → docs/tests/preprocessing.md**](docs/tests/preprocessing.md)
+[**Preprocessing → docs/preprocessing.md**](docs/preprocessing.md)
 
 ---
 
@@ -170,8 +170,8 @@ pytest docs/                  # Run markdown as tests
 pytest docs/ --collect-only   # See discovered tests
 ```
 
-[**Test runner → docs/tests/mdtest.md**](docs/tests/mdtest.md) ·
-[**pytest plugin → docs/tests/pytest-plugin.md**](docs/tests/pytest-plugin.md)
+[**Test runner → docs/mdtest.md**](docs/mdtest.md) ·
+[**pytest plugin → docs/pytest-plugin.md**](docs/pytest-plugin.md)
 
 ---
 
@@ -258,7 +258,7 @@ Output:
   --diff-context N       Diff context lines
 ```
 
-[**Full CLI docs → docs/tests/cli.md**](docs/tests/cli.md)
+[**Full CLI docs → docs/cli.md**](docs/cli.md)
 
 ---
 

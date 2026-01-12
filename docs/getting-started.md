@@ -98,8 +98,10 @@ Skip blocks with HTML comments:
 
 ## Next Steps
 
-- [Matching Modes](tests/matching.md) - Exact, contains, regex
-- [JSON Modes](tests/json.md) - Deep comparison, field ignoring
-- [Preprocessing](tests/preprocessing.md) - Normalization, replace, redact
-- [CLI Options](tests/cli.md) - Files, output, errors
-- [Test Runner](tests/mdtest.md) - `outmatch test` documentation
+- [Text Matching](matching.md) - Exact, contains, regex
+- [JSON Comparison](json.md) - Semantic comparison, field ignoring
+- [JSONL Comparison](jsonl.md) - JSON Lines modes
+- [Preprocessing](preprocessing.md) - Normalization, replace, redact
+- [CLI Reference](cli.md) - All options, exit codes, errors
+- [Test Runner](mdtest.md) - `outmatch test` documentation
+- [Pytest Plugin](pytest-plugin.md) - pytest integration
