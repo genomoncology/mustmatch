@@ -13,7 +13,7 @@ outmatch test docs/ README.md    # Test multiple paths
 Test this documentation:
 
 ```bash
-outmatch test docs/version.md --quiet
+outmatch test docs/cli.md --quiet
 ```
 
 ## Output Modes
@@ -21,26 +21,26 @@ outmatch test docs/version.md --quiet
 **Default** - Shows pass/fail per block with summary:
 
 ```bash
-outmatch test docs/version.md 2>&1 | outmatch --contains "Results:"
+outmatch test docs/cli.md 2>&1 | outmatch --contains "Results:"
 ```
 
 **Quiet** (`-q`) - Just the summary:
 
 ```bash
-outmatch test docs/version.md --quiet | outmatch --regex '\d+ passed'
+outmatch test docs/cli.md --quiet | outmatch --regex '\d+ passed'
 ```
 
 **Verbose** (`-v`) - Full output including commands:
 
 ```bash
-outmatch test docs/version.md --verbose 2>&1 | \
+outmatch test docs/cli.md --verbose 2>&1 | \
     outmatch --contains "Block (line"
 ```
 
 **TAP** - Test Anything Protocol format:
 
 ```bash
-outmatch test docs/version.md --tap | outmatch --contains "TAP version"
+outmatch test docs/cli.md --tap | outmatch --contains "TAP version"
 ```
 
 ## Report Files
@@ -49,11 +49,11 @@ Generate reports for CI integration:
 
 ```bash
 # JUnit XML (for Jenkins, GitLab CI, etc.)
-outmatch test docs/version.md --junit-xml /tmp/report.xml -q
+outmatch test docs/cli.md --junit-xml /tmp/report.xml -q
 cat /tmp/report.xml | outmatch --contains "testsuite"
 
 # JSON report
-outmatch test docs/version.md --json /tmp/report.json -q
+outmatch test docs/cli.md --json /tmp/report.json -q
 cat /tmp/report.json | outmatch --contains '"passed":'
 ```
 
@@ -71,7 +71,7 @@ outmatch test docs/matching.md --exclude "Empty" -q | \
     outmatch --contains "passed"
 
 # Run block at specific line
-outmatch test docs/version.md --line 8 -q | \
+outmatch test docs/cli.md --line 8 -q | \
     outmatch --contains "1 passed"
 ```
 
@@ -187,13 +187,13 @@ outmatch test /tmp/env-test.md -q
 By default, each test runs in its markdown file's directory:
 
 ```bash
-outmatch test docs/version.md -q
+outmatch test docs/cli.md -q
 ```
 
 Override with `--cwd`:
 
 ```bash
-outmatch test docs/version.md --cwd /tmp -q
+outmatch test docs/cli.md --cwd /tmp -q
 ```
 
 Pass environment variables with `--env`:
@@ -231,8 +231,8 @@ echo hello
 Verify naming works:
 
 ```bash
-outmatch test docs/version.md -v 2>&1 | \
-    outmatch --contains "Version flag"
+outmatch test docs/cli.md -v 2>&1 | \
+    outmatch --contains "Version"
 ```
 
 ## Debugging Failures

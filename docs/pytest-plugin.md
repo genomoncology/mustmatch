@@ -9,6 +9,7 @@ in markdown files alongside your regular tests.
 
 Install outmatch in your project - the plugin registers automatically:
 
+<!-- outmatch: skip -->
 ```bash
 pip install outmatch
 ```
@@ -25,16 +26,16 @@ testpaths = ["tests", "docs"]
 
 Point pytest at your markdown files:
 
+<!-- outmatch: skip -->
 ```bash
 # Run all markdown tests
 pytest docs/
 
 # Run specific file
-pytest docs/version.md
+pytest docs/cli.md
 
 # See what tests are discovered
-pytest docs/version.md --collect-only 2>&1 | \
-    outmatch --contains "version.md"
+pytest docs/cli.md --collect-only
 ```
 
 ## Test Discovery
@@ -42,14 +43,14 @@ pytest docs/version.md --collect-only 2>&1 | \
 Every ` ```bash ` block becomes a test item:
 
 ```bash
-pytest docs/version.md --collect-only 2>&1 | \
+pytest docs/cli.md --collect-only 2>&1 | \
     outmatch --contains "<MarkdownItem"
 ```
 
 Test names come from the preceding markdown heading:
 
 ```bash
-pytest docs/version.md -v 2>&1 | outmatch --contains "Version flag"
+pytest docs/cli.md -v 2>&1 | outmatch --contains "Version"
 ```
 
 ## Output Format
@@ -57,13 +58,13 @@ pytest docs/version.md -v 2>&1 | outmatch --contains "Version flag"
 Results appear in standard pytest format:
 
 ```bash
-pytest docs/version.md 2>&1 | outmatch --contains "passed"
+pytest docs/cli.md 2>&1 | outmatch --contains "passed"
 ```
 
 File paths are reported alongside test names:
 
 ```bash
-pytest docs/version.md -v 2>&1 | outmatch --contains "version.md"
+pytest docs/cli.md -v 2>&1 | outmatch --contains "cli.md"
 ```
 
 ## Mixing with Unit Tests
@@ -71,7 +72,7 @@ pytest docs/version.md -v 2>&1 | outmatch --contains "version.md"
 Markdown tests run alongside regular pytest tests:
 
 ```bash
-pytest tests/ docs/version.md 2>&1 | outmatch --contains "passed"
+pytest tests/ docs/cli.md 2>&1 | outmatch --contains "passed"
 ```
 
 ## Skipping Blocks
