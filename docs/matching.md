@@ -1,10 +1,12 @@
-# Matching Modes
+# Text Matching Modes
 
-outmatch supports three text matching modes: exact (default), contains, and regex.
+outmatch supports three text matching modes: exact (default), contains,
+and regex. For structured data, see [JSON](json.md) and [JSONL](jsonl.md).
 
 ## Exact Match (default)
 
-Output must match character-for-character. Trailing newlines are normalized automatically.
+Output must match character-for-character. Trailing newlines are
+normalized automatically.
 
 ```bash
 echo "hello world" | outmatch "hello world"
@@ -28,14 +30,21 @@ echo "hello" | outmatch "world" || test $? -eq 1
 
 ## Contains (`--contains`)
 
-Check if output includes a substring anywhere. Whitespace is trimmed from expected.
+Check if output includes a substring anywhere. Whitespace is
+trimmed from expected.
 
 ```bash
 echo "hello world" | outmatch --contains "world"
 echo "hello world" | outmatch --contains "hello"
 echo "the quick brown fox" | outmatch --contains "quick brown"
-printf "line one\nline two\nline three" | outmatch --contains "line two"
 echo "hello world" | outmatch --contains "  world  "
+```
+
+Works across multiple lines:
+
+```bash
+printf "line one\nline two\nline three" | \
+    outmatch --contains "line two"
 ```
 
 Case-sensitive by default:
@@ -54,16 +63,18 @@ printf "" | outmatch --contains "something" || test $? -eq 1
 
 ## Regex (`--regex`)
 
-Match output against a Python regex pattern. Uses DOTALL mode (`.` matches newlines).
+Match output against a Python regex pattern. Uses DOTALL mode
+(`.` matches newlines) and MULTILINE mode.
 
 ```bash
-echo "finished in 1.23s" | outmatch --regex 'finished in \d+\.\d+s'
+echo "finished in 1.23s" | \
+    outmatch --regex 'finished in \d+\.\d+s'
 echo "abc123xyz" | outmatch --regex '[a-z]+\d+[a-z]+'
 echo "success" | outmatch --regex 'success|failure'
 printf "line1\nline2\nline3" | outmatch --regex 'line1.*line3'
 ```
 
-Anchors for full match:
+Use anchors for full match:
 
 ```bash
 echo "hello world" | outmatch --regex '^hello.*world$'
@@ -85,7 +96,8 @@ echo "HELLO" | outmatch --regex 'hello' || test $? -eq 1
 Invalid regex returns exit code 2:
 
 ```bash
-echo "test" | outmatch --regex '[invalid' 2>&1 | outmatch --contains "Invalid regex"
+echo "test" | outmatch --regex '[invalid' 2>&1 | \
+    outmatch --contains "Invalid regex"
 ```
 
 Pattern not found returns exit code 1:
@@ -94,9 +106,12 @@ Pattern not found returns exit code 1:
 echo "hello" | outmatch --regex '\d+' || test $? -eq 1
 ```
 
-## Empty and Large Output
+## Edge Cases
+
+Empty output and large output work correctly:
 
 ```bash
 printf "" | outmatch ""
-python3 -c "print('x' * 1000)" | outmatch "$(python3 -c "print('x' * 1000)")"
+python3 -c "print('x' * 1000)" | \
+    outmatch "$(python3 -c "print('x' * 1000)")"
 ```

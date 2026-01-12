@@ -426,6 +426,636 @@ class TestMdtestExceptionHandling:
         assert len(result.blocks) == 0
 
 
+class TestMdtestMetadataParsing:
+    """Tests for BlockMetadata parsing edge cases - lines 60-61."""
+
+    def test_invalid_timeout_value(self) -> None:
+        """Test that invalid timeout values are ignored (lines 60-61)."""
+        from outmatch.mdtest import BlockMetadata
+
+        # Invalid timeout should be ignored (not raise, just skip)
+        meta = BlockMetadata.parse("timeout=notanumber")
+        assert meta.timeout is None
+
+    def test_env_directive_parsing(self) -> None:
+        """Test parsing env directive with multiple vars."""
+        from outmatch.mdtest import BlockMetadata
+
+        meta = BlockMetadata.parse("env=FOO=bar,BAZ=qux")
+        assert meta.env == {"FOO": "bar", "BAZ": "qux"}
+
+
+class TestMdtestBlockTimeout:
+    """Tests for block timeout handling - lines 306-310."""
+
+    def test_block_timeout(self, tmp_path: Path) -> None:
+        """Test that blocks exceeding timeout are properly handled."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockStatus,
+            TestConfig,
+            execute_block,
+        )
+
+        block = Block(
+            content="sleep 10",
+            line_start=1,
+            line_end=2,
+            metadata=BlockMetadata(),
+        )
+        config = TestConfig(timeout=1)  # 1 second timeout
+
+        result = execute_block(block, config)
+        assert result.status == BlockStatus.TIMEOUT
+        assert "timeout" in result.error.lower()
+
+
+class TestMdtestParallelExecution:
+    """Tests for parallel test execution - lines 450-469."""
+
+    def test_parallel_execution(self, tmp_path: Path) -> None:
+        """Test parallel execution of multiple files."""
+        from outmatch.mdtest import TestConfig, run_tests
+
+        # Create multiple markdown files
+        for i in range(3):
+            md = tmp_path / f"test{i}.md"
+            md.write_text(f"```bash\necho {i}\n```\n")
+
+        config = TestConfig(parallel=4)
+        result = run_tests([tmp_path], config)
+
+        assert result.total == 3
+        assert result.passed == 3
+
+    def test_no_files_found(self, tmp_path: Path) -> None:
+        """Test run_tests with empty directory - lines 445-446."""
+        from outmatch.mdtest import TestConfig, run_tests
+
+        # Create empty directory
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        config = TestConfig()
+        result = run_tests([empty_dir], config)
+
+        assert result.total == 0
+
+
+class TestMdtestFailFast:
+    """Tests for fail-fast behavior - lines 406, 477."""
+
+    def test_fail_fast_sequential(self, tmp_path: Path) -> None:
+        """Test fail-fast stops on first failure in sequential mode."""
+        from outmatch.mdtest import TestConfig, run_tests
+
+        md = tmp_path / "test.md"
+        md.write_text(
+            "```bash\nexit 1\n```\n```bash\necho second\n```\n"
+        )
+
+        config = TestConfig(parallel=1, fail_fast=True)
+        result = run_tests([tmp_path], config)
+
+        # Should stop after first failure
+        assert result.failed == 1
+        # Second block should not have run
+        assert result.total == 1
+
+
+class TestMdtestOutputFormats:
+    """Tests for various output formatting functions."""
+
+    def test_quiet_mode_with_failures(self, tmp_path: Path) -> None:
+        """Test quiet mode output with failures - line 502."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_result_quiet,
+        )
+
+        block = Block("exit 1", 1, 2, "failing", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(block=block, status=BlockStatus.FAILED),
+                ]
+            )
+        ])
+
+        output = format_result_quiet(result)
+        assert "failed" in output
+        assert "✗" in output
+
+    def test_default_mode_with_skipped(self, tmp_path: Path) -> None:
+        """Test default mode output with skipped blocks - lines 524-525."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_result_default,
+        )
+
+        block = Block("echo hi", 1, 2, "skipped", BlockMetadata(skip=True))
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(block=block, status=BlockStatus.SKIPPED),
+                ]
+            )
+        ])
+
+        output = format_result_default(result)
+        assert "skipped" in output
+        assert "⊘" in output
+
+    def test_default_mode_with_timeout(self, tmp_path: Path) -> None:
+        """Test default mode output with timeout - lines 526-527."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_result_default,
+        )
+
+        block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.TIMEOUT,
+                        error="Timeout after 30s"
+                    ),
+                ]
+            )
+        ])
+
+        output = format_result_default(result)
+        assert "timeout" in output.lower()
+        assert "⏱" in output
+
+    def test_verbose_mode_with_failure(self, tmp_path: Path) -> None:
+        """Test verbose mode output with failure - lines 559-563."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_result_verbose,
+        )
+
+        block = Block("echo fail; exit 1", 1, 2, "failing", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.FAILED,
+                        error="Exit code 1",
+                        actual="error output here"
+                    ),
+                ]
+            )
+        ])
+
+        output = format_result_verbose(result)
+        assert "Exit code 1" in output
+        assert "Output:" in output
+        assert "error output" in output
+
+    def test_verbose_mode_with_timeout(self, tmp_path: Path) -> None:
+        """Test verbose mode output with timeout - lines 568-573."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_result_verbose,
+        )
+
+        block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.TIMEOUT,
+                        error="Block exceeded 30s timeout"
+                    ),
+                ]
+            )
+        ])
+
+        output = format_result_verbose(result)
+        assert "timeout" in output.lower()
+        assert "⏱" in output
+
+    def test_verbose_truncates_long_content(self, tmp_path: Path) -> None:
+        """Test that verbose mode truncates long command content - line 554."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_result_verbose,
+        )
+
+        # Create a block with more than 5 lines
+        long_cmd = "\n".join(f"echo line{i}" for i in range(10))
+        block = Block(long_cmd, 1, 12, "long", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.FAILED,
+                        error="Exit code 1",
+                    ),
+                ]
+            )
+        ])
+
+        output = format_result_verbose(result)
+        # Should show "..." for truncated content
+        assert "..." in output
+
+
+class TestMdtestReportFormats:
+    """Tests for JUnit XML, JSON, and TAP report formats."""
+
+    def test_junit_xml_with_failure(self, tmp_path: Path) -> None:
+        """Test JUnit XML output with failures - lines 610-613."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            write_junit_xml,
+        )
+
+        block = Block("exit 1", 1, 2, "failing", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.FAILED,
+                        error="Exit code 1",
+                        actual="some output"
+                    ),
+                ]
+            )
+        ])
+
+        xml_path = tmp_path / "report.xml"
+        write_junit_xml(result, xml_path)
+
+        content = xml_path.read_text()
+        assert "<failure" in content
+        assert "Exit code 1" in content
+
+    def test_junit_xml_with_timeout(self, tmp_path: Path) -> None:
+        """Test JUnit XML output with timeout - lines 615-616."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            write_junit_xml,
+        )
+
+        block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.TIMEOUT,
+                        error="Timeout"
+                    ),
+                ]
+            )
+        ])
+
+        xml_path = tmp_path / "report.xml"
+        write_junit_xml(result, xml_path)
+
+        content = xml_path.read_text()
+        assert "<error" in content
+
+    def test_junit_xml_with_skipped(self, tmp_path: Path) -> None:
+        """Test JUnit XML output with skipped - line 618."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            write_junit_xml,
+        )
+
+        block = Block("echo hi", 1, 2, "skipped", BlockMetadata(skip=True))
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(block=block, status=BlockStatus.SKIPPED),
+                ]
+            )
+        ])
+
+        xml_path = tmp_path / "report.xml"
+        write_junit_xml(result, xml_path)
+
+        content = xml_path.read_text()
+        assert "<skipped" in content
+
+    def test_json_report_with_error_and_actual(self, tmp_path: Path) -> None:
+        """Test JSON report with error and actual - lines 653, 655, 657."""
+        import json
+
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            write_json_report,
+        )
+
+        block = Block("exit 1", 1, 2, "failing", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.FAILED,
+                        error="Exit code 1",
+                        expected="success",
+                        actual="failure output"
+                    ),
+                ]
+            )
+        ])
+
+        json_path = tmp_path / "report.json"
+        write_json_report(result, json_path)
+
+        data = json.loads(json_path.read_text())
+        block_data = data["files"][0]["blocks"][0]
+        assert block_data["error"] == "Exit code 1"
+        assert block_data["expected"] == "success"
+        assert block_data["actual"] == "failure output"
+
+    def test_tap_output_passed(self, tmp_path: Path) -> None:
+        """Test TAP output for passed tests - line 677."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_tap,
+        )
+
+        block = Block("echo hi", 1, 2, "passing", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(block=block, status=BlockStatus.PASSED),
+                ]
+            )
+        ])
+
+        output = format_tap(result)
+        assert "TAP version 13" in output
+        assert "ok 1 -" in output
+
+    def test_tap_output_failed(self, tmp_path: Path) -> None:
+        """Test TAP output for failed tests - lines 678-685."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_tap,
+        )
+
+        block = Block("exit 1", 1, 2, "failing", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.FAILED,
+                        error="Exit code 1",
+                        actual="output"
+                    ),
+                ]
+            )
+        ])
+
+        output = format_tap(result)
+        assert "not ok 1 -" in output
+        assert "message:" in output
+        assert "actual:" in output
+
+    def test_tap_output_skipped(self, tmp_path: Path) -> None:
+        """Test TAP output for skipped tests - lines 686-687."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_tap,
+        )
+
+        block = Block("echo hi", 1, 2, "skipped", BlockMetadata(skip=True))
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(block=block, status=BlockStatus.SKIPPED),
+                ]
+            )
+        ])
+
+        output = format_tap(result)
+        assert "# SKIP" in output
+
+    def test_tap_output_timeout(self, tmp_path: Path) -> None:
+        """Test TAP output for timeout tests - lines 688-689."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            BlockResult,
+            BlockStatus,
+            FileResult,
+            TestResult,
+            format_tap,
+        )
+
+        block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
+        result = TestResult(files=[
+            FileResult(
+                path=tmp_path / "test.md",
+                blocks=[
+                    BlockResult(
+                        block=block,
+                        status=BlockStatus.TIMEOUT,
+                        error="Timeout"
+                    ),
+                ]
+            )
+        ])
+
+        output = format_tap(result)
+        assert "# TIMEOUT" in output
+
+
+class TestMdtestRunCommand:
+    """Tests for run_command entry point - line 701."""
+
+    def test_run_command_no_paths(self, tmp_path: Path, monkeypatch) -> None:
+        """Test run_command with no paths uses cwd - line 701."""
+        from outmatch.mdtest import TestConfig, run_command
+
+        # Create a markdown file in the temp directory
+        md = tmp_path / "test.md"
+        md.write_text("```bash\necho hello\n```\n")
+
+        monkeypatch.chdir(tmp_path)
+        config = TestConfig(quiet=True)
+
+        # Empty paths list should default to cwd
+        result = run_command([], config)
+        assert result == 0
+
+
+class TestMdtestBlockFiltering:
+    """Tests for block filtering logic - lines 258, 264, 266."""
+
+    def test_include_pattern_no_match_no_name(self, tmp_path: Path) -> None:
+        """Test include pattern with no match and no block name - line 258."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            TestConfig,
+            should_skip_block,
+        )
+
+        # Block with no name and content that doesn't match pattern
+        block = Block("echo hello", 1, 2, None, BlockMetadata())
+        config = TestConfig(include_pattern="NOMATCH")
+
+        # Should skip because pattern doesn't match and no name
+        assert should_skip_block(block, config) is True
+
+    def test_exclude_pattern_matches_content(self, tmp_path: Path) -> None:
+        """Test exclude pattern matching content - line 264."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            TestConfig,
+            should_skip_block,
+        )
+
+        block = Block("echo EXCLUDE_ME", 1, 2, "test", BlockMetadata())
+        config = TestConfig(exclude_pattern="EXCLUDE")
+
+        assert should_skip_block(block, config) is True
+
+    def test_exclude_pattern_matches_name(self, tmp_path: Path) -> None:
+        """Test exclude pattern matching block name - line 266."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            TestConfig,
+            should_skip_block,
+        )
+
+        block = Block("echo hello", 1, 2, "EXCLUDE_ME", BlockMetadata())
+        config = TestConfig(exclude_pattern="EXCLUDE")
+
+        assert should_skip_block(block, config) is True
+
+
+class TestMdtestSkipIf:
+    """Tests for skip-if directive - lines 243->247."""
+
+    def test_skip_if_env_set(self, tmp_path: Path, monkeypatch) -> None:
+        """Test skip-if with environment variable set."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            TestConfig,
+            should_skip_block,
+        )
+
+        monkeypatch.setenv("SKIP_TEST", "1")
+        meta = BlockMetadata(skip_if="SKIP_TEST")
+        block = Block("echo hello", 1, 2, "test", meta)
+        config = TestConfig()
+
+        assert should_skip_block(block, config) is True
+
+    def test_skip_if_env_not_set(self, tmp_path: Path, monkeypatch) -> None:
+        """Test skip-if with environment variable not set."""
+        from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
+            TestConfig,
+            should_skip_block,
+        )
+
+        monkeypatch.delenv("SKIP_TEST", raising=False)
+        meta = BlockMetadata(skip_if="SKIP_TEST")
+        block = Block("echo hello", 1, 2, "test", meta)
+        config = TestConfig()
+
+        assert should_skip_block(block, config) is False
+
+
 class TestVersionMetadata:
     """Tests for version handling."""
 
