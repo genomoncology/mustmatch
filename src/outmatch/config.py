@@ -18,6 +18,8 @@ class CompareMode(Enum):
     JSONL_SET = auto()
     JSONL_KEY = auto()
     JSONL_CONTAINS = auto()
+    NOT_CONTAINS = auto()
+    NOT_REGEX = auto()
 
 
 class ColorMode(Enum):
@@ -26,6 +28,16 @@ class ColorMode(Enum):
     AUTO = "auto"
     ALWAYS = "always"
     NEVER = "never"
+
+
+class DiffFormat(Enum):
+    """Diff output format."""
+
+    UNIFIED = "unified"  # Default unified diff
+    SIDE_BY_SIDE = "side-by-side"  # Side-by-side comparison
+    INLINE = "inline"  # Word-level inline diff
+    JSON_PATH = "json-path"  # JSON path-based diff (for JSON mode)
+    NONE = "none"  # No diff output
 
 
 class RegexError(Exception):
@@ -153,4 +165,5 @@ class ExpectConfig:
     quiet: bool = False
     color: ColorMode = ColorMode.AUTO
     diff_context: int = 3
+    diff_format: DiffFormat = DiffFormat.UNIFIED
     update_file: bool = False
