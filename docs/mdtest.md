@@ -4,8 +4,7 @@ Test your documentation by running bash code blocks with `outmatch test`.
 
 ## Basic Usage
 
-<!-- outmatch: skip -->
-```bash
+```console
 outmatch test docs/              # Test all markdown in directory
 outmatch test README.md          # Test single file
 outmatch test docs/ README.md    # Test multiple paths

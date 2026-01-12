@@ -9,8 +9,7 @@ in markdown files alongside your regular tests.
 
 Install outmatch in your project - the plugin registers automatically:
 
-<!-- outmatch: skip -->
-```bash
+```console
 pip install outmatch
 ```
 
@@ -27,32 +26,34 @@ testpaths = ["tests", "docs"]
 Point pytest at your markdown files:
 
 ```console
-pytest docs/                  # Run all markdown tests
-pytest docs/cli.md            # Run specific file
-pytest docs/cli.md --collect-only   # See discovered tests
+pytest docs/                      # Run all markdown tests
+pytest docs/cli.md                # Run specific file
+pytest docs/cli.md --collect-only # See discovered tests
 ```
 
 ## Test Discovery
 
-Every ` ```bash ` block becomes a test item:
+Every ` ```bash ` block becomes a test item. When you run
+`pytest docs/ --collect-only`, you'll see output like:
 
-```bash
-pytest docs/cli.md --collect-only 2>&1 | \
-    outmatch --contains "<MarkdownItem"
+```
+<MarkdownFile cli.md>
+  <MarkdownItem Version (line 8)>
+  <MarkdownItem Exit Codes (line 20)>
+  ...
 ```
 
-Test names come from the preceding markdown heading:
-
-```bash
-pytest docs/cli.md -v 2>&1 | outmatch --contains "Version"
-```
+Test names come from the preceding markdown heading.
 
 ## Output
 
 Results appear in standard pytest format:
 
-```bash
-pytest docs/cli.md 2>&1 | outmatch --contains "passed"
+```
+docs/cli.md::Version (line 8) PASSED
+docs/cli.md::Exit Codes (line 20) PASSED
+...
+================== 15 passed in 2.34s ==================
 ```
 
 ## Skipping Blocks
@@ -70,15 +71,13 @@ Use HTML comments to skip blocks that shouldn't run:
 
 When a block fails, pytest shows the file, line, command, and exit code:
 
-```bash
-cat << 'EOF' > /tmp/pytest-fail.md
-## Failing Test
-` ` `bash
-exit 1
-` ` `
-EOF
-sed -i 's/` ` `/```/g' /tmp/pytest-fail.md
-pytest /tmp/pytest-fail.md 2>&1 | outmatch --contains "Exit code: 1"
+```
+FAILED docs/example.md::Test Name (line 10)
+  Command:
+    echo "wrong"
+  Expected: right
+  Actual: wrong
+  Exit code: 1
 ```
 
 ## pytest vs outmatch test

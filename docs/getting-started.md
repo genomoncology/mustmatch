@@ -4,13 +4,12 @@ Get outmatch running in under a minute, then learn the patterns you'll use daily
 
 ## Installation
 
-<!-- outmatch: skip -->
-```bash
+```console
 pip install outmatch
 ```
 
 Or with uv:
-```
+```console
 uv add outmatch
 ```
 
