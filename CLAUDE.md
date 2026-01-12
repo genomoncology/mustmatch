@@ -75,4 +75,4 @@ To run: `uv run pytest -v`
 
 ## Version
 
-Current: **0.2.0**
+Current: **0.0.0.dev0**

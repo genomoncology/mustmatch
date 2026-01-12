@@ -5,7 +5,7 @@ Complete reference for outmatch command-line options.
 ## Version
 
 ```bash
-outmatch --version | outmatch --contains "0.2.0"
+outmatch --version | outmatch --contains "0.0.0.dev0"
 ```
 
 ## Exit Codes
@@ -77,6 +77,47 @@ echo "actual" | outmatch "expected" 2>&1 | \
 # Show more context
 echo "actual" | outmatch --diff-context 5 "expected" 2>&1 | \
     outmatch --contains "actual"
+```
+
+## Diff Format
+
+Control the diff output format with `--diff-format`:
+
+| Value         | Description                              |
+|---------------|------------------------------------------|
+| `unified`     | Standard unified diff (default)          |
+| `side-by-side`| Side-by-side comparison                  |
+| `inline`      | Word-level inline diff                   |
+| `none`        | No diff output, just pass/fail message   |
+
+```bash
+# Side-by-side diff
+echo "hello world" | outmatch --diff-format side-by-side "hello there" 2>&1 | \
+    outmatch --contains "expected"
+
+# Inline word-level diff
+echo "hello world" | outmatch --diff-format inline "hello there" 2>&1 | \
+    outmatch --contains "[-there-]"
+
+# No diff output
+echo "hello" | outmatch --diff-format none "world" 2>&1 | \
+    outmatch "FAIL: Exact match failed."
+```
+
+## Negative Assertions
+
+Assert that content is NOT present with `--not-contains` and `--not-regex`:
+
+```bash
+# Assert substring is absent
+echo "hello world" | outmatch --not-contains "error"
+
+# Assert regex does not match
+echo "success: ok" | outmatch --not-regex "[Ee]rror|FAIL"
+
+# Fails when pattern is found
+echo "Error occurred" | outmatch --not-contains "Error" 2>&1 | \
+    outmatch --contains "Expected NOT to contain"
 ```
 
 ## File-Based Expected Values
@@ -157,6 +198,54 @@ printf '{"a":1}\nnot json' | outmatch --jsonl '{"a":1}' 2>&1 | \
     outmatch --contains "JSON parse error"
 ```
 
+## Command Execution Mode
+
+Run a command and assert on its output with `outmatch exec`:
+
+```bash
+# Assert exit code
+outmatch exec --exit-code 0 -- echo "hello"
+
+# Assert stdout contains text
+outmatch exec --stdout-contains "hello" -- echo "hello world"
+
+# Assert stderr is empty
+outmatch exec --stderr "" -- echo "output"
+
+# Assert command fails
+outmatch exec --exit-code 1 -- false
+
+# Multiple assertions
+outmatch exec --exit-code 0 --stdout-contains "done" --stderr "" -- echo "done"
+```
+
+### Combined JSON Output
+
+Match all outputs at once with `--output-json` (supports wildcards):
+
+```bash
+# Match exit code and ignore stdout content
+outmatch exec --output-json '{"exit_code": 0, "stdout": "*", "stderr": ""}' -- echo "hello"
+```
+
+### Exec Options
+
+| Option                | Description                           |
+|-----------------------|---------------------------------------|
+| `--exit-code N`       | Expected exit code                    |
+| `--stdout TEXT`       | Expected stdout (exact)               |
+| `--stdout-contains`   | Stdout must contain                   |
+| `--stdout-not-contains` | Stdout must NOT contain             |
+| `--stdout-regex`      | Stdout must match regex               |
+| `--stdout-not-regex`  | Stdout must NOT match regex           |
+| `--stderr TEXT`       | Expected stderr (exact)               |
+| `--stderr-contains`   | Stderr must contain                   |
+| `--stderr-not-contains` | Stderr must NOT contain             |
+| `--stderr-regex`      | Stderr must match regex               |
+| `--stderr-not-regex`  | Stderr must NOT match regex           |
+| `--output-json`       | Match combined output as JSON         |
+| `--timeout N`         | Command timeout in seconds            |
+
 ## Full Options List
 
 ```
@@ -171,6 +260,10 @@ Comparison modes:
   --jsonl-key FIELD      Match by key field
   --jsonl-contains       Subset matching
 
+Negative assertions:
+  --not-contains         Assert substring is absent
+  --not-regex            Assert regex does not match
+
 Normalization:
   --strip-ansi           Remove ANSI escape codes
   --normalize-newlines   Convert CRLF to LF
@@ -181,7 +274,7 @@ Normalization:
 Transformation:
   --replace REGEX=>REPL  Replace pattern (repeatable)
   --redact REGEX         Replace with <redacted> (repeatable)
-  --json-ignore PATH     Ignore JSON path (repeatable)
+  --json-ignore PATH     Ignore JSON path (repeatable, supports [*])
 
 Files:
   -f, --expected-file    Read expected from file
@@ -191,8 +284,13 @@ Output:
   -q, --quiet            Suppress all output
   --color MODE           auto | always | never
   --diff-context N       Context lines in diff (default: 3)
+  --diff-format FORMAT   unified | side-by-side | inline | none
 
 Info:
   --version              Show version and exit
   --help                 Show help and exit
+
+Subcommands:
+  outmatch exec          Execute command and assert on output
+  outmatch test          Run markdown documentation tests
 ```

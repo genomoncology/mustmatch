@@ -30,6 +30,33 @@ echo '[1, 2, 3]' | outmatch --json '[1, 2, 3]'
 echo '[1, 2, 3]' | outmatch --json '[3, 2, 1]' || test $? -eq 1
 ```
 
+## Wildcard Matching
+
+Use `"*"` as a value to match any value (including objects and arrays):
+
+```bash
+# Match any id value
+echo '{"id": "abc123", "status": "ok"}' | \
+    outmatch --json '{"id": "*", "status": "ok"}'
+
+# Nested wildcards
+echo '{"user": {"id": 42, "name": "alice"}}' | \
+    outmatch --json '{"user": {"id": "*", "name": "alice"}}'
+
+# Array element wildcards
+echo '{"items": [1, 2, 3]}' | \
+    outmatch --json '{"items": ["*", "*", "*"]}'
+
+# Wildcard matches any type
+echo '{"data": {"nested": "complex"}}' | \
+    outmatch --json '{"data": "*"}'
+```
+
+This is useful for:
+- Matching responses with dynamic IDs or timestamps
+- Validating structure without caring about specific values
+- Testing with `outmatch exec --output-json`
+
 ## Ignoring Fields
 
 Use `--json-ignore` to exclude volatile fields like timestamps:
@@ -62,11 +89,27 @@ echo '{"id": 1}' | \
 
 Paths use a simplified JSONPath syntax:
 
-| Syntax         | Meaning                    |
-|----------------|----------------------------|
-| `$.field`      | Top-level field            |
-| `$.a.b`        | Nested field               |
-| `$.arr[0].x`   | Field in array element     |
+| Syntax           | Meaning                              |
+|------------------|--------------------------------------|
+| `$.field`        | Top-level field                      |
+| `$.a.b`          | Nested field                         |
+| `$.arr[0].x`     | Field in array element               |
+| `$.arr[*].x`     | Field in ALL array elements          |
+
+### Array Wildcards
+
+Use `[*]` to ignore a field across all array elements:
+
+```bash
+# Ignore timestamp in all records
+echo '[{"id":1,"ts":"a"},{"id":2,"ts":"b"}]' | \
+    outmatch --json --json-ignore '$[*].ts' '[{"id":1},{"id":2}]'
+
+# Nested array wildcards
+echo '{"items":[{"id":1,"created":"x"},{"id":2,"created":"y"}]}' | \
+    outmatch --json --json-ignore '$.items[*].created' \
+    '{"items":[{"id":1},{"id":2}]}'
+```
 
 ## Errors
 

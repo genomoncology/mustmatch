@@ -1088,3 +1088,680 @@ class TestVersionMetadata:
 
         assert isinstance(__version__, str)
         assert "." in __version__  # Should have at least one dot
+
+
+class TestExecModule:
+    """Tests for exec.py - command execution mode."""
+
+    def test_run_command_success(self) -> None:
+        """Test successful command execution."""
+        from outmatch.exec import run_command
+
+        result = run_command(["echo", "hello"])
+        assert result.stdout.strip() == "hello"
+        assert result.stderr == ""
+        assert result.exit_code == 0
+
+    def test_run_command_with_stderr(self) -> None:
+        """Test command that writes to stderr."""
+        from outmatch.exec import run_command
+
+        result = run_command(["sh", "-c", "echo error >&2"])
+        assert result.stderr.strip() == "error"
+        assert result.exit_code == 0
+
+    def test_run_command_nonzero_exit(self) -> None:
+        """Test command with non-zero exit code."""
+        from outmatch.exec import run_command
+
+        result = run_command(["false"])
+        assert result.exit_code != 0
+
+    def test_run_command_timeout(self) -> None:
+        """Test command timeout handling."""
+        from outmatch.exec import run_command
+
+        result = run_command(["sleep", "10"], timeout=0.1)
+        assert result.exit_code == -1  # Special timeout code
+
+    def test_check_assertions_exit_code_match(self) -> None:
+        """Test exit code assertion - match."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="", exit_code=0)
+        config = ExecConfig(expected_exit_code=0)
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_exit_code_mismatch(self) -> None:
+        """Test exit code assertion - mismatch."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="", exit_code=1)
+        config = ExecConfig(expected_exit_code=0)
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+        assert "Exit code mismatch" in failures[0].message
+
+    def test_check_assertions_stdout_contains(self) -> None:
+        """Test stdout contains assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="hello world", stderr="", exit_code=0)
+        config = ExecConfig(stdout_contains="hello")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stdout_not_contains(self) -> None:
+        """Test stdout not-contains assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="hello world", stderr="", exit_code=0)
+        config = ExecConfig(stdout_not_contains="error")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stdout_regex(self) -> None:
+        """Test stdout regex assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="value: 123", stderr="", exit_code=0)
+        config = ExecConfig(stdout_regex=r"value: \d+")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stdout_not_regex(self) -> None:
+        """Test stdout not-regex assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="success", stderr="", exit_code=0)
+        config = ExecConfig(stdout_not_regex=r"error|fail")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stderr_exact(self) -> None:
+        """Test stderr exact assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="", exit_code=0)
+        config = ExecConfig(stderr_exact="")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stderr_contains(self) -> None:
+        """Test stderr contains assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="warning: deprecated", exit_code=0)
+        config = ExecConfig(stderr_contains="warning")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stderr_not_contains(self) -> None:
+        """Test stderr not-contains assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="", exit_code=0)
+        config = ExecConfig(stderr_not_contains="error")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stderr_regex(self) -> None:
+        """Test stderr regex assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="warn: 123", exit_code=0)
+        config = ExecConfig(stderr_regex=r"warn: \d+")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_stderr_not_regex(self) -> None:
+        """Test stderr not-regex assertion."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="info", exit_code=0)
+        config = ExecConfig(stderr_not_regex=r"error|fatal")
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+    def test_check_assertions_output_json(self) -> None:
+        """Test combined JSON output assertion with wildcards."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="hello\n", stderr="", exit_code=0)
+        config = ExecConfig(output_json='{"exit_code": 0, "stdout": "*", "stderr": ""}')
+        failures = check_assertions(result, config)
+        assert len(failures) == 0
+
+
+class TestOutputDiffFormats:
+    """Tests for output.py diff format functions."""
+
+    def test_side_by_side_diff(self) -> None:
+        """Test side-by-side diff generation."""
+        from outmatch.output import side_by_side_diff
+
+        result = side_by_side_diff("hello", "world")
+        assert "expected" in result
+        assert "actual" in result
+
+    def test_inline_diff(self) -> None:
+        """Test inline word-level diff."""
+        from outmatch.output import inline_diff
+
+        result = inline_diff("hello world", "hello there")
+        assert "[-" in result or "[+" in result
+
+    def test_format_diff_none(self) -> None:
+        """Test format_diff with NONE format returns empty string."""
+        from outmatch.config import DiffFormat, ExpectConfig
+        from outmatch.output import format_diff
+
+        config = ExpectConfig(diff_format=DiffFormat.NONE)
+        result = format_diff("actual", "expected", config)
+        assert result == ""
+
+    def test_format_diff_side_by_side(self) -> None:
+        """Test format_diff with SIDE_BY_SIDE format."""
+        from outmatch.config import DiffFormat, ExpectConfig
+        from outmatch.output import format_diff
+
+        config = ExpectConfig(diff_format=DiffFormat.SIDE_BY_SIDE)
+        result = format_diff("actual", "expected", config)
+        assert "expected" in result
+
+    def test_format_diff_inline(self) -> None:
+        """Test format_diff with INLINE format."""
+        from outmatch.config import DiffFormat, ExpectConfig
+        from outmatch.output import format_diff
+
+        config = ExpectConfig(diff_format=DiffFormat.INLINE)
+        result = format_diff("hello world", "hello there", config)
+        assert result  # Should return non-empty string
+
+
+class TestJsonWildcards:
+    """Tests for JSON wildcard matching in json_utils.py."""
+
+    def test_wildcard_matches_string(self) -> None:
+        """Test wildcard matches any string."""
+        from outmatch.json_utils import json_matches_with_wildcards
+
+        assert json_matches_with_wildcards("hello", "*") is True
+
+    def test_wildcard_matches_number(self) -> None:
+        """Test wildcard matches any number."""
+        from outmatch.json_utils import json_matches_with_wildcards
+
+        assert json_matches_with_wildcards(42, "*") is True
+
+    def test_wildcard_matches_object(self) -> None:
+        """Test wildcard matches any object."""
+        from outmatch.json_utils import json_matches_with_wildcards
+
+        assert json_matches_with_wildcards({"a": 1}, "*") is True
+
+    def test_wildcard_in_object(self) -> None:
+        """Test wildcard field in object."""
+        from outmatch.json_utils import json_matches_with_wildcards
+
+        actual = {"id": "abc123", "status": "ok"}
+        expected = {"id": "*", "status": "ok"}
+        assert json_matches_with_wildcards(actual, expected) is True
+
+    def test_type_mismatch(self) -> None:
+        """Test type mismatch returns False."""
+        from outmatch.json_utils import json_matches_with_wildcards
+
+        assert json_matches_with_wildcards("string", 123) is False
+
+    def test_object_key_mismatch(self) -> None:
+        """Test object with different keys returns False."""
+        from outmatch.json_utils import json_matches_with_wildcards
+
+        actual = {"a": 1}
+        expected = {"b": 1}
+        assert json_matches_with_wildcards(actual, expected) is False
+
+    def test_array_length_mismatch(self) -> None:
+        """Test array with different length returns False."""
+        from outmatch.json_utils import json_matches_with_wildcards
+
+        assert json_matches_with_wildcards([1, 2], [1, 2, 3]) is False
+
+    def test_find_mismatches_type_mismatch(self) -> None:
+        """Test find_wildcard_mismatches reports type mismatch."""
+        from outmatch.json_utils import find_wildcard_mismatches
+
+        mismatches = find_wildcard_mismatches("string", 123)
+        assert len(mismatches) == 1
+        assert "type mismatch" in mismatches[0]
+
+    def test_find_mismatches_missing_key(self) -> None:
+        """Test find_wildcard_mismatches reports missing key."""
+        from outmatch.json_utils import find_wildcard_mismatches
+
+        mismatches = find_wildcard_mismatches({"a": 1}, {"a": 1, "b": 2})
+        assert any("missing key" in m for m in mismatches)
+
+    def test_find_mismatches_unexpected_key(self) -> None:
+        """Test find_wildcard_mismatches reports unexpected key."""
+        from outmatch.json_utils import find_wildcard_mismatches
+
+        mismatches = find_wildcard_mismatches({"a": 1, "b": 2}, {"a": 1})
+        assert any("unexpected key" in m for m in mismatches)
+
+    def test_find_mismatches_array_length(self) -> None:
+        """Test find_wildcard_mismatches reports array length mismatch."""
+        from outmatch.json_utils import find_wildcard_mismatches
+
+        mismatches = find_wildcard_mismatches([1, 2], [1, 2, 3])
+        assert any("array length mismatch" in m for m in mismatches)
+
+    def test_find_mismatches_value_mismatch(self) -> None:
+        """Test find_wildcard_mismatches reports value mismatch."""
+        from outmatch.json_utils import find_wildcard_mismatches
+
+        mismatches = find_wildcard_mismatches({"a": 1}, {"a": 2})
+        assert any("expected" in m and "got" in m for m in mismatches)
+
+
+class TestJsonPathWildcards:
+    """Tests for JSON path array wildcards in json_utils.py."""
+
+    def test_remove_path_with_array_wildcard(self) -> None:
+        """Test removing field from all array elements."""
+        from outmatch.json_utils import remove_json_paths
+
+        obj = [{"id": 1, "ts": "a"}, {"id": 2, "ts": "b"}]
+        result = remove_json_paths(obj, ("$[*].ts",))
+        assert result == [{"id": 1}, {"id": 2}]
+
+    def test_remove_nested_array_wildcard(self) -> None:
+        """Test removing field from nested array elements."""
+        from outmatch.json_utils import remove_json_paths
+
+        obj = {"items": [{"id": 1, "ts": "a"}, {"id": 2, "ts": "b"}]}
+        result = remove_json_paths(obj, ("$.items[*].ts",))
+        assert result == {"items": [{"id": 1}, {"id": 2}]}
+
+    def test_remove_path_recursive_with_wildcard_no_remaining(self) -> None:
+        """Test wildcard at end of path (edge case)."""
+        from outmatch.json_utils import _remove_path_recursive
+
+        obj = [{"a": 1}, {"a": 2}]
+        # Wildcard with no remaining path - should not modify
+        _remove_path_recursive(obj, ["*"])
+        assert obj == [{"a": 1}, {"a": 2}]
+
+
+class TestExecModuleFailures:
+    """Tests for exec.py failure paths."""
+
+    def test_check_assertions_stdout_exact_failure(self) -> None:
+        """Test stdout exact assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="actual", stderr="", exit_code=0)
+        config = ExecConfig(stdout_exact="expected")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+        assert "Stdout:" in failures[0].message
+
+    def test_check_assertions_stdout_contains_failure(self) -> None:
+        """Test stdout contains assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="hello", stderr="", exit_code=0)
+        config = ExecConfig(stdout_contains="world")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_stdout_not_contains_failure(self) -> None:
+        """Test stdout not-contains assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="hello error world", stderr="", exit_code=0)
+        config = ExecConfig(stdout_not_contains="error")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_stdout_regex_failure(self) -> None:
+        """Test stdout regex assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="hello", stderr="", exit_code=0)
+        config = ExecConfig(stdout_regex=r"\d+")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_stdout_not_regex_failure(self) -> None:
+        """Test stdout not-regex assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="error 123", stderr="", exit_code=0)
+        config = ExecConfig(stdout_not_regex=r"error")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_stderr_exact_failure(self) -> None:
+        """Test stderr exact assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="error", exit_code=0)
+        config = ExecConfig(stderr_exact="")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+        assert "Stderr:" in failures[0].message
+
+    def test_check_assertions_stderr_contains_failure(self) -> None:
+        """Test stderr contains assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="info", exit_code=0)
+        config = ExecConfig(stderr_contains="error")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_stderr_not_contains_failure(self) -> None:
+        """Test stderr not-contains assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="error occurred", exit_code=0)
+        config = ExecConfig(stderr_not_contains="error")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_stderr_regex_failure(self) -> None:
+        """Test stderr regex assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="info", exit_code=0)
+        config = ExecConfig(stderr_regex=r"error")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_stderr_not_regex_failure(self) -> None:
+        """Test stderr not-regex assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="", stderr="fatal error", exit_code=0)
+        config = ExecConfig(stderr_not_regex=r"fatal")
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+
+    def test_check_assertions_output_json_failure(self) -> None:
+        """Test output JSON assertion failure."""
+        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+
+        result = ExecResult(stdout="hello", stderr="", exit_code=1)
+        config = ExecConfig(output_json='{"exit_code": 0}')
+        failures = check_assertions(result, config)
+        assert len(failures) == 1
+        assert "Output JSON:" in failures[0].message
+
+
+class TestOutputDiffEdgeCases:
+    """Tests for edge cases in output.py diff functions."""
+
+    def test_side_by_side_diff_replace(self) -> None:
+        """Test side-by-side diff with replaced lines."""
+        from outmatch.output import side_by_side_diff
+
+        result = side_by_side_diff("line1\nline2", "line1\nchanged")
+        assert "<different>" in result
+
+    def test_side_by_side_diff_delete(self) -> None:
+        """Test side-by-side diff with deleted lines (actual has more)."""
+        from outmatch.output import side_by_side_diff
+
+        # actual="line1\nline2", expected="line1" -> extra line in actual
+        result = side_by_side_diff("line1\nline2", "line1")
+        assert "<extra>" in result
+
+    def test_side_by_side_diff_insert(self) -> None:
+        """Test side-by-side diff with inserted lines (expected has more)."""
+        from outmatch.output import side_by_side_diff
+
+        # actual="line1", expected="line1\nline2" -> missing line in actual
+        result = side_by_side_diff("line1", "line1\nline2")
+        assert "<missing>" in result
+
+    def test_inline_diff_delete(self) -> None:
+        """Test inline diff with deleted words (actual has more)."""
+        from outmatch.output import inline_diff
+
+        # actual has "beautiful", expected doesn't -> shows as inserted [+]
+        result = inline_diff("hello beautiful world", "hello world")
+        assert "[+" in result
+
+    def test_inline_diff_insert(self) -> None:
+        """Test inline diff with inserted words (expected has more)."""
+        from outmatch.output import inline_diff
+
+        # expected has "beautiful", actual doesn't -> shows as deleted [-]
+        result = inline_diff("hello world", "hello beautiful world")
+        assert "[-" in result
+
+
+class TestNegativeAssertions:
+    """Tests for negative assertion comparison functions."""
+
+    def test_compare_not_contains_success(self) -> None:
+        """Test not-contains when substring is absent."""
+        from outmatch.compare import compare_not_contains
+
+        result = compare_not_contains("hello world", "error")
+        assert result.success is True
+
+    def test_compare_not_contains_failure(self) -> None:
+        """Test not-contains when substring is present."""
+        from outmatch.compare import compare_not_contains
+
+        result = compare_not_contains("error occurred", "error")
+        assert result.success is False
+        assert "Expected NOT to contain" in result.message
+        assert "position" in result.message
+
+    def test_compare_not_contains_context_truncation(self) -> None:
+        """Test not-contains shows context around match."""
+        from outmatch.compare import compare_not_contains
+
+        # Long string to test context truncation
+        text = "a" * 50 + "error" + "b" * 50
+        result = compare_not_contains(text, "error")
+        assert result.success is False
+        assert "..." in result.message  # Context should be truncated
+
+    def test_compare_not_regex_success(self) -> None:
+        """Test not-regex when pattern doesn't match."""
+        from outmatch.compare import compare_not_regex
+
+        result = compare_not_regex("hello world", r"error|fail")
+        assert result.success is True
+
+    def test_compare_not_regex_failure(self) -> None:
+        """Test not-regex when pattern matches."""
+        from outmatch.compare import compare_not_regex
+
+        result = compare_not_regex("error occurred", r"error")
+        assert result.success is False
+        assert "Expected NOT to match regex" in result.message
+
+    def test_compare_not_regex_invalid_pattern(self) -> None:
+        """Test not-regex with invalid regex pattern."""
+        from outmatch.compare import compare_not_regex
+
+        result = compare_not_regex("text", r"[invalid")
+        assert result.success is False
+        assert "Invalid regex" in result.message
+
+
+class TestCliExecErrorPaths:
+    """Tests for exec command error paths in cli.py."""
+
+    def test_exec_no_command(self, monkeypatch) -> None:
+        """Test exec with no command specified - lines 451-452."""
+        import io
+        import sys
+
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", captured)
+
+        result = main(["exec", "--exit-code", "0"])
+        assert result == 2
+        assert "no command" in captured.getvalue().lower()
+
+    def test_exec_no_assertion(self, monkeypatch) -> None:
+        """Test exec with no assertion specified - lines 492-496."""
+        import io
+        import sys
+
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", captured)
+
+        result = main(["exec", "--", "echo", "hello"])
+        assert result == 2
+        assert "assertion required" in captured.getvalue().lower()
+
+    def test_exec_command_not_found(self, monkeypatch) -> None:
+        """Test exec with non-existent command - lines 501-503."""
+        import io
+        import sys
+
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", captured)
+
+        result = main(["exec", "--exit-code", "0", "--", "/nonexistent/cmd"])
+        assert result == 2
+        assert "not found" in captured.getvalue().lower()
+
+    def test_exec_timeout(self, monkeypatch) -> None:
+        """Test exec with command timeout - lines 507-512."""
+        import io
+        import sys
+
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", captured)
+
+        result = main([
+            "exec", "--exit-code", "0", "--timeout", "0.1", "--", "sleep", "10"
+        ])
+        assert result == 1
+        assert "timed out" in captured.getvalue().lower()
+
+    def test_exec_assertion_failure_output(self, monkeypatch) -> None:
+        """Test exec with failing assertion prints error - lines 523-528."""
+        import io
+        import sys
+
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", captured)
+
+        result = main(["exec", "--stdout-contains", "NOTFOUND", "--", "echo", "hello"])
+        assert result == 1
+        assert "FAIL" in captured.getvalue()
+
+    def test_exec_quiet_mode_no_output(self, monkeypatch) -> None:
+        """Test exec with --quiet suppresses output - line 523 branch."""
+        import io
+        import sys
+
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", captured)
+
+        result = main([
+            "exec", "-q", "--stdout-contains", "NOTFOUND", "--", "echo", "hello"
+        ])
+        assert result == 1
+        # In quiet mode, should have minimal/no output
+        assert "FAIL" not in captured.getvalue()
+
+
+class TestJsonPathEdgeCasesExtended:
+    """Additional JSON path edge cases for json_utils.py."""
+
+    def test_path_with_dollar_only(self) -> None:
+        """Test path with just '$' prefix - line 192-193."""
+        from outmatch.json_utils import _remove_single_path
+
+        obj = {"a": 1}
+        _remove_single_path(obj, "$a")  # $ followed directly by key (not $.)
+        # This should strip $ and try to remove "a"
+        assert obj == {}
+
+    def test_remove_list_index_middle(self) -> None:
+        """Test removing element from middle of list - lines 224-226."""
+        from outmatch.json_utils import _remove_single_path
+
+        obj = [1, 2, 3]
+        _remove_single_path(obj, "[1]")
+        assert obj == [1, 3]
+
+    def test_remove_list_index_out_of_bounds(self) -> None:
+        """Test removing with out-of-bounds index - lines 224-226 branch."""
+        from outmatch.json_utils import _remove_single_path
+
+        obj = [1, 2, 3]
+        _remove_single_path(obj, "[10]")  # Out of bounds
+        assert obj == [1, 2, 3]  # Unchanged
+
+    def test_remove_recursive_with_none_obj(self) -> None:
+        """Test _remove_path_recursive with None obj - line 207-208."""
+        from outmatch.json_utils import _remove_path_recursive
+
+        # Should return early without error
+        _remove_path_recursive(None, ["a", "b"])
+        # No assertion needed - just verifying no exception
+
+    def test_wildcard_on_non_list(self) -> None:
+        """Test wildcard on non-list object - line 215 branch."""
+        from outmatch.json_utils import _remove_path_recursive
+
+        obj = {"a": 1}  # Not a list
+        _remove_path_recursive(obj, ["*", "b"])
+        # Should do nothing since obj isn't a list
+        assert obj == {"a": 1}
+
+
+class TestCliFileReadErrors:
+    """Tests for file read error handling in cli.py."""
+
+    def test_file_read_unicode_error(self, tmp_path: Path, monkeypatch) -> None:
+        """Test handling of UnicodeDecodeError - lines 310-312."""
+        import io
+        import sys
+
+        # Create a file with invalid UTF-8
+        bad_file = tmp_path / "bad.txt"
+        bad_file.write_bytes(b"\xff\xfe invalid utf-8")
+
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stdin", io.StringIO("test input"))
+        monkeypatch.setattr(sys, "stderr", captured)
+
+        result = main(["-f", str(bad_file)])
+        assert result == 2
+        assert "Error" in captured.getvalue()
+
+
+class TestFindWildcardMismatchesEdgeCases:
+    """Edge cases for find_wildcard_mismatches in json_utils.py."""
+
+    def test_wildcard_returns_empty_list(self) -> None:
+        """Test find_wildcard_mismatches with wildcard expected - line 109."""
+        from outmatch.json_utils import find_wildcard_mismatches
+
+        # When expected is "*", should return empty list immediately
+        result = find_wildcard_mismatches({"any": "value"}, "*")
+        assert result == []
+
+    def test_nested_array_mismatches(self) -> None:
+        """Test find_wildcard_mismatches with array element differences."""
+        from outmatch.json_utils import find_wildcard_mismatches
+
+        actual = [1, 2, 3]
+        expected = [1, 2, 4]
+        mismatches = find_wildcard_mismatches(actual, expected)
+        assert len(mismatches) == 1
+        assert "expected 4" in mismatches[0]

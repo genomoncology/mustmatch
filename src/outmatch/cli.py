@@ -12,6 +12,7 @@ from .compare import compare
 from .config import (
     ColorMode,
     CompareMode,
+    DiffFormat,
     ExpectConfig,
     NormalizeOptions,
     RegexError,
@@ -46,6 +47,8 @@ def _run_expect(
     jsonl_set: bool,
     jsonl_key: str | None,
     jsonl_contains: bool,
+    not_contains: bool,
+    not_regex: bool,
     strip_ansi: bool,
     normalize_newlines_opt: bool,
     trim: bool,
@@ -57,6 +60,7 @@ def _run_expect(
     quiet: bool,
     color: str,
     diff_context: int,
+    diff_format: str,
     update: bool,
 ) -> None:
     """Run the expect (match) command logic."""
@@ -74,7 +78,8 @@ def _run_expect(
 
     # Build config
     mode = _determine_mode(
-        contains, regex, json_mode, jsonl, jsonl_set, jsonl_key, jsonl_contains
+        contains, regex, json_mode, jsonl, jsonl_set, jsonl_key, jsonl_contains,
+        not_contains, not_regex
     )
 
     # Parse and compile regex patterns with validation
@@ -103,6 +108,7 @@ def _run_expect(
         quiet=quiet,
         color=ColorMode(color),
         diff_context=diff_context,
+        diff_format=DiffFormat(diff_format),
         update_file=update,
     )
 
@@ -176,6 +182,15 @@ def callback(
         bool,
         typer.Option(help="Check JSONL contains expected records"),
     ] = False,
+    # Negative assertions
+    not_contains: Annotated[
+        bool,
+        typer.Option(help="Assert substring is NOT present"),
+    ] = False,
+    not_regex: Annotated[
+        bool,
+        typer.Option(help="Assert regex does NOT match"),
+    ] = False,
     # Normalization options
     strip_ansi: Annotated[
         bool,
@@ -224,6 +239,10 @@ def callback(
         int,
         typer.Option(help="Diff context lines"),
     ] = 3,
+    diff_format: Annotated[
+        str,
+        typer.Option(help="Diff format: unified, side-by-side, inline, none"),
+    ] = "unified",
     # Update mode
     update: Annotated[
         bool,
@@ -256,6 +275,8 @@ def callback(
         jsonl_set,
         jsonl_key,
         jsonl_contains,
+        not_contains,
+        not_regex,
         strip_ansi,
         normalize_newlines_opt,
         trim,
@@ -267,6 +288,7 @@ def callback(
         quiet,
         color,
         diff_context,
+        diff_format,
         update,
     )
 
@@ -299,8 +321,14 @@ def _determine_mode(
     jsonl_set: bool,
     jsonl_key: str | None,
     jsonl_contains: bool,
+    not_contains: bool,
+    not_regex: bool,
 ) -> CompareMode:
     """Determine comparison mode from flags."""
+    if not_contains:
+        return CompareMode.NOT_CONTAINS
+    if not_regex:
+        return CompareMode.NOT_REGEX
     if jsonl_key:
         return CompareMode.JSONL_KEY
     if jsonl_set:
@@ -347,11 +375,157 @@ def main(args: list[str] | None = None) -> int:
         except typer.Exit as e:
             return e.exit_code
 
+    # Handle "exec" subcommand
+    if args and args[0] == "exec":
+        exec_args = args[1:]
+        try:
+            _run_exec(exec_args)
+            return 0
+        except typer.Exit as e:
+            return e.exit_code
+
     try:
         result = app(args, standalone_mode=False)
         return result if result is not None else 0
     except typer.Exit as e:
         return e.exit_code
+
+
+def _run_exec(args: list[str]) -> None:
+    """Direct entry point for exec command."""
+    import argparse
+
+    from .config import ColorMode
+    from .exec import ExecConfig, check_assertions, run_command
+    from .output import format_error
+
+    parser = argparse.ArgumentParser(
+        description="Execute command and assert on output",
+        usage="outmatch exec [OPTIONS] -- COMMAND [ARGS...]",
+    )
+    parser.add_argument(
+        "--exit-code", type=int, default=None, help="Expected exit code"
+    )
+    parser.add_argument("--stdout", default=None, help="Expected stdout (exact)")
+    parser.add_argument("--stdout-contains", default=None, help="Stdout must contain")
+    parser.add_argument(
+        "--stdout-not-contains", default=None, help="Stdout must NOT contain"
+    )
+    parser.add_argument("--stdout-regex", default=None, help="Stdout must match regex")
+    parser.add_argument(
+        "--stdout-not-regex", default=None, help="Stdout must NOT match regex"
+    )
+    parser.add_argument("--stderr", default=None, help="Expected stderr (exact)")
+    parser.add_argument("--stderr-contains", default=None, help="Stderr must contain")
+    parser.add_argument(
+        "--stderr-not-contains", default=None, help="Stderr must NOT contain"
+    )
+    parser.add_argument("--stderr-regex", default=None, help="Stderr must match regex")
+    parser.add_argument(
+        "--stderr-not-regex", default=None, help="Stderr must NOT match regex"
+    )
+    parser.add_argument(
+        "--output-json",
+        default=None,
+        help='Match combined output as JSON: {"stdout":..., "exit_code": N}',
+    )
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress output")
+    parser.add_argument(
+        "--color", default="auto", help="Color mode: auto, always, never"
+    )
+    parser.add_argument(
+        "--timeout", type=float, default=None, help="Command timeout in seconds"
+    )
+    parser.add_argument(
+        "command", nargs=argparse.REMAINDER, help="Command to execute (after --)"
+    )
+
+    parsed = parser.parse_args(args)
+
+    # Extract command (skip leading -- if present)
+    cmd = parsed.command
+    if cmd and cmd[0] == "--":
+        cmd = cmd[1:]
+
+    if not cmd:
+        print("Error: no command specified", file=sys.stderr)
+        raise typer.Exit(2)
+
+    # Build config
+    config = ExecConfig(
+        expected_exit_code=parsed.exit_code,
+        stdout_exact=parsed.stdout,
+        stdout_contains=parsed.stdout_contains,
+        stdout_not_contains=parsed.stdout_not_contains,
+        stdout_regex=parsed.stdout_regex,
+        stdout_not_regex=parsed.stdout_not_regex,
+        stderr_exact=parsed.stderr,
+        stderr_contains=parsed.stderr_contains,
+        stderr_not_contains=parsed.stderr_not_contains,
+        stderr_regex=parsed.stderr_regex,
+        stderr_not_regex=parsed.stderr_not_regex,
+        output_json=parsed.output_json,
+        quiet=parsed.quiet,
+        color=ColorMode(parsed.color),
+        timeout=parsed.timeout,
+    )
+
+    # Check if any assertion was specified
+    has_assertion = any(
+        [
+            parsed.exit_code is not None,
+            parsed.stdout is not None,
+            parsed.stdout_contains is not None,
+            parsed.stdout_not_contains is not None,
+            parsed.stdout_regex is not None,
+            parsed.stdout_not_regex is not None,
+            parsed.stderr is not None,
+            parsed.stderr_contains is not None,
+            parsed.stderr_not_contains is not None,
+            parsed.stderr_regex is not None,
+            parsed.stderr_not_regex is not None,
+            parsed.output_json is not None,
+        ]
+    )
+
+    if not has_assertion:
+        print(
+            "Error: at least one assertion required (--exit-code, --stdout, etc.)",
+            file=sys.stderr,
+        )
+        raise typer.Exit(2)
+
+    # Run the command
+    try:
+        result = run_command(cmd, timeout=config.timeout)
+    except FileNotFoundError:
+        print(f"Error: command not found: {cmd[0]}", file=sys.stderr)
+        raise typer.Exit(2)
+
+    # Check timeout
+    if result.exit_code == -1 and config.timeout is not None:
+        if not config.quiet:
+            print(
+                f"FAIL: Command timed out after {config.timeout}s",
+                file=sys.stderr,
+            )
+        raise typer.Exit(1)
+
+    # Check assertions
+    from .config import ExpectConfig
+
+    failures = check_assertions(result, config)
+
+    if not failures:
+        raise typer.Exit(0)
+
+    # Output failures
+    if not config.quiet:
+        for failure in failures:
+            expect_config = ExpectConfig(quiet=config.quiet, color=config.color)
+            print(format_error(failure, expect_config), file=sys.stderr)
+
+    raise typer.Exit(1)
 
 
 def _run_mdtest(args: list[str]) -> None:

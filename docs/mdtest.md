@@ -48,13 +48,18 @@ outmatch test docs/cli.md --tap | outmatch --contains "TAP version"
 Generate reports for CI integration:
 
 ```bash
+# Create a simple test file for report generation
+echo -e '```bash\necho hello\n```' > /tmp/simple.md
+
 # JUnit XML (for Jenkins, GitLab CI, etc.)
-outmatch test docs/cli.md --junit-xml /tmp/report.xml -q
+outmatch test /tmp/simple.md --junit-xml /tmp/report.xml -q
 cat /tmp/report.xml | outmatch --contains "testsuite"
 
 # JSON report
-outmatch test docs/cli.md --json /tmp/report.json -q
+outmatch test /tmp/simple.md --json /tmp/report.json -q
 cat /tmp/report.json | outmatch --contains '"passed":'
+
+rm /tmp/simple.md /tmp/report.xml /tmp/report.json
 ```
 
 ## Filtering Tests
