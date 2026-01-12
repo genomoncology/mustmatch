@@ -87,9 +87,12 @@ def run_command(args: list[str], timeout: float | None = None) -> ExecResult:
         )
     except subprocess.TimeoutExpired as e:
         # Return partial output on timeout
+        # With text=True, stdout/stderr are already strings (or None)
+        stdout = e.stdout if e.stdout else ""
+        stderr = e.stderr if e.stderr else ""
         return ExecResult(
-            stdout=e.stdout.decode() if e.stdout else "",
-            stderr=e.stderr.decode() if e.stderr else "",
+            stdout=stdout,
+            stderr=stderr,
             exit_code=-1,  # Special code for timeout
         )
 
