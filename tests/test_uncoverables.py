@@ -1644,7 +1644,9 @@ class TestCliExecErrorPaths:
         captured = io.StringIO()
         monkeypatch.setattr(sys, "stderr", captured)
 
-        result = main(["exec", "--exit-code", "0", "--timeout", "0.1", "--", "sleep", "10"])
+        result = main([
+            "exec", "--exit-code", "0", "--timeout", "0.1", "--", "sleep", "10"
+        ])
         assert result == 1
         assert "timed out" in captured.getvalue().lower()
 
@@ -1668,7 +1670,9 @@ class TestCliExecErrorPaths:
         captured = io.StringIO()
         monkeypatch.setattr(sys, "stderr", captured)
 
-        result = main(["exec", "-q", "--stdout-contains", "NOTFOUND", "--", "echo", "hello"])
+        result = main([
+            "exec", "-q", "--stdout-contains", "NOTFOUND", "--", "echo", "hello"
+        ])
         assert result == 1
         # In quiet mode, should have minimal/no output
         assert "FAIL" not in captured.getvalue()
