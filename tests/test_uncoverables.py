@@ -530,13 +530,13 @@ class TestMdtestOutputFormats:
     def test_quiet_mode_with_failures(self, tmp_path: Path) -> None:
         """Test quiet mode output with failures - line 502."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_result_quiet,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("exit 1", 1, 2, "failing", BlockMetadata())
@@ -556,13 +556,13 @@ class TestMdtestOutputFormats:
     def test_default_mode_with_skipped(self, tmp_path: Path) -> None:
         """Test default mode output with skipped blocks - lines 524-525."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_result_default,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("echo hi", 1, 2, "skipped", BlockMetadata(skip=True))
@@ -582,13 +582,13 @@ class TestMdtestOutputFormats:
     def test_default_mode_with_timeout(self, tmp_path: Path) -> None:
         """Test default mode output with timeout - lines 526-527."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_result_default,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
@@ -612,13 +612,13 @@ class TestMdtestOutputFormats:
     def test_verbose_mode_with_failure(self, tmp_path: Path) -> None:
         """Test verbose mode output with failure - lines 559-563."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_result_verbose,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("echo fail; exit 1", 1, 2, "failing", BlockMetadata())
@@ -644,13 +644,13 @@ class TestMdtestOutputFormats:
     def test_verbose_mode_with_timeout(self, tmp_path: Path) -> None:
         """Test verbose mode output with timeout - lines 568-573."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_result_verbose,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
@@ -674,13 +674,13 @@ class TestMdtestOutputFormats:
     def test_verbose_truncates_long_content(self, tmp_path: Path) -> None:
         """Test that verbose mode truncates long command content - line 554."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_result_verbose,
-            Block,
-            BlockMetadata,
         )
 
         # Create a block with more than 5 lines
@@ -710,13 +710,13 @@ class TestMdtestReportFormats:
     def test_junit_xml_with_failure(self, tmp_path: Path) -> None:
         """Test JUnit XML output with failures - lines 610-613."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             write_junit_xml,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("exit 1", 1, 2, "failing", BlockMetadata())
@@ -744,13 +744,13 @@ class TestMdtestReportFormats:
     def test_junit_xml_with_timeout(self, tmp_path: Path) -> None:
         """Test JUnit XML output with timeout - lines 615-616."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             write_junit_xml,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
@@ -776,13 +776,13 @@ class TestMdtestReportFormats:
     def test_junit_xml_with_skipped(self, tmp_path: Path) -> None:
         """Test JUnit XML output with skipped - line 618."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             write_junit_xml,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("echo hi", 1, 2, "skipped", BlockMetadata(skip=True))
@@ -803,16 +803,17 @@ class TestMdtestReportFormats:
 
     def test_json_report_with_error_and_actual(self, tmp_path: Path) -> None:
         """Test JSON report with error and actual - lines 653, 655, 657."""
+        import json
+
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             write_json_report,
-            Block,
-            BlockMetadata,
         )
-        import json
 
         block = Block("exit 1", 1, 2, "failing", BlockMetadata())
         result = TestResult(files=[
@@ -842,13 +843,13 @@ class TestMdtestReportFormats:
     def test_tap_output_passed(self, tmp_path: Path) -> None:
         """Test TAP output for passed tests - line 677."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_tap,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("echo hi", 1, 2, "passing", BlockMetadata())
@@ -868,13 +869,13 @@ class TestMdtestReportFormats:
     def test_tap_output_failed(self, tmp_path: Path) -> None:
         """Test TAP output for failed tests - lines 678-685."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_tap,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("exit 1", 1, 2, "failing", BlockMetadata())
@@ -900,13 +901,13 @@ class TestMdtestReportFormats:
     def test_tap_output_skipped(self, tmp_path: Path) -> None:
         """Test TAP output for skipped tests - lines 686-687."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_tap,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("echo hi", 1, 2, "skipped", BlockMetadata(skip=True))
@@ -925,13 +926,13 @@ class TestMdtestReportFormats:
     def test_tap_output_timeout(self, tmp_path: Path) -> None:
         """Test TAP output for timeout tests - lines 688-689."""
         from outmatch.mdtest import (
+            Block,
+            BlockMetadata,
             BlockResult,
             BlockStatus,
             FileResult,
             TestResult,
             format_tap,
-            Block,
-            BlockMetadata,
         )
 
         block = Block("sleep 100", 1, 2, "slow", BlockMetadata())
