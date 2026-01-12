@@ -22,7 +22,7 @@ If it matches, exit 0. If it doesn't, exit 1 with a helpful diff. Simple enough 
 
 **Exact matching** - The default. Output must match exactly.
 ```bash
-outmatch --version | outmatch --contains "0.2.0"
+outmatch --version | outmatch --contains "0.0.0.dev0"
 ```
 
 **Substring matching** - Check that output contains expected text.

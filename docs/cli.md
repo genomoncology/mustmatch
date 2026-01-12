@@ -5,7 +5,7 @@ Complete reference for outmatch command-line options.
 ## Version
 
 ```bash
-outmatch --version | outmatch --contains "0.3.0"
+outmatch --version | outmatch --contains "0.0.0.dev0"
 ```
 
 ## Exit Codes
