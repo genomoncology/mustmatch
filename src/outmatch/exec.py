@@ -7,11 +7,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from dataclasses import dataclass
-from typing import Annotated, Optional
-
-import typer
 
 from .compare import (
     compare_contains,
@@ -21,8 +17,7 @@ from .compare import (
     compare_not_regex,
     compare_regex,
 )
-from .config import ColorMode, CompareResult, ExpectConfig
-from .output import format_error
+from .config import ColorMode, CompareResult
 
 
 @dataclass
@@ -207,155 +202,3 @@ def check_assertions(result: ExecResult, config: ExecConfig) -> list[CompareResu
             )
 
     return failures
-
-
-def exec_command(
-    args: list[str],
-    expected_exit_code: Annotated[
-        Optional[int],
-        typer.Option("--exit-code", help="Expected exit code"),
-    ] = None,
-    stdout: Annotated[
-        Optional[str],
-        typer.Option("--stdout", help="Expected stdout (exact match)"),
-    ] = None,
-    stdout_contains: Annotated[
-        Optional[str],
-        typer.Option("--stdout-contains", help="Stdout must contain"),
-    ] = None,
-    stdout_not_contains: Annotated[
-        Optional[str],
-        typer.Option("--stdout-not-contains", help="Stdout must NOT contain"),
-    ] = None,
-    stdout_regex: Annotated[
-        Optional[str],
-        typer.Option("--stdout-regex", help="Stdout must match regex"),
-    ] = None,
-    stdout_not_regex: Annotated[
-        Optional[str],
-        typer.Option("--stdout-not-regex", help="Stdout must NOT match regex"),
-    ] = None,
-    stderr: Annotated[
-        Optional[str],
-        typer.Option("--stderr", help="Expected stderr (exact match)"),
-    ] = None,
-    stderr_contains: Annotated[
-        Optional[str],
-        typer.Option("--stderr-contains", help="Stderr must contain"),
-    ] = None,
-    stderr_not_contains: Annotated[
-        Optional[str],
-        typer.Option("--stderr-not-contains", help="Stderr must NOT contain"),
-    ] = None,
-    stderr_regex: Annotated[
-        Optional[str],
-        typer.Option("--stderr-regex", help="Stderr must match regex"),
-    ] = None,
-    stderr_not_regex: Annotated[
-        Optional[str],
-        typer.Option("--stderr-not-regex", help="Stderr must NOT match regex"),
-    ] = None,
-    output_json: Annotated[
-        Optional[str],
-        typer.Option(
-            "--output-json",
-            help='Match combined JSON: {"stdout":..., "exit_code": N}',
-        ),
-    ] = None,
-    quiet: Annotated[
-        bool,
-        typer.Option("-q", "--quiet", help="Suppress error output"),
-    ] = False,
-    color: Annotated[
-        str,
-        typer.Option(help="Color mode: auto, always, never"),
-    ] = "auto",
-    timeout: Annotated[
-        Optional[float],
-        typer.Option(help="Command timeout in seconds"),
-    ] = None,
-) -> None:
-    """Execute a command and assert on its output.
-
-    Example:
-        outmatch exec --exit-code 0 -- ls /tmp
-        outmatch exec --stdout-contains "hello" -- echo hello world
-        outmatch exec --stderr "" -- cmd  # Assert stderr is empty
-    """
-    if not args:
-        print("Error: no command specified", file=sys.stderr)
-        raise typer.Exit(2)
-
-    # Build config
-    config = ExecConfig(
-        expected_exit_code=expected_exit_code,
-        stdout_exact=stdout,
-        stdout_contains=stdout_contains,
-        stdout_not_contains=stdout_not_contains,
-        stdout_regex=stdout_regex,
-        stdout_not_regex=stdout_not_regex,
-        stderr_exact=stderr,
-        stderr_contains=stderr_contains,
-        stderr_not_contains=stderr_not_contains,
-        stderr_regex=stderr_regex,
-        stderr_not_regex=stderr_not_regex,
-        output_json=output_json,
-        quiet=quiet,
-        color=ColorMode(color),
-        timeout=timeout,
-    )
-
-    # Check if any assertion was specified
-    has_assertion = any(
-        [
-            expected_exit_code is not None,
-            stdout is not None,
-            stdout_contains is not None,
-            stdout_not_contains is not None,
-            stdout_regex is not None,
-            stdout_not_regex is not None,
-            stderr is not None,
-            stderr_contains is not None,
-            stderr_not_contains is not None,
-            stderr_regex is not None,
-            stderr_not_regex is not None,
-            output_json is not None,
-        ]
-    )
-
-    if not has_assertion:
-        print(
-            "Error: at least one assertion required (--exit-code, --stdout, etc.)",
-            file=sys.stderr,
-        )
-        raise typer.Exit(2)
-
-    # Run the command
-    try:
-        result = run_command(args, timeout=config.timeout)
-    except FileNotFoundError:
-        print(f"Error: command not found: {args[0]}", file=sys.stderr)
-        raise typer.Exit(2)
-
-    # Check timeout
-    if result.exit_code == -1 and config.timeout is not None:
-        if not quiet:
-            print(
-                f"FAIL: Command timed out after {config.timeout}s",
-                file=sys.stderr,
-            )
-        raise typer.Exit(1)
-
-    # Check assertions
-    failures = check_assertions(result, config)
-
-    if not failures:
-        raise typer.Exit(0)
-
-    # Output failures
-    if not quiet:
-        for failure in failures:
-            expect_config = ExpectConfig(quiet=quiet, color=config.color)
-            print(format_error(failure, expect_config), file=sys.stderr)
-
-    raise typer.Exit(1)
