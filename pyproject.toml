@@ -65,7 +65,7 @@ select = ["E", "F", "I", "W"]
 source = ["src/outmatch"]
 branch = true
 parallel = true
-omit = ["src/outmatch/__main__.py", "src/outmatch/config.py", "src/outmatch/version.py"]
+omit = ["src/outmatch/__main__.py", "src/outmatch/config.py", "src/outmatch/version.py", "src/outmatch/pytest_plugin.py"]
 
 [tool.coverage.report]
 fail_under = 95
