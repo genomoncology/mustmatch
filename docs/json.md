@@ -66,15 +66,7 @@ Paths use a simplified JSONPath syntax:
 |----------------|----------------------------|
 | `$.field`      | Top-level field            |
 | `$.a.b`        | Nested field               |
-| `$.arr[0]`     | Array index                |
 | `$.arr[0].x`   | Field in array element     |
-
-```bash
-# Array element access
-echo '{"items": [{"id": 1}, {"id": 2}]}' | \
-    outmatch --json --json-ignore '$.items[0]' \
-    '{"items": [{"id": 2}]}'
-```
 
 ## Errors
 

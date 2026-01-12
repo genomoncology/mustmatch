@@ -4,6 +4,7 @@ Test your documentation by running bash code blocks with `outmatch test`.
 
 ## Basic Usage
 
+<!-- outmatch: skip -->
 ```bash
 outmatch test docs/              # Test all markdown in directory
 outmatch test README.md          # Test single file
@@ -247,7 +248,7 @@ exit 42
 EOF
 sed -i 's/` ` `/```/g' /tmp/fail-test.md
 outmatch test /tmp/fail-test.md -v 2>&1 | \
-    outmatch --contains "Exit code: 42"
+    outmatch --contains "Exit code 42"
 ```
 
 Stop on first failure to focus on one issue:

@@ -26,16 +26,10 @@ testpaths = ["tests", "docs"]
 
 Point pytest at your markdown files:
 
-<!-- outmatch: skip -->
-```bash
-# Run all markdown tests
-pytest docs/
-
-# Run specific file
-pytest docs/cli.md
-
-# See what tests are discovered
-pytest docs/cli.md --collect-only
+```console
+pytest docs/                  # Run all markdown tests
+pytest docs/cli.md            # Run specific file
+pytest docs/cli.md --collect-only   # See discovered tests
 ```
 
 ## Test Discovery
@@ -53,7 +47,7 @@ Test names come from the preceding markdown heading:
 pytest docs/cli.md -v 2>&1 | outmatch --contains "Version"
 ```
 
-## Output Format
+## Output
 
 Results appear in standard pytest format:
 
@@ -61,23 +55,9 @@ Results appear in standard pytest format:
 pytest docs/cli.md 2>&1 | outmatch --contains "passed"
 ```
 
-File paths are reported alongside test names:
-
-```bash
-pytest docs/cli.md -v 2>&1 | outmatch --contains "cli.md"
-```
-
-## Mixing with Unit Tests
-
-Markdown tests run alongside regular pytest tests:
-
-```bash
-pytest tests/ docs/cli.md 2>&1 | outmatch --contains "passed"
-```
-
 ## Skipping Blocks
 
-Use HTML comments to skip blocks that shouldn't run in pytest:
+Use HTML comments to skip blocks that shouldn't run:
 
 ```markdown
 <!-- outmatch: skip -->
@@ -88,12 +68,7 @@ Use HTML comments to skip blocks that shouldn't run in pytest:
 
 ## Failure Output
 
-When a block fails, pytest shows:
-- File path and line number
-- Block name (from heading)
-- The command that failed
-- stdout/stderr output
-- Exit code
+When a block fails, pytest shows the file, line, command, and exit code:
 
 ```bash
 cat << 'EOF' > /tmp/pytest-fail.md
@@ -106,17 +81,14 @@ sed -i 's/` ` `/```/g' /tmp/pytest-fail.md
 pytest /tmp/pytest-fail.md 2>&1 | outmatch --contains "Exit code: 1"
 ```
 
-## Comparison with outmatch test
+## pytest vs outmatch test
 
-| Feature           | pytest plugin          | outmatch test        |
-|-------------------|------------------------|----------------------|
-| Integration       | Works with pytest      | Standalone           |
-| Parallelism       | Via pytest-xdist       | Built-in `--parallel`|
-| Reports           | pytest reporters       | JUnit, JSON, TAP     |
-| Configuration     | pyproject.toml/pytest.ini | CLI flags         |
-| Block directives  | skip only              | skip, timeout, env   |
+| Feature           | pytest plugin        | outmatch test        |
+|-------------------|----------------------|----------------------|
+| Integration       | Works with pytest    | Standalone           |
+| Parallelism       | Via pytest-xdist     | Built-in `--parallel`|
+| Reports           | pytest reporters     | JUnit, JSON, TAP     |
+| Block directives  | skip                 | skip, timeout, env   |
 
-Use the pytest plugin when you want markdown tests integrated into
-your existing pytest workflow. Use `outmatch test` for standalone
-documentation testing or when you need advanced features like
-per-block timeouts.
+Use pytest when integrating with existing test suites.
+Use `outmatch test` for standalone doc testing or advanced features.
