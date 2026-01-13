@@ -30,6 +30,7 @@ app = typer.Typer(
 )
 
 
+
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
@@ -364,22 +365,19 @@ def main(args: list[str] | None = None) -> int:
     if args is None:
         args = sys.argv[1:]
 
-    # Handle special case where "test" is the first argument
-    # We need to explicitly route to test command since Typer captures it
-    # as the expected argument value
+    # Handle "test" subcommand - routed manually because Typer's callback
+    # with positional expected argument conflicts with subcommand detection
     if args and args[0] == "test":
-        test_args = args[1:]
         try:
-            _run_mdtest(test_args)
+            _run_test_command(args[1:])
             return 0
         except typer.Exit as e:
             return e.exit_code
 
     # Handle "exec" subcommand
     if args and args[0] == "exec":
-        exec_args = args[1:]
         try:
-            _run_exec(exec_args)
+            _run_exec_command(args[1:])
             return 0
         except typer.Exit as e:
             return e.exit_code
@@ -391,59 +389,95 @@ def main(args: list[str] | None = None) -> int:
         return e.exit_code
 
 
-def _run_exec(args: list[str]) -> None:
-    """Direct entry point for exec command."""
-    import argparse
+# Separate Typer apps for subcommands - used to provide consistent help and parsing
+# These are invoked via manual routing in main() because the main app's callback
+# has a positional expected argument that conflicts with subcommand detection
 
-    from .config import ColorMode
+exec_app = typer.Typer(
+    help="Execute command and assert on output.",
+    add_completion=False,
+)
+
+test_app = typer.Typer(
+    help="Run bash blocks in markdown files as tests.",
+    add_completion=False,
+    context_settings={"allow_interspersed_args": True},
+)
+
+
+@exec_app.callback(invoke_without_command=True)
+def _exec_callback(
+    ctx: typer.Context,
+    exit_code: Annotated[
+        Optional[int],
+        typer.Option("--exit-code", help="Expected exit code"),
+    ] = None,
+    stdout: Annotated[
+        Optional[str],
+        typer.Option(help="Expected stdout (exact)"),
+    ] = None,
+    stdout_contains: Annotated[
+        Optional[str],
+        typer.Option(help="Stdout must contain"),
+    ] = None,
+    stdout_not_contains: Annotated[
+        Optional[str],
+        typer.Option(help="Stdout must NOT contain"),
+    ] = None,
+    stdout_regex: Annotated[
+        Optional[str],
+        typer.Option(help="Stdout must match regex"),
+    ] = None,
+    stdout_not_regex: Annotated[
+        Optional[str],
+        typer.Option(help="Stdout must NOT match regex"),
+    ] = None,
+    stderr: Annotated[
+        Optional[str],
+        typer.Option(help="Expected stderr (exact)"),
+    ] = None,
+    stderr_contains: Annotated[
+        Optional[str],
+        typer.Option(help="Stderr must contain"),
+    ] = None,
+    stderr_not_contains: Annotated[
+        Optional[str],
+        typer.Option(help="Stderr must NOT contain"),
+    ] = None,
+    stderr_regex: Annotated[
+        Optional[str],
+        typer.Option(help="Stderr must match regex"),
+    ] = None,
+    stderr_not_regex: Annotated[
+        Optional[str],
+        typer.Option(help="Stderr must NOT match regex"),
+    ] = None,
+    output_json: Annotated[
+        Optional[str],
+        typer.Option(help='Match output as JSON: {"stdout":..., "exit_code": N}'),
+    ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("-q", "--quiet", help="Suppress output"),
+    ] = False,
+    color: Annotated[
+        str,
+        typer.Option(help="Color mode: auto, always, never"),
+    ] = "auto",
+    timeout: Annotated[
+        Optional[float],
+        typer.Option(help="Command timeout in seconds"),
+    ] = None,
+    command: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Command to execute (after --)"),
+    ] = None,
+) -> None:
+    """Execute command and assert on output."""
     from .exec import ExecConfig, check_assertions, run_command
-    from .output import format_error
-
-    parser = argparse.ArgumentParser(
-        description="Execute command and assert on output",
-        usage="outmatch exec [OPTIONS] -- COMMAND [ARGS...]",
-    )
-    parser.add_argument(
-        "--exit-code", type=int, default=None, help="Expected exit code"
-    )
-    parser.add_argument("--stdout", default=None, help="Expected stdout (exact)")
-    parser.add_argument("--stdout-contains", default=None, help="Stdout must contain")
-    parser.add_argument(
-        "--stdout-not-contains", default=None, help="Stdout must NOT contain"
-    )
-    parser.add_argument("--stdout-regex", default=None, help="Stdout must match regex")
-    parser.add_argument(
-        "--stdout-not-regex", default=None, help="Stdout must NOT match regex"
-    )
-    parser.add_argument("--stderr", default=None, help="Expected stderr (exact)")
-    parser.add_argument("--stderr-contains", default=None, help="Stderr must contain")
-    parser.add_argument(
-        "--stderr-not-contains", default=None, help="Stderr must NOT contain"
-    )
-    parser.add_argument("--stderr-regex", default=None, help="Stderr must match regex")
-    parser.add_argument(
-        "--stderr-not-regex", default=None, help="Stderr must NOT match regex"
-    )
-    parser.add_argument(
-        "--output-json",
-        default=None,
-        help='Match combined output as JSON: {"stdout":..., "exit_code": N}',
-    )
-    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress output")
-    parser.add_argument(
-        "--color", default="auto", help="Color mode: auto, always, never"
-    )
-    parser.add_argument(
-        "--timeout", type=float, default=None, help="Command timeout in seconds"
-    )
-    parser.add_argument(
-        "command", nargs=argparse.REMAINDER, help="Command to execute (after --)"
-    )
-
-    parsed = parser.parse_args(args)
 
     # Extract command (skip leading -- if present)
-    cmd = parsed.command
+    cmd = list(command) if command else []
     if cmd and cmd[0] == "--":
         cmd = cmd[1:]
 
@@ -453,38 +487,38 @@ def _run_exec(args: list[str]) -> None:
 
     # Build config
     config = ExecConfig(
-        expected_exit_code=parsed.exit_code,
-        stdout_exact=parsed.stdout,
-        stdout_contains=parsed.stdout_contains,
-        stdout_not_contains=parsed.stdout_not_contains,
-        stdout_regex=parsed.stdout_regex,
-        stdout_not_regex=parsed.stdout_not_regex,
-        stderr_exact=parsed.stderr,
-        stderr_contains=parsed.stderr_contains,
-        stderr_not_contains=parsed.stderr_not_contains,
-        stderr_regex=parsed.stderr_regex,
-        stderr_not_regex=parsed.stderr_not_regex,
-        output_json=parsed.output_json,
-        quiet=parsed.quiet,
-        color=ColorMode(parsed.color),
-        timeout=parsed.timeout,
+        expected_exit_code=exit_code,
+        stdout_exact=stdout,
+        stdout_contains=stdout_contains,
+        stdout_not_contains=stdout_not_contains,
+        stdout_regex=stdout_regex,
+        stdout_not_regex=stdout_not_regex,
+        stderr_exact=stderr,
+        stderr_contains=stderr_contains,
+        stderr_not_contains=stderr_not_contains,
+        stderr_regex=stderr_regex,
+        stderr_not_regex=stderr_not_regex,
+        output_json=output_json,
+        quiet=quiet,
+        color=ColorMode(color),
+        timeout=timeout,
     )
 
     # Check if any assertion was specified
     has_assertion = any(
         [
-            parsed.exit_code is not None,
-            parsed.stdout is not None,
-            parsed.stdout_contains is not None,
-            parsed.stdout_not_contains is not None,
-            parsed.stdout_regex is not None,
-            parsed.stdout_not_regex is not None,
-            parsed.stderr is not None,
-            parsed.stderr_contains is not None,
-            parsed.stderr_not_contains is not None,
-            parsed.stderr_regex is not None,
-            parsed.stderr_not_regex is not None,
-            parsed.output_json is not None,
+            exit_code is not None,
+            stdout is not None,
+            stdout_contains is not None,
+            stdout_not_contains is not None,
+            stdout_regex is not None,
+            stdout_not_regex is not None,
+            stderr is not None,
+            stderr_contains is not None,
+            stderr_not_contains is not None,
+            stderr_regex is not None,
+            stderr_not_regex is not None,
+            output_json is not None,
         ]
     )
 
@@ -512,8 +546,6 @@ def _run_exec(args: list[str]) -> None:
         raise typer.Exit(1)
 
     # Check assertions
-    from .config import ExpectConfig
-
     failures = check_assertions(result, config)
 
     if not failures:
@@ -528,58 +560,123 @@ def _run_exec(args: list[str]) -> None:
     raise typer.Exit(1)
 
 
-def _run_mdtest(args: list[str]) -> None:
-    """Direct entry point for test command."""
-    import argparse
-    from pathlib import Path
-
+@test_app.callback(invoke_without_command=True)
+def _test_callback(
+    ctx: typer.Context,
+    paths: Annotated[
+        Optional[list[Path]],
+        typer.Argument(help="Files or directories to test"),
+    ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("-q", "--quiet", help="Minimal output"),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("-v", "--verbose", help="Verbose output"),
+    ] = False,
+    fail_fast: Annotated[
+        bool,
+        typer.Option("--fail-fast", help="Stop on first failure"),
+    ] = False,
+    parallel: Annotated[
+        int,
+        typer.Option(help="Number of parallel workers"),
+    ] = 4,
+    timeout: Annotated[
+        int,
+        typer.Option(help="Timeout per block in seconds"),
+    ] = 30,
+    shell: Annotated[
+        str,
+        typer.Option(help="Shell to use for execution"),
+    ] = "/bin/bash",
+    include: Annotated[
+        Optional[str],
+        typer.Option(help="Include pattern for blocks"),
+    ] = None,
+    exclude: Annotated[
+        Optional[str],
+        typer.Option(help="Exclude pattern for blocks"),
+    ] = None,
+    line: Annotated[
+        Optional[int],
+        typer.Option(help="Run only block at this line"),
+    ] = None,
+    junit_xml: Annotated[
+        Optional[Path],
+        typer.Option(help="Write JUnit XML report"),
+    ] = None,
+    json_out: Annotated[
+        Optional[Path],
+        typer.Option("--json", help="Write JSON report"),
+    ] = None,
+    tap: Annotated[
+        bool,
+        typer.Option("--tap", help="Output in TAP format"),
+    ] = False,
+    env: Annotated[
+        Optional[list[str]],
+        typer.Option(help="Environment variable (KEY=VALUE)"),
+    ] = None,
+    cwd: Annotated[
+        Optional[Path],
+        typer.Option(help="Working directory"),
+    ] = None,
+) -> None:
+    """Run bash blocks in markdown files as tests."""
     from .mdtest import TestConfig, test_command
-
-    parser = argparse.ArgumentParser(description="Run bash blocks in markdown files")
-    parser.add_argument("paths", nargs="*", type=Path, help="Files or directories")
-    parser.add_argument("-q", "--quiet", action="store_true")
-    parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--fail-fast", action="store_true")
-    parser.add_argument("--parallel", type=int, default=4)
-    parser.add_argument("--timeout", type=int, default=30)
-    parser.add_argument("--shell", default="/bin/bash")
-    parser.add_argument("--include")
-    parser.add_argument("--exclude")
-    parser.add_argument("--line", type=int)
-    parser.add_argument("--junit-xml", type=Path)
-    parser.add_argument("--json", type=Path, dest="json_out")
-    parser.add_argument("--tap", action="store_true")
-    parser.add_argument("--env", action="append", default=[])
-    parser.add_argument("--cwd", type=Path)
-
-    parsed = parser.parse_args(args)
 
     # Parse env variables
     env_dict: dict[str, str] = {}
-    for item in parsed.env:
+    for item in env or []:
         if "=" in item:
             key, val = item.split("=", 1)
             env_dict[key] = val
 
     config = TestConfig(
-        quiet=parsed.quiet,
-        verbose=parsed.verbose,
-        fail_fast=parsed.fail_fast,
-        parallel=parsed.parallel,
-        timeout=parsed.timeout,
-        shell=parsed.shell,
-        include_pattern=parsed.include,
-        exclude_pattern=parsed.exclude,
-        line_filter=parsed.line,
+        quiet=quiet,
+        verbose=verbose,
+        fail_fast=fail_fast,
+        parallel=parallel,
+        timeout=timeout,
+        shell=shell,
+        include_pattern=include,
+        exclude_pattern=exclude,
+        line_filter=line,
         env=env_dict,
-        cwd=parsed.cwd,
-        junit_xml=parsed.junit_xml,
-        json_output=parsed.json_out,
-        tap_output=parsed.tap,
+        cwd=cwd,
+        junit_xml=junit_xml,
+        json_output=json_out,
+        tap_output=tap,
     )
 
-    exit_code = test_command(parsed.paths or [], config)
+    exit_code = test_command(list(paths) if paths else [], config)
     raise typer.Exit(exit_code)
+
+
+def _run_exec_command(args: list[str]) -> None:
+    """Route exec subcommand to dedicated Typer app."""
+    try:
+        result = exec_app(args, standalone_mode=False)
+        # Typer returns exit code when standalone_mode=False
+        if result is not None:
+            raise typer.Exit(result)
+    except SystemExit as e:
+        # Typer may raise SystemExit, convert to typer.Exit
+        raise typer.Exit(e.code if e.code is not None else 0)
+
+
+def _run_test_command(args: list[str]) -> None:
+    """Route test subcommand to dedicated Typer app."""
+    try:
+        result = test_app(args, standalone_mode=False)
+        # Typer returns exit code when standalone_mode=False
+        if result is not None:
+            raise typer.Exit(result)
+    except SystemExit as e:
+        # Typer may raise SystemExit, convert to typer.Exit
+        raise typer.Exit(e.code if e.code is not None else 0)
 
 
 def cli() -> None:

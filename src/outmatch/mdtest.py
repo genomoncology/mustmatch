@@ -10,11 +10,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 
-# Regex patterns for markdown parsing
-FENCE_PATTERN = re.compile(
-    r'^```(bash|sh|shell)\s*$\n(.*?)^```\s*$',
-    re.MULTILINE | re.DOTALL
-)
+# Regex pattern for metadata comments
 METADATA_PATTERN = re.compile(
     r'<!--\s*outmatch:\s*(.*?)\s*-->',
     re.IGNORECASE
