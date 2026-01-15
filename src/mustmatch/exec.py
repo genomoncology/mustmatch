@@ -1,4 +1,4 @@
-"""Command execution mode for outmatch.
+"""Command execution mode for mustmatch.
 
 Runs a command and asserts on stdout, stderr, and exit code.
 """

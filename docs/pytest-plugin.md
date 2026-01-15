@@ -2,15 +2,15 @@
 
 Run markdown tests as part of your pytest suite.
 
-The outmatch pytest plugin automatically discovers and runs bash blocks
+The mustmatch pytest plugin automatically discovers and runs bash blocks
 in markdown files alongside your regular tests.
 
 ## Setup
 
-Install outmatch in your project - the plugin registers automatically:
+Install mustmatch in your project - the plugin registers automatically:
 
 ```console
-pip install outmatch
+pip install mustmatch
 ```
 
 Configure pytest to find your docs:
@@ -61,7 +61,7 @@ docs/cli.md::Exit Codes (line 20) PASSED
 Use HTML comments to skip blocks that shouldn't run:
 
 ```markdown
-<!-- outmatch: skip -->
+<!-- mustmatch: skip -->
 ` ` `bash
 # This block won't run
 ` ` `
@@ -80,9 +80,9 @@ FAILED docs/example.md::Test Name (line 10)
   Exit code: 1
 ```
 
-## pytest vs outmatch test
+## pytest vs mustmatch test
 
-| Feature           | pytest plugin        | outmatch test        |
+| Feature           | pytest plugin        | mustmatch test        |
 |-------------------|----------------------|----------------------|
 | Integration       | Works with pytest    | Standalone           |
 | Parallelism       | Via pytest-xdist     | Built-in `--parallel`|
@@ -90,4 +90,4 @@ FAILED docs/example.md::Test Name (line 10)
 | Block directives  | skip                 | skip, timeout, env   |
 
 Use pytest when integrating with existing test suites.
-Use `outmatch test` for standalone doc testing or advanced features.
+Use `mustmatch test` for standalone doc testing or advanced features.

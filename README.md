@@ -1,48 +1,52 @@
-# outmatch
+# mustmatch
 
 **Assert CLI output. Test your documentation.**
 
 Your CLI tool works perfectly—until someone copies an example from your
-docs and it fails. outmatch catches broken examples before users do.
+docs and it fails. mustmatch catches broken examples before users do.
 
 ```bash
 # Does your help text still say what your docs claim?
-mytool --help | outmatch --contains "Usage:"
+mytool --help | mustmatch --contains "Usage:"
 
 # Does your JSON output match the documented schema?
-mytool export | outmatch --json '{"status": "ok"}'
+mytool export | mustmatch --json '{"status": "ok"}'
 
-# Run every bash block in your docs as a test
-outmatch test docs/
+# Run every code block in your docs as a test
+mustmatch test docs/
+
+# Test Python code blocks with shared state
+mustmatch test --lang python --memory docs/
 ```
 
-## Why outmatch?
+## Why mustmatch?
 
-| Problem                        | Solution                       |
-|--------------------------------|--------------------------------|
-| Docs show outdated CLI output  | Test docs with `outmatch test` |
-| JSON field order breaks tests  | `--json` compares semantically |
-| Timestamps cause flaky tests   | `--replace` normalizes them    |
-| ANSI colors break CI           | `--strip-ansi` removes them    |
-| No good CLI assertion library  | Pipe to outmatch, check exit   |
+| Problem                        | Solution                         |
+|--------------------------------|----------------------------------|
+| Docs show outdated CLI output  | Test docs with `mustmatch test`  |
+| JSON field order breaks tests  | `--json` compares semantically   |
+| Timestamps cause flaky tests   | `--replace` normalizes them      |
+| ANSI colors break CI           | `--strip-ansi` removes them      |
+| Python examples drift          | `--lang python` tests them       |
+| No good CLI assertion library  | Pipe to mustmatch, check exit    |
 
 ## Install
 
 ```bash
-pip install outmatch
+pip install mustmatch
 ```
 
 ## Quick Start
 
-Pipe any command's output to outmatch with the expected value:
+Pipe any command's output to mustmatch with the expected value:
 
 ```bash
-echo "hello" | outmatch "hello"
+echo "hello" | mustmatch "hello"
 ```
 
 Exit 0 on match. Exit 1 with diff on mismatch. That's it.
 
-[**Full tutorial → docs/getting-started.md**](docs/getting-started.md)
+[**Full tutorial -> docs/getting-started.md**](docs/getting-started.md)
 
 ---
 
@@ -60,24 +64,24 @@ Exit 0 on match. Exit 1 with diff on mismatch. That's it.
 
 ```bash
 # Exact (default)
-echo "hello world" | outmatch "hello world"
+echo "hello world" | mustmatch "hello world"
 
 # Contains
-python --version 2>&1 | outmatch --contains "Python"
+python --version 2>&1 | mustmatch --contains "Python"
 
 # Regex
-date +%Y-%m-%d | outmatch --regex '^\d{4}-\d{2}-\d{2}$'
+date +%Y-%m-%d | mustmatch --regex '^\d{4}-\d{2}-\d{2}$'
 
 # JSON - field order independent
-echo '{"b":2,"a":1}' | outmatch --json '{"a":1,"b":2}'
+echo '{"b":2,"a":1}' | mustmatch --json '{"a":1,"b":2}'
 
 # JSONL - one object per line
-printf '{"id":1}\n{"id":2}' | outmatch --jsonl '{"id":1}
+printf '{"id":1}\n{"id":2}' | mustmatch --jsonl '{"id":1}
 {"id":2}'
 ```
 
-[**All modes → docs/matching.md**](docs/matching.md) ·
-[**JSON details → docs/json.md**](docs/json.md)
+[**All modes -> docs/matching.md**](docs/matching.md) |
+[**JSON details -> docs/json.md**](docs/json.md)
 
 ---
 
@@ -87,25 +91,25 @@ Replace timestamps, IDs, and paths before comparison:
 
 ```bash
 # Replace pattern with placeholder
-echo "took 1.5s" | outmatch --replace '\d+\.\d+s=>TIME' \
+echo "took 1.5s" | mustmatch --replace '\d+\.\d+s=>TIME' \
     "took TIME"
 
 # Multiple replacements
-echo "user alice, id 42" | outmatch \
+echo "user alice, id 42" | mustmatch \
     --replace 'alice=>USER' \
     --replace '\d+=>ID' \
     "user USER, id ID"
 
 # Redact sensitive values
-echo "token: abc123" | outmatch --redact 'abc\w+' \
+echo "token: abc123" | mustmatch --redact 'abc\w+' \
     "token: <redacted>"
 
 # Ignore JSON fields
-echo '{"data":"x","ts":123}' | outmatch --json \
+echo '{"data":"x","ts":123}' | mustmatch --json \
     --json-ignore '$.ts' '{"data":"x"}'
 ```
 
-[**Preprocessing → docs/preprocessing.md**](docs/preprocessing.md)
+[**Preprocessing -> docs/preprocessing.md**](docs/preprocessing.md)
 
 ---
 
@@ -116,19 +120,19 @@ Handle environment differences that cause flaky tests:
 | Flag                    | Effect                        |
 |-------------------------|-------------------------------|
 | `--strip-ansi`          | Remove color codes            |
-| `--normalize-newlines`  | CRLF → LF                     |
+| `--normalize-newlines`  | CRLF -> LF                    |
 | `--trim`                | Strip leading/trailing space  |
 | `--collapse-whitespace` | Collapse runs to single space |
 | `-i`, `--ignore-case`   | Case-insensitive comparison   |
 
 ```bash
 # Colored output in CI
-NO_COLOR=1 mytool status | outmatch "OK"
+NO_COLOR=1 mytool status | mustmatch "OK"
 # Or strip ANSI codes
-mytool status | outmatch --strip-ansi "OK"
+mytool status | mustmatch --strip-ansi "OK"
 
 # Flexible whitespace matching
-echo "  hello   world  " | outmatch --trim \
+echo "  hello   world  " | mustmatch --trim \
     --collapse-whitespace "hello world"
 ```
 
@@ -136,7 +140,7 @@ echo "  hello   world  " | outmatch --trim \
 
 ## Testing Documentation
 
-Every ` ```bash ` block in your markdown becomes a test:
+Every ` ```bash ` and ` ```python ` block in your markdown becomes a test:
 
 ````markdown
 # My CLI Tool
@@ -150,28 +154,84 @@ pip install mytool
 Check it works:
 
 ```bash
-mytool --version | outmatch --contains "1.0"
+mytool --version | mustmatch --contains "1.0"
+```
+
+Python example:
+
+```python
+import mytool
+result = mytool.process("data")
+assert result["status"] == "ok"
 ```
 ````
 
 Run with the built-in test runner:
 
 ```bash
-outmatch test docs/           # Test a directory
-outmatch test README.md       # Test a file
-outmatch test -v docs/        # Verbose output
-outmatch test --fail-fast     # Stop on first failure
+mustmatch test docs/           # Test all code blocks
+mustmatch test README.md       # Test a file
+mustmatch test -v docs/        # Verbose output
+mustmatch test --fail-fast     # Stop on first failure
+
+# Language-specific testing
+mustmatch test --lang bash docs/     # Only bash blocks
+mustmatch test --lang python docs/   # Only Python blocks
+mustmatch test --lang all docs/      # Both (default for pytest)
+
+# Python with shared state (memory mode)
+mustmatch test --lang python --memory docs/
 ```
 
 Or integrate with pytest—the plugin auto-discovers markdown:
 
 ```bash
-pytest docs/                  # Run markdown as tests
-pytest docs/ --collect-only   # See discovered tests
+pytest docs/                            # Run markdown as tests
+pytest docs/ --collect-only             # See discovered tests
+pytest docs/ --mustmatch-lang python    # Only Python blocks
+pytest docs/ --mustmatch-memory         # Share Python state
 ```
 
-[**Test runner → docs/mdtest.md**](docs/mdtest.md) ·
-[**pytest plugin → docs/pytest-plugin.md**](docs/pytest-plugin.md)
+[**Test runner -> docs/mdtest.md**](docs/mdtest.md) |
+[**Python testing -> docs/python.md**](docs/python.md) |
+[**pytest plugin -> docs/pytest-plugin.md**](docs/pytest-plugin.md)
+
+---
+
+## Python Memory Mode
+
+When testing Python documentation, blocks can share state:
+
+````markdown
+# Python Tutorial
+
+Define a class:
+
+```python
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+calc = Calculator()
+```
+
+Use it in subsequent blocks:
+
+```python
+result = calc.add(2, 3)
+assert result == 5
+```
+````
+
+Run with memory mode:
+
+```bash
+mustmatch test --lang python --memory docs/python-tutorial.md
+```
+
+Without `--memory`, each block runs independently and the second block would fail because `calc` is undefined.
+
+[**Python testing guide -> docs/python.md**](docs/python.md)
 
 ---
 
@@ -180,17 +240,17 @@ pytest docs/ --collect-only   # See discovered tests
 Control test execution with HTML comments:
 
 ````markdown
-<!-- outmatch: skip -->
+<!-- mustmatch: skip -->
 ```bash
 echo "this block won't run"
 ```
 
-<!-- outmatch: timeout=60 -->
+<!-- mustmatch: timeout=60 -->
 ```bash
 slow-command
 ```
 
-<!-- outmatch: skip-if=CI -->
+<!-- mustmatch: skip-if=CI -->
 ```bash
 interactive-command
 ```
@@ -204,10 +264,30 @@ Store expected output in files for large outputs or snapshots:
 
 ```bash
 # Compare against file
-mytool export | outmatch -f expected/output.json
+mytool export | mustmatch -f expected/output.json
 
 # Update snapshot when output intentionally changes
-mytool export | outmatch -f expected/output.json --update
+mytool export | mustmatch -f expected/output.json --update
+```
+
+---
+
+## Programmatic API
+
+Use mustmatch in your Python tests:
+
+```python
+from mustmatch import check_md_file
+
+# Test all code blocks in a file
+assert check_md_file("docs/getting-started.md")
+
+# Test only Python blocks with memory mode
+assert check_md_file(
+    "docs/python-tutorial.md",
+    lang="python",
+    memory=True
+)
 ```
 
 ---
@@ -225,7 +305,7 @@ mytool export | outmatch -f expected/output.json --update
 ## CLI Reference
 
 ```
-outmatch [OPTIONS] [EXPECTED]
+mustmatch [OPTIONS] [EXPECTED]
 
 Comparison:
   --contains             Substring match
@@ -238,7 +318,7 @@ Comparison:
 
 Normalization:
   --strip-ansi           Remove ANSI codes
-  --normalize-newlines   CRLF → LF
+  --normalize-newlines   CRLF -> LF
   --trim                 Strip whitespace
   --collapse-whitespace  Collapse whitespace runs
   -i, --ignore-case      Case-insensitive
@@ -258,15 +338,15 @@ Output:
   --diff-context N       Diff context lines
 ```
 
-[**Full CLI docs → docs/cli.md**](docs/cli.md)
+[**Full CLI docs -> docs/cli.md**](docs/cli.md)
 
 ---
 
 ## Development
 
 ```bash
-git clone https://github.com/anthropics/outmatch
-cd outmatch
+git clone https://github.com/botassembly/mustmatch
+cd mustmatch
 uv sync --extra dev
 uv run pytest
 uv run ruff check src tests

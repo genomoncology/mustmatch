@@ -1,6 +1,6 @@
 # Text Matching Modes
 
-outmatch supports three text matching modes: exact (default), contains,
+mustmatch supports three text matching modes: exact (default), contains,
 and regex. For structured data, see [JSON](json.md) and [JSONL](jsonl.md).
 
 ## Exact Match (default)
@@ -9,23 +9,23 @@ Output must match character-for-character. Trailing newlines are
 normalized automatically.
 
 ```bash
-echo "hello world" | outmatch "hello world"
-printf "hello\n" | outmatch "hello"
-printf "line one\nline two" | outmatch "line one
+echo "hello world" | mustmatch "hello world"
+printf "hello\n" | mustmatch "hello"
+printf "line one\nline two" | mustmatch "line one
 line two"
 ```
 
 Unicode and special characters work:
 
 ```bash
-printf "Hello 世界 🌍" | outmatch "Hello 世界 🌍"
-printf '{"key": "value"}' | outmatch '{"key": "value"}'
+printf "Hello 世界 🌍" | mustmatch "Hello 世界 🌍"
+printf '{"key": "value"}' | mustmatch '{"key": "value"}'
 ```
 
 Mismatch returns exit code 1:
 
 ```bash
-echo "hello" | outmatch "world" || test $? -eq 1
+echo "hello" | mustmatch "world" || test $? -eq 1
 ```
 
 ## Contains (`--contains`)
@@ -34,31 +34,31 @@ Check if output includes a substring anywhere. Whitespace is
 trimmed from expected.
 
 ```bash
-echo "hello world" | outmatch --contains "world"
-echo "hello world" | outmatch --contains "hello"
-echo "the quick brown fox" | outmatch --contains "quick brown"
-echo "hello world" | outmatch --contains "  world  "
+echo "hello world" | mustmatch --contains "world"
+echo "hello world" | mustmatch --contains "hello"
+echo "the quick brown fox" | mustmatch --contains "quick brown"
+echo "hello world" | mustmatch --contains "  world  "
 ```
 
 Works across multiple lines:
 
 ```bash
 printf "line one\nline two\nline three" | \
-    outmatch --contains "line two"
+    mustmatch --contains "line two"
 ```
 
 Case-sensitive by default:
 
 ```bash
-echo "Hello World" | outmatch --contains "hello" || test $? -eq 1
-echo "Hello World" | outmatch --contains --ignore-case "hello"
+echo "Hello World" | mustmatch --contains "hello" || test $? -eq 1
+echo "Hello World" | mustmatch --contains --ignore-case "hello"
 ```
 
 Missing substring returns exit code 1:
 
 ```bash
-echo "hello" | outmatch --contains "goodbye" || test $? -eq 1
-printf "" | outmatch --contains "something" || test $? -eq 1
+echo "hello" | mustmatch --contains "goodbye" || test $? -eq 1
+printf "" | mustmatch --contains "something" || test $? -eq 1
 ```
 
 ## Regex (`--regex`)
@@ -68,42 +68,42 @@ Match output against a Python regex pattern. Uses DOTALL mode
 
 ```bash
 echo "finished in 1.23s" | \
-    outmatch --regex 'finished in \d+\.\d+s'
-echo "abc123xyz" | outmatch --regex '[a-z]+\d+[a-z]+'
-echo "success" | outmatch --regex 'success|failure'
-printf "line1\nline2\nline3" | outmatch --regex 'line1.*line3'
+    mustmatch --regex 'finished in \d+\.\d+s'
+echo "abc123xyz" | mustmatch --regex '[a-z]+\d+[a-z]+'
+echo "success" | mustmatch --regex 'success|failure'
+printf "line1\nline2\nline3" | mustmatch --regex 'line1.*line3'
 ```
 
 Use anchors for full match:
 
 ```bash
-echo "hello world" | outmatch --regex '^hello.*world$'
+echo "hello world" | mustmatch --regex '^hello.*world$'
 ```
 
 Optional groups:
 
 ```bash
-echo "color" | outmatch --regex 'colou?r'
-echo "colour" | outmatch --regex 'colou?r'
+echo "color" | mustmatch --regex 'colou?r'
+echo "colour" | mustmatch --regex 'colou?r'
 ```
 
 Case-sensitive by default:
 
 ```bash
-echo "HELLO" | outmatch --regex 'hello' || test $? -eq 1
+echo "HELLO" | mustmatch --regex 'hello' || test $? -eq 1
 ```
 
 Invalid regex returns exit code 2:
 
 ```bash
-echo "test" | outmatch --regex '[invalid' 2>&1 | \
-    outmatch --contains "Invalid regex"
+echo "test" | mustmatch --regex '[invalid' 2>&1 | \
+    mustmatch --contains "Invalid regex"
 ```
 
 Pattern not found returns exit code 1:
 
 ```bash
-echo "hello" | outmatch --regex '\d+' || test $? -eq 1
+echo "hello" | mustmatch --regex '\d+' || test $? -eq 1
 ```
 
 ## Edge Cases
@@ -111,7 +111,7 @@ echo "hello" | outmatch --regex '\d+' || test $? -eq 1
 Empty output and large output work correctly:
 
 ```bash
-printf "" | outmatch ""
+printf "" | mustmatch ""
 python3 -c "print('x' * 1000)" | \
-    outmatch "$(python3 -c "print('x' * 1000)")"
+    mustmatch "$(python3 -c "print('x' * 1000)")"
 ```

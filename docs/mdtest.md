@@ -1,19 +1,19 @@
 # Markdown Test Runner
 
-Test your documentation by running bash code blocks with `outmatch test`.
+Test your documentation by running bash code blocks with `mustmatch test`.
 
 ## Basic Usage
 
 ```console
-outmatch test docs/              # Test all markdown in directory
-outmatch test README.md          # Test single file
-outmatch test docs/ README.md    # Test multiple paths
+mustmatch test docs/              # Test all markdown in directory
+mustmatch test README.md          # Test single file
+mustmatch test docs/ README.md    # Test multiple paths
 ```
 
 Test this documentation:
 
 ```bash
-outmatch test docs/cli.md --quiet
+mustmatch test docs/cli.md --quiet
 ```
 
 ## Output Modes
@@ -21,26 +21,26 @@ outmatch test docs/cli.md --quiet
 **Default** - Shows pass/fail per block with summary:
 
 ```bash
-outmatch test docs/cli.md 2>&1 | outmatch --contains "Results:"
+mustmatch test docs/cli.md 2>&1 | mustmatch --contains "Results:"
 ```
 
 **Quiet** (`-q`) - Just the summary:
 
 ```bash
-outmatch test docs/cli.md --quiet | outmatch --regex '\d+ passed'
+mustmatch test docs/cli.md --quiet | mustmatch --regex '\d+ passed'
 ```
 
 **Verbose** (`-v`) - Full output including commands:
 
 ```bash
-outmatch test docs/cli.md --verbose 2>&1 | \
-    outmatch --contains "Block (line"
+mustmatch test docs/cli.md --verbose 2>&1 | \
+    mustmatch --contains "Block (line"
 ```
 
 **TAP** - Test Anything Protocol format:
 
 ```bash
-outmatch test docs/cli.md --tap | outmatch --contains "TAP version"
+mustmatch test docs/cli.md --tap | mustmatch --contains "TAP version"
 ```
 
 ## Report Files
@@ -52,12 +52,12 @@ Generate reports for CI integration:
 echo -e '```bash\necho hello\n```' > /tmp/simple.md
 
 # JUnit XML (for Jenkins, GitLab CI, etc.)
-outmatch test /tmp/simple.md --junit-xml /tmp/report.xml -q
-cat /tmp/report.xml | outmatch --contains "testsuite"
+mustmatch test /tmp/simple.md --junit-xml /tmp/report.xml -q
+cat /tmp/report.xml | mustmatch --contains "testsuite"
 
 # JSON report
-outmatch test /tmp/simple.md --json /tmp/report.json -q
-cat /tmp/report.json | outmatch --contains '"passed":'
+mustmatch test /tmp/simple.md --json /tmp/report.json -q
+cat /tmp/report.json | mustmatch --contains '"passed":'
 
 rm /tmp/simple.md /tmp/report.xml /tmp/report.json
 ```
@@ -68,16 +68,16 @@ Run specific tests by name pattern or line number:
 
 ```bash
 # Include only tests matching pattern
-outmatch test docs/matching.md --include "Exact" -q | \
-    outmatch --contains "passed"
+mustmatch test docs/matching.md --include "Exact" -q | \
+    mustmatch --contains "passed"
 
 # Exclude tests matching pattern
-outmatch test docs/matching.md --exclude "Empty" -q | \
-    outmatch --contains "passed"
+mustmatch test docs/matching.md --exclude "Empty" -q | \
+    mustmatch --contains "passed"
 
 # Run block at specific line
-outmatch test docs/cli.md --line 8 -q | \
-    outmatch --contains "1 passed"
+mustmatch test docs/cli.md --line 8 -q | \
+    mustmatch --contains "1 passed"
 ```
 
 ## Block Directives
@@ -87,7 +87,7 @@ Control block execution with HTML comments before the code fence.
 ### Skip a Block
 
 ```markdown
-<!-- outmatch: skip -->
+<!-- mustmatch: skip -->
 ` ` `bash
 # This won't run
 exit 1
@@ -98,13 +98,13 @@ Test that skip works:
 
 ```bash
 cat << 'EOF' > /tmp/skip-test.md
-<!-- outmatch: skip -->
+<!-- mustmatch: skip -->
 ` ` `bash
 exit 1
 ` ` `
 EOF
 sed -i 's/` ` `/```/g' /tmp/skip-test.md
-outmatch test /tmp/skip-test.md -q | outmatch --contains "1 skipped"
+mustmatch test /tmp/skip-test.md -q | mustmatch --contains "1 skipped"
 ```
 
 ### Conditional Skip
@@ -112,7 +112,7 @@ outmatch test /tmp/skip-test.md -q | outmatch --contains "1 skipped"
 Skip based on environment variable:
 
 ```markdown
-<!-- outmatch: skip-if=CI -->
+<!-- mustmatch: skip-if=CI -->
 ` ` `bash
 # Skipped when CI=1
 open https://example.com
@@ -121,14 +121,14 @@ open https://example.com
 
 ```bash
 cat << 'EOF' > /tmp/skipif-test.md
-<!-- outmatch: skip-if=SKIP_ME -->
+<!-- mustmatch: skip-if=SKIP_ME -->
 ` ` `bash
 exit 1
 ` ` `
 EOF
 sed -i 's/` ` `/```/g' /tmp/skipif-test.md
-SKIP_ME=1 outmatch test /tmp/skipif-test.md -q | \
-    outmatch --contains "1 skipped"
+SKIP_ME=1 mustmatch test /tmp/skipif-test.md -q | \
+    mustmatch --contains "1 skipped"
 ```
 
 ### Custom Timeout
@@ -136,7 +136,7 @@ SKIP_ME=1 outmatch test /tmp/skipif-test.md -q | \
 Override the default 30-second timeout:
 
 ```markdown
-<!-- outmatch: timeout=60 -->
+<!-- mustmatch: timeout=60 -->
 ` ` `bash
 # Has 60 seconds to complete
 long-running-command
@@ -145,13 +145,13 @@ long-running-command
 
 ```bash
 cat << 'EOF' > /tmp/timeout-test.md
-<!-- outmatch: timeout=5 -->
+<!-- mustmatch: timeout=5 -->
 ` ` `bash
 sleep 0.1
 ` ` `
 EOF
 sed -i 's/` ` `/```/g' /tmp/timeout-test.md
-outmatch test /tmp/timeout-test.md -q
+mustmatch test /tmp/timeout-test.md -q
 ```
 
 ### Block Environment Variables
@@ -159,7 +159,7 @@ outmatch test /tmp/timeout-test.md -q
 Set variables for a specific block:
 
 ```markdown
-<!-- outmatch: env=DEBUG=1,VERBOSE=true -->
+<!-- mustmatch: env=DEBUG=1,VERBOSE=true -->
 ` ` `bash
 test "$DEBUG" = "1"
 ` ` `
@@ -167,13 +167,13 @@ test "$DEBUG" = "1"
 
 ```bash
 cat << 'EOF' > /tmp/env-test.md
-<!-- outmatch: env=TEST_VAR=hello -->
+<!-- mustmatch: env=TEST_VAR=hello -->
 ` ` `bash
 test "$TEST_VAR" = "hello"
 ` ` `
 EOF
 sed -i 's/` ` `/```/g' /tmp/env-test.md
-outmatch test /tmp/env-test.md -q
+mustmatch test /tmp/env-test.md -q
 ```
 
 ## Execution Options
@@ -192,13 +192,13 @@ outmatch test /tmp/env-test.md -q
 By default, each test runs in its markdown file's directory:
 
 ```bash
-outmatch test docs/cli.md -q
+mustmatch test docs/cli.md -q
 ```
 
 Override with `--cwd`:
 
 ```bash
-outmatch test docs/cli.md --cwd /tmp -q
+mustmatch test docs/cli.md --cwd /tmp -q
 ```
 
 Pass environment variables with `--env`:
@@ -210,7 +210,7 @@ test -n "$MY_VAR"
 ` ` `
 EOF
 sed -i 's/` ` `/```/g' /tmp/envflag-test.md
-outmatch test /tmp/envflag-test.md --env MY_VAR=hello -q
+mustmatch test /tmp/envflag-test.md --env MY_VAR=hello -q
 ```
 
 ## Test Names
@@ -223,7 +223,7 @@ a comment on the first line of the block:
 
 ` ` `bash
 # This block is named "Installation"
-pip install outmatch
+pip install mustmatch
 ` ` `
 
 ` ` `bash
@@ -236,8 +236,8 @@ echo hello
 Verify naming works:
 
 ```bash
-outmatch test docs/cli.md -v 2>&1 | \
-    outmatch --contains "Version"
+mustmatch test docs/cli.md -v 2>&1 | \
+    mustmatch --contains "Version"
 ```
 
 ## Debugging Failures
@@ -251,15 +251,15 @@ exit 42
 ` ` `
 EOF
 sed -i 's/` ` `/```/g' /tmp/fail-test.md
-outmatch test /tmp/fail-test.md -v 2>&1 | \
-    outmatch --contains "Exit code 42"
+mustmatch test /tmp/fail-test.md -v 2>&1 | \
+    mustmatch --contains "Exit code 42"
 ```
 
 Stop on first failure to focus on one issue:
 
 ```bash
-outmatch test docs/cli.md --fail-fast -q 2>&1 | \
-    outmatch --contains "passed"
+mustmatch test docs/cli.md --fail-fast -q 2>&1 | \
+    mustmatch --contains "passed"
 ```
 
 ## Excluded Directories
@@ -281,5 +281,5 @@ echo '```' >> /tmp/excluded-test/node_modules/bad.md
 echo '```bash' > /tmp/excluded-test/good.md
 echo 'echo ok' >> /tmp/excluded-test/good.md
 echo '```' >> /tmp/excluded-test/good.md
-outmatch test /tmp/excluded-test -q | outmatch --contains "1 passed"
+mustmatch test /tmp/excluded-test -q | mustmatch --contains "1 passed"
 ```

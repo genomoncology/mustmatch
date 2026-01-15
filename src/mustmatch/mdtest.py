@@ -1,4 +1,4 @@
-"""Test command: run bash blocks in markdown files."""
+"""Test command: run bash and Python blocks in markdown files."""
 
 from __future__ import annotations
 
@@ -9,10 +9,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
+from typing import Any
 
 # Regex pattern for metadata comments
 METADATA_PATTERN = re.compile(
-    r'<!--\s*outmatch:\s*(.*?)\s*-->',
+    r'<!--\s*mustmatch:\s*(.*?)\s*-->',
     re.IGNORECASE
 )
 # Default exclusion patterns
@@ -63,12 +64,13 @@ class BlockMetadata:
 
 @dataclass
 class Block:
-    """A bash code block from markdown."""
+    """A code block from markdown."""
     content: str
     line_start: int
     line_end: int
     name: str | None = None
     metadata: BlockMetadata = field(default_factory=BlockMetadata)
+    lang: str = "bash"  # "bash" or "python"
 
 
 @dataclass
@@ -160,6 +162,9 @@ class RunConfig:
     junit_xml: Path | None = None
     json_output: Path | None = None
     tap_output: bool = False
+    # Language options
+    lang: str = "bash"  # "bash", "python", or "all"
+    memory: bool = False  # For Python: share state between blocks
     # Pre-compiled patterns (computed in __post_init__)
     _include_re: re.Pattern[str] | None = field(default=None, repr=False)
     _exclude_re: re.Pattern[str] | None = field(default=None, repr=False)
@@ -182,8 +187,32 @@ class RunConfig:
 TestConfig = RunConfig
 
 
-def parse_markdown(content: str, heading_context: bool = True) -> list[Block]:
-    """Parse markdown content and extract bash blocks."""
+def parse_markdown(
+    content: str,
+    heading_context: bool = True,
+    lang: str = "bash",
+) -> list[Block]:
+    """Parse markdown content and extract code blocks.
+
+    Args:
+        content: Markdown content.
+        heading_context: If True, use headings as block names.
+        lang: Language to parse: "bash", "python", or "all".
+
+    Returns:
+        List of Block instances.
+    """
+    # Define fence patterns
+    bash_fences = {"bash", "sh", "shell"}
+    python_fences = {"python", "py"}
+
+    if lang == "bash":
+        target_fences = bash_fences
+    elif lang == "python":
+        target_fences = python_fences
+    else:  # "all"
+        target_fences = bash_fences | python_fences
+
     blocks: list[Block] = []
     lines = content.split('\n')
 
@@ -208,39 +237,49 @@ def parse_markdown(content: str, heading_context: bool = True) -> list[Block]:
             i += 1
             continue
 
-        # Check for bash fence
-        fence_match = re.match(r'^```(bash|sh|shell)\s*$', line)
+        # Check for code fence
+        fence_match = re.match(r'^```(\w+)\s*$', line)
         if fence_match:
-            block_start = i + 1  # Line number (1-indexed)
-            block_lines: list[str] = []
-            i += 1
+            fence_lang = fence_match.group(1).lower()
+            # Determine if this fence matches our target
+            detected_lang = None
+            if fence_lang in bash_fences and fence_lang in target_fences:
+                detected_lang = "bash"
+            elif fence_lang in python_fences and fence_lang in target_fences:
+                detected_lang = "python"
 
-            # Collect block content until closing fence
-            while i < len(lines) and not lines[i].startswith('```'):
-                block_lines.append(lines[i])
+            if detected_lang:
+                block_start = i + 2  # Line number (1-indexed, first line of content)
+                block_lines: list[str] = []
                 i += 1
 
-            block_end = i + 1  # Line number (1-indexed)
-            block_content = '\n'.join(block_lines)
+                # Collect block content until closing fence
+                while i < len(lines) and not lines[i].startswith('```'):
+                    block_lines.append(lines[i])
+                    i += 1
 
-            # Extract name from first comment or heading
-            block_name = current_heading
-            if block_lines:
-                first_line = block_lines[0].strip()
-                if first_line.startswith('#'):
-                    comment_match = re.match(r'^#\s*(.+)$', first_line)
-                    if comment_match:
-                        block_name = comment_match.group(1).strip()
+                block_end = i + 1  # Line number (1-indexed)
+                block_content = '\n'.join(block_lines)
 
-            block = Block(
-                content=block_content,
-                line_start=block_start,
-                line_end=block_end,
-                name=block_name,
-                metadata=pending_metadata or BlockMetadata(),
-            )
-            blocks.append(block)
-            pending_metadata = None
+                # Extract name from first comment or heading
+                block_name = current_heading
+                if block_lines:
+                    first_line = block_lines[0].strip()
+                    if first_line.startswith('#'):
+                        comment_match = re.match(r'^#\s*(.+)$', first_line)
+                        if comment_match:
+                            block_name = comment_match.group(1).strip()
+
+                block = Block(
+                    content=block_content,
+                    line_start=block_start,
+                    line_end=block_end,
+                    name=block_name,
+                    metadata=pending_metadata or BlockMetadata(),
+                    lang=detected_lang,
+                )
+                blocks.append(block)
+                pending_metadata = None
 
         i += 1
 
@@ -366,6 +405,47 @@ def execute_block(
         )
 
 
+def execute_python_block(
+    block: Block,
+    namespace: dict[str, Any] | None = None,
+    filename: str = "<markdown>",
+) -> tuple[BlockResult, dict[str, Any]]:
+    """Execute a single Python block.
+
+    Args:
+        block: The Python block to execute.
+        namespace: Optional namespace for state sharing.
+        filename: Filename for error reporting.
+
+    Returns:
+        Tuple of (BlockResult, namespace) for memory mode.
+    """
+    import time
+
+    from .python_exec import execute_python
+
+    start_time = time.time()
+    block_filename = f"{filename}:{block.line_start}"
+
+    result, namespace = execute_python(block.content, namespace, block_filename)
+    duration = time.time() - start_time
+
+    if result.success:
+        return BlockResult(
+            block=block,
+            status=BlockStatus.PASSED,
+            duration=duration,
+        ), namespace
+    else:
+        return BlockResult(
+            block=block,
+            status=BlockStatus.FAILED,
+            duration=duration,
+            error=result.error,
+            actual=result.output if result.output else None,
+        ), namespace
+
+
 def run_file(path: Path, config: TestConfig) -> FileResult:
     """Test all blocks in a markdown file."""
     import time
@@ -384,7 +464,7 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
         )
         return result
 
-    blocks = parse_markdown(content)
+    blocks = parse_markdown(content, lang=config.lang)
 
     # Set working directory to file's directory if not specified
     file_config = TestConfig(
@@ -402,12 +482,16 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
         junit_xml=config.junit_xml,
         json_output=config.json_output,
         tap_output=config.tap_output,
+        lang=config.lang,
+        memory=config.memory,
     )
 
-    # Execute blocks sequentially in isolated subprocesses
-    # Note: Each block runs in a fresh shell, so environment changes
-    # (like `export FOO=bar`) don't persist between blocks.
-    # Put dependent commands in a single block if state sharing is needed.
+    # For Python memory mode, we need to share namespace across blocks
+    python_namespace: dict[str, Any] | None = None
+    if config.memory and config.lang in ("python", "all"):
+        python_namespace = {"__name__": "__main__", "__builtins__": __builtins__}
+
+    # Execute blocks sequentially
     for block in blocks:
         if should_skip_block(block, file_config):
             result.blocks.append(BlockResult(
@@ -416,7 +500,16 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
             ))
             continue
 
-        block_result = execute_block(block, file_config)
+        # Execute based on block language
+        if block.lang == "python":
+            block_result, python_namespace = execute_python_block(
+                block,
+                namespace=python_namespace if config.memory else None,
+                filename=str(path),
+            )
+        else:  # bash
+            block_result = execute_block(block, file_config)
+
         result.blocks.append(block_result)
 
         # Stop on first failure if fail-fast
@@ -626,7 +719,7 @@ def format_result(result: TestResult, config: TestConfig) -> str:
 def write_junit_xml(result: TestResult, path: Path) -> None:
     """Write JUnit XML report."""
     testsuite = ET.Element("testsuite")
-    testsuite.set("name", "outmatch")
+    testsuite.set("name", "mustmatch")
     testsuite.set("tests", str(result.total))
     testsuite.set("failures", str(result.failed))
     testsuite.set("errors", str(result.timeout))
