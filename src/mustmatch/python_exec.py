@@ -13,6 +13,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+def create_namespace() -> dict[str, Any]:
+    """Create a fresh Python namespace for code execution.
+
+    Returns:
+        A dict with __name__ and __builtins__ set for exec().
+    """
+    return {"__name__": "__main__", "__builtins__": __builtins__}
+
+
 @dataclass
 class PythonResult:
     """Result of Python execution."""
@@ -39,7 +48,7 @@ def execute_python(
         Tuple of (PythonResult, namespace) where namespace may be modified.
     """
     if namespace is None:
-        namespace = {"__name__": "__main__", "__builtins__": __builtins__}
+        namespace = create_namespace()
 
     # Capture stdout
     old_stdout = sys.stdout
@@ -145,36 +154,25 @@ def execute_python_blocks(
     if not blocks:
         return result
 
-    if memory:
-        # Share namespace across all blocks
-        namespace: dict[str, Any] = {
-            "__name__": "__main__",
-            "__builtins__": __builtins__,
-        }
-        for i, (code, line_num) in enumerate(blocks):
-            block_filename = f"{filename}:{line_num}"
-            exec_result, namespace = execute_python(code, namespace, block_filename)
-            result.blocks.append(PythonBlockResult(
-                block_index=i,
-                line_start=line_num,
-                success=exec_result.success,
-                output=exec_result.output,
-                error=exec_result.error,
-            ))
-            # Stop on first failure in memory mode
+    # In memory mode, share namespace; otherwise use None (fresh each time)
+    namespace: dict[str, Any] | None = create_namespace() if memory else None
+
+    for i, (code, line_num) in enumerate(blocks):
+        block_filename = f"{filename}:{line_num}"
+        exec_result, updated_namespace = execute_python(code, namespace, block_filename)
+
+        result.blocks.append(PythonBlockResult(
+            block_index=i,
+            line_start=line_num,
+            success=exec_result.success,
+            output=exec_result.output,
+            error=exec_result.error,
+        ))
+
+        # In memory mode, preserve namespace and stop on failure
+        if memory:
+            namespace = updated_namespace
             if not exec_result.success:
                 break
-    else:
-        # Run each independently
-        for i, (code, line_num) in enumerate(blocks):
-            block_filename = f"{filename}:{line_num}"
-            exec_result, _ = execute_python(code, None, block_filename)
-            result.blocks.append(PythonBlockResult(
-                block_index=i,
-                line_start=line_num,
-                success=exec_result.success,
-                output=exec_result.output,
-                error=exec_result.error,
-            ))
 
     return result

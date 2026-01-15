@@ -489,7 +489,8 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
     # For Python memory mode, we need to share namespace across blocks
     python_namespace: dict[str, Any] | None = None
     if config.memory and config.lang in ("python", "all"):
-        python_namespace = {"__name__": "__main__", "__builtins__": __builtins__}
+        from .python_exec import create_namespace
+        python_namespace = create_namespace()
 
     # Execute blocks sequentially
     for block in blocks:

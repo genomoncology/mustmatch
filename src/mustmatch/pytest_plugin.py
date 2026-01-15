@@ -7,7 +7,7 @@ Automatically collects and runs bash and Python blocks from markdown files.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -127,10 +127,9 @@ class PythonMemoryItem(pytest.Item):
 
     def runtest(self) -> None:
         """Execute all Python blocks with shared namespace."""
-        namespace: dict[str, Any] = {
-            "__name__": "__main__",
-            "__builtins__": __builtins__,
-        }
+        from mustmatch.python_exec import create_namespace
+
+        namespace = create_namespace()
         for test in self.tests:
             namespace = test.run(namespace=namespace) or namespace
 

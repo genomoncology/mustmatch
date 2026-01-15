@@ -22,6 +22,7 @@ from .config import (
 )
 from .normalize import preprocess
 from .pytest import MarkdownTest
+from .python_exec import create_namespace
 from .version import __version__
 
 
@@ -71,6 +72,7 @@ __all__ = [
     "compare",
     "preprocess",
     "check_md_file",
+    "create_namespace",
     "CompareMode",
     "CompareResult",
     "ColorMode",

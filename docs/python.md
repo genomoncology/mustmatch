@@ -10,6 +10,7 @@ Python code blocks (` ```python ` or ` ```py `) are executed using Python's buil
 
 ### CLI
 
+<!-- mustmatch: skip -->
 ```bash
 # Test only Python blocks
 mustmatch test --lang python docs/
@@ -20,6 +21,7 @@ mustmatch test --lang all docs/
 
 ### pytest
 
+<!-- mustmatch: skip -->
 ```bash
 # Test Python blocks
 pytest docs/ --mustmatch-lang python
@@ -66,6 +68,7 @@ print(x)  # Output: 42
 
 Run with memory mode:
 
+<!-- mustmatch: skip -->
 ```bash
 # CLI
 mustmatch test --lang python --memory docs/
@@ -115,6 +118,7 @@ Without `--memory`, the second block would fail because `calc` doesn't exist.
 
 Use the `check_md_file` function to test markdown files programmatically:
 
+<!-- mustmatch: skip -->
 ```python
 from mustmatch import check_md_file
 
@@ -156,6 +160,7 @@ Example error output:
 
 Use standard Python assertions in your blocks:
 
+<!-- mustmatch: skip -->
 ```python
 # Simple assertions
 x = 1 + 1
@@ -209,6 +214,7 @@ time.sleep(5)  # Simulating slow operation
 
 While memory mode is useful, independent blocks are easier to maintain:
 
+<!-- mustmatch: skip -->
 ```python
 # Good: Self-contained example
 from mylib import process
@@ -220,11 +226,13 @@ assert result["status"] == "ok"
 
 Memory mode shines for tutorials:
 
+<!-- mustmatch: skip -->
 ```python
 # Block 1: Setup
 data = load_data()
 ```
 
+<!-- mustmatch: skip -->
 ```python
 # Block 2: Transform (needs data from Block 1)
 processed = transform(data)
@@ -235,6 +243,7 @@ assert len(processed) > 0
 
 Always include assertions to verify the code works:
 
+<!-- mustmatch: skip -->
 ```python
 # Instead of just showing how to use the API...
 result = my_function()

@@ -64,6 +64,45 @@ def find_block_name(lines: list[str], fence_index: int) -> str | None:
     return None
 
 
+def should_skip_block(lines: list[str], fence_index: int) -> bool:
+    """Check if a block should be skipped based on preceding HTML comment.
+
+    Looks for <!-- mustmatch: skip --> in the few lines before the fence.
+
+    Args:
+        lines: All lines of the markdown file.
+        fence_index: Index of the fence opening line (0-indexed).
+
+    Returns:
+        True if the block should be skipped, False otherwise.
+    """
+    # Check up to 3 lines before the fence for skip directive
+    start = max(fence_index - 3, 0)
+    for i in range(fence_index - 1, start - 1, -1):
+        line = lines[i].strip()
+        if not line:
+            continue
+        # Check for skip directive
+        if "mustmatch:" in line.lower() and "skip" in line.lower():
+            return True
+        # Stop at non-empty, non-comment lines
+        if not line.startswith("<!--"):
+            break
+    return False
+
+
+def _count_backticks(line: str) -> int:
+    """Count leading backticks in a line (after stripping whitespace)."""
+    stripped = line.strip()
+    count = 0
+    for char in stripped:
+        if char == "`":
+            count += 1
+        else:
+            break
+    return count
+
+
 def parse_code_blocks(
     content: str,
     lang: str = "bash",
@@ -72,6 +111,7 @@ def parse_code_blocks(
     """Parse markdown content and yield code blocks of specified language.
 
     This is the shared implementation used by both mdtest and pytest integrations.
+    Properly handles nested fences (e.g., ````markdown containing ```python).
 
     Args:
         content: Markdown file content.
@@ -94,39 +134,75 @@ def parse_code_blocks(
     block_start = 0
     block_lines: list[str] = []
     block_name: str | None = None
+    current_fence_level = 0  # Number of backticks for current fence
+
+    # Track outer fences that contain our target blocks (e.g., ````markdown)
+    outer_fence_level = 0
 
     for i, line in enumerate(lines):
         stripped = line.strip()
+        backtick_count = _count_backticks(stripped)
 
-        # Check for fence opening
+        # Check if we're entering or exiting an outer fence (4+ backticks)
+        if backtick_count >= 4:
+            if outer_fence_level == 0:
+                # Entering an outer fence
+                outer_fence_level = backtick_count
+            elif (
+                backtick_count == outer_fence_level
+                and stripped == "`" * backtick_count
+            ):
+                # Exiting the outer fence (exact match of backticks only)
+                outer_fence_level = 0
+            continue
+
+        # Skip processing if we're inside an outer fence
+        if outer_fence_level > 0:
+            continue
+
+        # Check for fence opening (only 3-backtick fences)
         detected_lang = None
-        if stripped in BASH_FENCES and stripped in target_fences:
-            detected_lang = "bash"
-        elif stripped in PYTHON_FENCES and stripped in target_fences:
-            detected_lang = "python"
+        if not in_block and backtick_count == 3:
+            if stripped in BASH_FENCES and stripped in target_fences:
+                detected_lang = "bash"
+            elif stripped in PYTHON_FENCES and stripped in target_fences:
+                detected_lang = "python"
 
         if detected_lang:
-            in_block = True
-            current_lang = detected_lang
-            block_start = i + 2  # Line number (1-indexed, after fence)
-            block_lines = []
-            block_name = find_block_name(lines, i) if include_name else None
+            # Check for skip directive
+            if should_skip_block(lines, i):
+                # Skip this block - read until closing fence and discard
+                in_block = True
+                current_lang = detected_lang
+                current_fence_level = 3
+                block_lines = []
+                block_name = None
+                # Mark as skipped (will be filtered out when yielding)
+                block_start = -1  # Sentinel value to indicate skip
+            else:
+                in_block = True
+                current_lang = detected_lang
+                current_fence_level = 3
+                block_start = i + 2  # Line number (1-indexed, after fence)
+                block_lines = []
+                block_name = find_block_name(lines, i) if include_name else None
 
-        # Check for fence closing
-        elif stripped == "```" and in_block:
+        # Check for fence closing (exactly 3 backticks)
+        elif stripped == "```" and in_block and current_fence_level == 3:
             in_block = False
+            current_fence_level = 0
+
+            # Skip blocks marked with sentinel value (-1)
+            if block_start == -1:
+                continue
+
             block_content = "\n".join(block_lines)
 
             # Try to get name from first comment if not found from heading
+            # Both bash and python use # for comments
             if include_name and block_name is None and block_lines:
                 first_line = block_lines[0].strip()
-                # Bash comment
-                if current_lang == "bash" and first_line.startswith("#"):
-                    comment_match = re.match(r"^#\s*(.+)$", first_line)
-                    if comment_match:
-                        block_name = comment_match.group(1).strip()
-                # Python comment
-                elif current_lang == "python" and first_line.startswith("#"):
+                if first_line.startswith("#"):
                     comment_match = re.match(r"^#\s*(.+)$", first_line)
                     if comment_match:
                         block_name = comment_match.group(1).strip()
