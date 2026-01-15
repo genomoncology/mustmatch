@@ -170,7 +170,7 @@ wheels = [
 ]
 
 [[package]]
-name = "outmatch"
+name = "mustmatch"
 version = "0.0.0.dev0"
 source = { editable = "." }
 dependencies = [

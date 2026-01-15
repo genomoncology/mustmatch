@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from outmatch.cli import main
-from outmatch.config import (
+from mustmatch.cli import main
+from mustmatch.config import (
     ColorMode,
     CompareResult,
     ExpectConfig,
@@ -24,9 +24,9 @@ from outmatch.config import (
     compile_redactions,
     compile_replacements,
 )
-from outmatch.json_utils import _navigate, _remove_single_path
-from outmatch.output import colorize_diff, format_error
-from outmatch.pytest import MarkdownTest
+from mustmatch.json_utils import _navigate, _remove_single_path
+from mustmatch.output import colorize_diff, format_error
+from mustmatch.pytest import MarkdownTest
 
 
 class TestMarkdownTestInternals:
@@ -256,8 +256,8 @@ class TestNormalizeWithCompiledPatterns:
 
     def test_normalize_options_with_compiled_replacements(self) -> None:
         """Test NormalizeOptions with pre-compiled replacement patterns."""
-        from outmatch.config import NormalizeOptions, compile_replacements
-        from outmatch.normalize import preprocess
+        from mustmatch.config import NormalizeOptions, compile_replacements
+        from mustmatch.normalize import preprocess
 
         compiled = compile_replacements((("foo", "bar"),))
         opts = NormalizeOptions(replacements=compiled)
@@ -266,8 +266,8 @@ class TestNormalizeWithCompiledPatterns:
 
     def test_normalize_options_with_compiled_redactions(self) -> None:
         """Test NormalizeOptions with pre-compiled redaction patterns."""
-        from outmatch.config import NormalizeOptions, compile_redactions
-        from outmatch.normalize import preprocess
+        from mustmatch.config import NormalizeOptions, compile_redactions
+        from mustmatch.normalize import preprocess
 
         compiled = compile_redactions((r"secret-\w+",))
         opts = NormalizeOptions(redactions=compiled)
@@ -367,7 +367,7 @@ class TestMdtestExceptionHandling:
 
     def test_os_error_shell_not_found(self, tmp_path: Path) -> None:
         """Test handling of OSError when shell is not found."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockStatus,
@@ -389,7 +389,7 @@ class TestMdtestExceptionHandling:
 
     def test_subprocess_error_handling(self, tmp_path: Path) -> None:
         """Test handling of subprocess errors."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockStatus,
@@ -415,7 +415,7 @@ class TestMdtestExceptionHandling:
 
         Tests the OSError handling in run_file when file can't be read.
         """
-        from outmatch.mdtest import TestConfig, run_file
+        from mustmatch.mdtest import TestConfig, run_file
 
         # Use a non-existent file path
         nonexistent = tmp_path / "does_not_exist.md"
@@ -431,7 +431,7 @@ class TestMdtestMetadataParsing:
 
     def test_invalid_timeout_value(self) -> None:
         """Test that invalid timeout values are ignored (lines 60-61)."""
-        from outmatch.mdtest import BlockMetadata
+        from mustmatch.mdtest import BlockMetadata
 
         # Invalid timeout should be ignored (not raise, just skip)
         meta = BlockMetadata.parse("timeout=notanumber")
@@ -439,7 +439,7 @@ class TestMdtestMetadataParsing:
 
     def test_env_directive_parsing(self) -> None:
         """Test parsing env directive with multiple vars."""
-        from outmatch.mdtest import BlockMetadata
+        from mustmatch.mdtest import BlockMetadata
 
         meta = BlockMetadata.parse("env=FOO=bar,BAZ=qux")
         assert meta.env == {"FOO": "bar", "BAZ": "qux"}
@@ -450,7 +450,7 @@ class TestMdtestBlockTimeout:
 
     def test_block_timeout(self, tmp_path: Path) -> None:
         """Test that blocks exceeding timeout are properly handled."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockStatus,
@@ -476,7 +476,7 @@ class TestMdtestParallelExecution:
 
     def test_parallel_execution(self, tmp_path: Path) -> None:
         """Test parallel execution of multiple files."""
-        from outmatch.mdtest import TestConfig, run_tests
+        from mustmatch.mdtest import TestConfig, run_tests
 
         # Create multiple markdown files
         for i in range(3):
@@ -491,7 +491,7 @@ class TestMdtestParallelExecution:
 
     def test_no_files_found(self, tmp_path: Path) -> None:
         """Test run_tests with empty directory - lines 445-446."""
-        from outmatch.mdtest import TestConfig, run_tests
+        from mustmatch.mdtest import TestConfig, run_tests
 
         # Create empty directory
         empty_dir = tmp_path / "empty"
@@ -508,7 +508,7 @@ class TestMdtestFailFast:
 
     def test_fail_fast_sequential(self, tmp_path: Path) -> None:
         """Test fail-fast stops on first failure in sequential mode."""
-        from outmatch.mdtest import TestConfig, run_tests
+        from mustmatch.mdtest import TestConfig, run_tests
 
         md = tmp_path / "test.md"
         md.write_text(
@@ -529,7 +529,7 @@ class TestMdtestOutputFormats:
 
     def test_quiet_mode_with_failures(self, tmp_path: Path) -> None:
         """Test quiet mode output with failures - line 502."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -555,7 +555,7 @@ class TestMdtestOutputFormats:
 
     def test_default_mode_with_skipped(self, tmp_path: Path) -> None:
         """Test default mode output with skipped blocks - lines 524-525."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -581,7 +581,7 @@ class TestMdtestOutputFormats:
 
     def test_default_mode_with_timeout(self, tmp_path: Path) -> None:
         """Test default mode output with timeout - lines 526-527."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -611,7 +611,7 @@ class TestMdtestOutputFormats:
 
     def test_verbose_mode_with_failure(self, tmp_path: Path) -> None:
         """Test verbose mode output with failure - lines 559-563."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -643,7 +643,7 @@ class TestMdtestOutputFormats:
 
     def test_verbose_mode_with_timeout(self, tmp_path: Path) -> None:
         """Test verbose mode output with timeout - lines 568-573."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -673,7 +673,7 @@ class TestMdtestOutputFormats:
 
     def test_verbose_truncates_long_content(self, tmp_path: Path) -> None:
         """Test that verbose mode truncates long command content - line 554."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -709,7 +709,7 @@ class TestMdtestReportFormats:
 
     def test_junit_xml_with_failure(self, tmp_path: Path) -> None:
         """Test JUnit XML output with failures - lines 610-613."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -743,7 +743,7 @@ class TestMdtestReportFormats:
 
     def test_junit_xml_with_timeout(self, tmp_path: Path) -> None:
         """Test JUnit XML output with timeout - lines 615-616."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -775,7 +775,7 @@ class TestMdtestReportFormats:
 
     def test_junit_xml_with_skipped(self, tmp_path: Path) -> None:
         """Test JUnit XML output with skipped - line 618."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -805,7 +805,7 @@ class TestMdtestReportFormats:
         """Test JSON report with error and actual - lines 653, 655, 657."""
         import json
 
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -842,7 +842,7 @@ class TestMdtestReportFormats:
 
     def test_tap_output_passed(self, tmp_path: Path) -> None:
         """Test TAP output for passed tests - line 677."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -868,7 +868,7 @@ class TestMdtestReportFormats:
 
     def test_tap_output_failed(self, tmp_path: Path) -> None:
         """Test TAP output for failed tests - lines 678-685."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -900,7 +900,7 @@ class TestMdtestReportFormats:
 
     def test_tap_output_skipped(self, tmp_path: Path) -> None:
         """Test TAP output for skipped tests - lines 686-687."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -925,7 +925,7 @@ class TestMdtestReportFormats:
 
     def test_tap_output_timeout(self, tmp_path: Path) -> None:
         """Test TAP output for timeout tests - lines 688-689."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             BlockResult,
@@ -958,7 +958,7 @@ class TestMdtestRunCommand:
 
     def test_run_command_no_paths(self, tmp_path: Path, monkeypatch) -> None:
         """Test run_command with no paths uses cwd - line 701."""
-        from outmatch.mdtest import TestConfig, run_command
+        from mustmatch.mdtest import TestConfig, run_command
 
         # Create a markdown file in the temp directory
         md = tmp_path / "test.md"
@@ -977,7 +977,7 @@ class TestMdtestBlockFiltering:
 
     def test_include_pattern_no_match_no_name(self, tmp_path: Path) -> None:
         """Test include pattern with no match and no block name - line 258."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             TestConfig,
@@ -993,7 +993,7 @@ class TestMdtestBlockFiltering:
 
     def test_exclude_pattern_matches_content(self, tmp_path: Path) -> None:
         """Test exclude pattern matching content - line 264."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             TestConfig,
@@ -1007,7 +1007,7 @@ class TestMdtestBlockFiltering:
 
     def test_exclude_pattern_matches_name(self, tmp_path: Path) -> None:
         """Test exclude pattern matching block name - line 266."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             TestConfig,
@@ -1025,7 +1025,7 @@ class TestMdtestSkipIf:
 
     def test_skip_if_env_set(self, tmp_path: Path, monkeypatch) -> None:
         """Test skip-if with environment variable set."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             TestConfig,
@@ -1041,7 +1041,7 @@ class TestMdtestSkipIf:
 
     def test_skip_if_env_not_set(self, tmp_path: Path, monkeypatch) -> None:
         """Test skip-if with environment variable not set."""
-        from outmatch.mdtest import (
+        from mustmatch.mdtest import (
             Block,
             BlockMetadata,
             TestConfig,
@@ -1061,7 +1061,7 @@ class TestVersionMetadata:
 
     def test_version_is_accessible(self) -> None:
         """Test that version is accessible from the package."""
-        from outmatch import __version__
+        from mustmatch import __version__
 
         # Version should be a string
         assert isinstance(__version__, str)
@@ -1084,7 +1084,7 @@ class TestVersionMetadata:
         assert fallback == "0.0.0.dev"
 
         # Also verify the actual version is a valid string
-        from outmatch.version import __version__
+        from mustmatch.version import __version__
 
         assert isinstance(__version__, str)
         assert "." in __version__  # Should have at least one dot
@@ -1095,7 +1095,7 @@ class TestExecModule:
 
     def test_run_command_success(self) -> None:
         """Test successful command execution."""
-        from outmatch.exec import run_command
+        from mustmatch.exec import run_command
 
         result = run_command(["echo", "hello"])
         assert result.stdout.strip() == "hello"
@@ -1104,7 +1104,7 @@ class TestExecModule:
 
     def test_run_command_with_stderr(self) -> None:
         """Test command that writes to stderr."""
-        from outmatch.exec import run_command
+        from mustmatch.exec import run_command
 
         result = run_command(["sh", "-c", "echo error >&2"])
         assert result.stderr.strip() == "error"
@@ -1112,21 +1112,21 @@ class TestExecModule:
 
     def test_run_command_nonzero_exit(self) -> None:
         """Test command with non-zero exit code."""
-        from outmatch.exec import run_command
+        from mustmatch.exec import run_command
 
         result = run_command(["false"])
         assert result.exit_code != 0
 
     def test_run_command_timeout(self) -> None:
         """Test command timeout handling."""
-        from outmatch.exec import run_command
+        from mustmatch.exec import run_command
 
         result = run_command(["sleep", "10"], timeout=0.1)
         assert result.exit_code == -1  # Special timeout code
 
     def test_check_assertions_exit_code_match(self) -> None:
         """Test exit code assertion - match."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="", exit_code=0)
         config = ExecConfig(expected_exit_code=0)
@@ -1135,7 +1135,7 @@ class TestExecModule:
 
     def test_check_assertions_exit_code_mismatch(self) -> None:
         """Test exit code assertion - mismatch."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="", exit_code=1)
         config = ExecConfig(expected_exit_code=0)
@@ -1145,7 +1145,7 @@ class TestExecModule:
 
     def test_check_assertions_stdout_contains(self) -> None:
         """Test stdout contains assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="hello world", stderr="", exit_code=0)
         config = ExecConfig(stdout_contains="hello")
@@ -1154,7 +1154,7 @@ class TestExecModule:
 
     def test_check_assertions_stdout_not_contains(self) -> None:
         """Test stdout not-contains assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="hello world", stderr="", exit_code=0)
         config = ExecConfig(stdout_not_contains="error")
@@ -1163,7 +1163,7 @@ class TestExecModule:
 
     def test_check_assertions_stdout_regex(self) -> None:
         """Test stdout regex assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="value: 123", stderr="", exit_code=0)
         config = ExecConfig(stdout_regex=r"value: \d+")
@@ -1172,7 +1172,7 @@ class TestExecModule:
 
     def test_check_assertions_stdout_not_regex(self) -> None:
         """Test stdout not-regex assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="success", stderr="", exit_code=0)
         config = ExecConfig(stdout_not_regex=r"error|fail")
@@ -1181,7 +1181,7 @@ class TestExecModule:
 
     def test_check_assertions_stderr_exact(self) -> None:
         """Test stderr exact assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="", exit_code=0)
         config = ExecConfig(stderr_exact="")
@@ -1190,7 +1190,7 @@ class TestExecModule:
 
     def test_check_assertions_stderr_contains(self) -> None:
         """Test stderr contains assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="warning: deprecated", exit_code=0)
         config = ExecConfig(stderr_contains="warning")
@@ -1199,7 +1199,7 @@ class TestExecModule:
 
     def test_check_assertions_stderr_not_contains(self) -> None:
         """Test stderr not-contains assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="", exit_code=0)
         config = ExecConfig(stderr_not_contains="error")
@@ -1208,7 +1208,7 @@ class TestExecModule:
 
     def test_check_assertions_stderr_regex(self) -> None:
         """Test stderr regex assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="warn: 123", exit_code=0)
         config = ExecConfig(stderr_regex=r"warn: \d+")
@@ -1217,7 +1217,7 @@ class TestExecModule:
 
     def test_check_assertions_stderr_not_regex(self) -> None:
         """Test stderr not-regex assertion."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="info", exit_code=0)
         config = ExecConfig(stderr_not_regex=r"error|fatal")
@@ -1226,7 +1226,7 @@ class TestExecModule:
 
     def test_check_assertions_output_json(self) -> None:
         """Test combined JSON output assertion with wildcards."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="hello\n", stderr="", exit_code=0)
         config = ExecConfig(output_json='{"exit_code": 0, "stdout": "*", "stderr": ""}')
@@ -1239,7 +1239,7 @@ class TestOutputDiffFormats:
 
     def test_side_by_side_diff(self) -> None:
         """Test side-by-side diff generation."""
-        from outmatch.output import side_by_side_diff
+        from mustmatch.output import side_by_side_diff
 
         result = side_by_side_diff("hello", "world")
         assert "expected" in result
@@ -1247,15 +1247,15 @@ class TestOutputDiffFormats:
 
     def test_inline_diff(self) -> None:
         """Test inline word-level diff."""
-        from outmatch.output import inline_diff
+        from mustmatch.output import inline_diff
 
         result = inline_diff("hello world", "hello there")
         assert "[-" in result or "[+" in result
 
     def test_format_diff_none(self) -> None:
         """Test format_diff with NONE format returns empty string."""
-        from outmatch.config import DiffFormat, ExpectConfig
-        from outmatch.output import format_diff
+        from mustmatch.config import DiffFormat, ExpectConfig
+        from mustmatch.output import format_diff
 
         config = ExpectConfig(diff_format=DiffFormat.NONE)
         result = format_diff("actual", "expected", config)
@@ -1263,8 +1263,8 @@ class TestOutputDiffFormats:
 
     def test_format_diff_side_by_side(self) -> None:
         """Test format_diff with SIDE_BY_SIDE format."""
-        from outmatch.config import DiffFormat, ExpectConfig
-        from outmatch.output import format_diff
+        from mustmatch.config import DiffFormat, ExpectConfig
+        from mustmatch.output import format_diff
 
         config = ExpectConfig(diff_format=DiffFormat.SIDE_BY_SIDE)
         result = format_diff("actual", "expected", config)
@@ -1272,8 +1272,8 @@ class TestOutputDiffFormats:
 
     def test_format_diff_inline(self) -> None:
         """Test format_diff with INLINE format."""
-        from outmatch.config import DiffFormat, ExpectConfig
-        from outmatch.output import format_diff
+        from mustmatch.config import DiffFormat, ExpectConfig
+        from mustmatch.output import format_diff
 
         config = ExpectConfig(diff_format=DiffFormat.INLINE)
         result = format_diff("hello world", "hello there", config)
@@ -1285,25 +1285,25 @@ class TestJsonWildcards:
 
     def test_wildcard_matches_string(self) -> None:
         """Test wildcard matches any string."""
-        from outmatch.json_utils import json_matches_with_wildcards
+        from mustmatch.json_utils import json_matches_with_wildcards
 
         assert json_matches_with_wildcards("hello", "*") is True
 
     def test_wildcard_matches_number(self) -> None:
         """Test wildcard matches any number."""
-        from outmatch.json_utils import json_matches_with_wildcards
+        from mustmatch.json_utils import json_matches_with_wildcards
 
         assert json_matches_with_wildcards(42, "*") is True
 
     def test_wildcard_matches_object(self) -> None:
         """Test wildcard matches any object."""
-        from outmatch.json_utils import json_matches_with_wildcards
+        from mustmatch.json_utils import json_matches_with_wildcards
 
         assert json_matches_with_wildcards({"a": 1}, "*") is True
 
     def test_wildcard_in_object(self) -> None:
         """Test wildcard field in object."""
-        from outmatch.json_utils import json_matches_with_wildcards
+        from mustmatch.json_utils import json_matches_with_wildcards
 
         actual = {"id": "abc123", "status": "ok"}
         expected = {"id": "*", "status": "ok"}
@@ -1311,13 +1311,13 @@ class TestJsonWildcards:
 
     def test_type_mismatch(self) -> None:
         """Test type mismatch returns False."""
-        from outmatch.json_utils import json_matches_with_wildcards
+        from mustmatch.json_utils import json_matches_with_wildcards
 
         assert json_matches_with_wildcards("string", 123) is False
 
     def test_object_key_mismatch(self) -> None:
         """Test object with different keys returns False."""
-        from outmatch.json_utils import json_matches_with_wildcards
+        from mustmatch.json_utils import json_matches_with_wildcards
 
         actual = {"a": 1}
         expected = {"b": 1}
@@ -1325,13 +1325,13 @@ class TestJsonWildcards:
 
     def test_array_length_mismatch(self) -> None:
         """Test array with different length returns False."""
-        from outmatch.json_utils import json_matches_with_wildcards
+        from mustmatch.json_utils import json_matches_with_wildcards
 
         assert json_matches_with_wildcards([1, 2], [1, 2, 3]) is False
 
     def test_find_mismatches_type_mismatch(self) -> None:
         """Test find_wildcard_mismatches reports type mismatch."""
-        from outmatch.json_utils import find_wildcard_mismatches
+        from mustmatch.json_utils import find_wildcard_mismatches
 
         mismatches = find_wildcard_mismatches("string", 123)
         assert len(mismatches) == 1
@@ -1339,28 +1339,28 @@ class TestJsonWildcards:
 
     def test_find_mismatches_missing_key(self) -> None:
         """Test find_wildcard_mismatches reports missing key."""
-        from outmatch.json_utils import find_wildcard_mismatches
+        from mustmatch.json_utils import find_wildcard_mismatches
 
         mismatches = find_wildcard_mismatches({"a": 1}, {"a": 1, "b": 2})
         assert any("missing key" in m for m in mismatches)
 
     def test_find_mismatches_unexpected_key(self) -> None:
         """Test find_wildcard_mismatches reports unexpected key."""
-        from outmatch.json_utils import find_wildcard_mismatches
+        from mustmatch.json_utils import find_wildcard_mismatches
 
         mismatches = find_wildcard_mismatches({"a": 1, "b": 2}, {"a": 1})
         assert any("unexpected key" in m for m in mismatches)
 
     def test_find_mismatches_array_length(self) -> None:
         """Test find_wildcard_mismatches reports array length mismatch."""
-        from outmatch.json_utils import find_wildcard_mismatches
+        from mustmatch.json_utils import find_wildcard_mismatches
 
         mismatches = find_wildcard_mismatches([1, 2], [1, 2, 3])
         assert any("array length mismatch" in m for m in mismatches)
 
     def test_find_mismatches_value_mismatch(self) -> None:
         """Test find_wildcard_mismatches reports value mismatch."""
-        from outmatch.json_utils import find_wildcard_mismatches
+        from mustmatch.json_utils import find_wildcard_mismatches
 
         mismatches = find_wildcard_mismatches({"a": 1}, {"a": 2})
         assert any("expected" in m and "got" in m for m in mismatches)
@@ -1371,7 +1371,7 @@ class TestJsonPathWildcards:
 
     def test_remove_path_with_array_wildcard(self) -> None:
         """Test removing field from all array elements."""
-        from outmatch.json_utils import remove_json_paths
+        from mustmatch.json_utils import remove_json_paths
 
         obj = [{"id": 1, "ts": "a"}, {"id": 2, "ts": "b"}]
         result = remove_json_paths(obj, ("$[*].ts",))
@@ -1379,7 +1379,7 @@ class TestJsonPathWildcards:
 
     def test_remove_nested_array_wildcard(self) -> None:
         """Test removing field from nested array elements."""
-        from outmatch.json_utils import remove_json_paths
+        from mustmatch.json_utils import remove_json_paths
 
         obj = {"items": [{"id": 1, "ts": "a"}, {"id": 2, "ts": "b"}]}
         result = remove_json_paths(obj, ("$.items[*].ts",))
@@ -1387,7 +1387,7 @@ class TestJsonPathWildcards:
 
     def test_remove_path_recursive_with_wildcard_no_remaining(self) -> None:
         """Test wildcard at end of path (edge case)."""
-        from outmatch.json_utils import _remove_path_recursive
+        from mustmatch.json_utils import _remove_path_recursive
 
         obj = [{"a": 1}, {"a": 2}]
         # Wildcard with no remaining path - should not modify
@@ -1400,7 +1400,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stdout_exact_failure(self) -> None:
         """Test stdout exact assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="actual", stderr="", exit_code=0)
         config = ExecConfig(stdout_exact="expected")
@@ -1410,7 +1410,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stdout_contains_failure(self) -> None:
         """Test stdout contains assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="hello", stderr="", exit_code=0)
         config = ExecConfig(stdout_contains="world")
@@ -1419,7 +1419,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stdout_not_contains_failure(self) -> None:
         """Test stdout not-contains assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="hello error world", stderr="", exit_code=0)
         config = ExecConfig(stdout_not_contains="error")
@@ -1428,7 +1428,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stdout_regex_failure(self) -> None:
         """Test stdout regex assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="hello", stderr="", exit_code=0)
         config = ExecConfig(stdout_regex=r"\d+")
@@ -1437,7 +1437,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stdout_not_regex_failure(self) -> None:
         """Test stdout not-regex assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="error 123", stderr="", exit_code=0)
         config = ExecConfig(stdout_not_regex=r"error")
@@ -1446,7 +1446,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stderr_exact_failure(self) -> None:
         """Test stderr exact assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="error", exit_code=0)
         config = ExecConfig(stderr_exact="")
@@ -1456,7 +1456,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stderr_contains_failure(self) -> None:
         """Test stderr contains assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="info", exit_code=0)
         config = ExecConfig(stderr_contains="error")
@@ -1465,7 +1465,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stderr_not_contains_failure(self) -> None:
         """Test stderr not-contains assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="error occurred", exit_code=0)
         config = ExecConfig(stderr_not_contains="error")
@@ -1474,7 +1474,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stderr_regex_failure(self) -> None:
         """Test stderr regex assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="info", exit_code=0)
         config = ExecConfig(stderr_regex=r"error")
@@ -1483,7 +1483,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_stderr_not_regex_failure(self) -> None:
         """Test stderr not-regex assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="", stderr="fatal error", exit_code=0)
         config = ExecConfig(stderr_not_regex=r"fatal")
@@ -1492,7 +1492,7 @@ class TestExecModuleFailures:
 
     def test_check_assertions_output_json_failure(self) -> None:
         """Test output JSON assertion failure."""
-        from outmatch.exec import ExecConfig, ExecResult, check_assertions
+        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
 
         result = ExecResult(stdout="hello", stderr="", exit_code=1)
         config = ExecConfig(output_json='{"exit_code": 0}')
@@ -1506,14 +1506,14 @@ class TestOutputDiffEdgeCases:
 
     def test_side_by_side_diff_replace(self) -> None:
         """Test side-by-side diff with replaced lines."""
-        from outmatch.output import side_by_side_diff
+        from mustmatch.output import side_by_side_diff
 
         result = side_by_side_diff("line1\nline2", "line1\nchanged")
         assert "<different>" in result
 
     def test_side_by_side_diff_delete(self) -> None:
         """Test side-by-side diff with deleted lines (actual has more)."""
-        from outmatch.output import side_by_side_diff
+        from mustmatch.output import side_by_side_diff
 
         # actual="line1\nline2", expected="line1" -> extra line in actual
         result = side_by_side_diff("line1\nline2", "line1")
@@ -1521,7 +1521,7 @@ class TestOutputDiffEdgeCases:
 
     def test_side_by_side_diff_insert(self) -> None:
         """Test side-by-side diff with inserted lines (expected has more)."""
-        from outmatch.output import side_by_side_diff
+        from mustmatch.output import side_by_side_diff
 
         # actual="line1", expected="line1\nline2" -> missing line in actual
         result = side_by_side_diff("line1", "line1\nline2")
@@ -1529,7 +1529,7 @@ class TestOutputDiffEdgeCases:
 
     def test_inline_diff_delete(self) -> None:
         """Test inline diff with deleted words (actual has more)."""
-        from outmatch.output import inline_diff
+        from mustmatch.output import inline_diff
 
         # actual has "beautiful", expected doesn't -> shows as inserted [+]
         result = inline_diff("hello beautiful world", "hello world")
@@ -1537,7 +1537,7 @@ class TestOutputDiffEdgeCases:
 
     def test_inline_diff_insert(self) -> None:
         """Test inline diff with inserted words (expected has more)."""
-        from outmatch.output import inline_diff
+        from mustmatch.output import inline_diff
 
         # expected has "beautiful", actual doesn't -> shows as deleted [-]
         result = inline_diff("hello world", "hello beautiful world")
@@ -1549,14 +1549,14 @@ class TestNegativeAssertions:
 
     def test_compare_not_contains_success(self) -> None:
         """Test not-contains when substring is absent."""
-        from outmatch.compare import compare_not_contains
+        from mustmatch.compare import compare_not_contains
 
         result = compare_not_contains("hello world", "error")
         assert result.success is True
 
     def test_compare_not_contains_failure(self) -> None:
         """Test not-contains when substring is present."""
-        from outmatch.compare import compare_not_contains
+        from mustmatch.compare import compare_not_contains
 
         result = compare_not_contains("error occurred", "error")
         assert result.success is False
@@ -1565,7 +1565,7 @@ class TestNegativeAssertions:
 
     def test_compare_not_contains_context_truncation(self) -> None:
         """Test not-contains shows context around match."""
-        from outmatch.compare import compare_not_contains
+        from mustmatch.compare import compare_not_contains
 
         # Long string to test context truncation
         text = "a" * 50 + "error" + "b" * 50
@@ -1575,14 +1575,14 @@ class TestNegativeAssertions:
 
     def test_compare_not_regex_success(self) -> None:
         """Test not-regex when pattern doesn't match."""
-        from outmatch.compare import compare_not_regex
+        from mustmatch.compare import compare_not_regex
 
         result = compare_not_regex("hello world", r"error|fail")
         assert result.success is True
 
     def test_compare_not_regex_failure(self) -> None:
         """Test not-regex when pattern matches."""
-        from outmatch.compare import compare_not_regex
+        from mustmatch.compare import compare_not_regex
 
         result = compare_not_regex("error occurred", r"error")
         assert result.success is False
@@ -1590,7 +1590,7 @@ class TestNegativeAssertions:
 
     def test_compare_not_regex_invalid_pattern(self) -> None:
         """Test not-regex with invalid regex pattern."""
-        from outmatch.compare import compare_not_regex
+        from mustmatch.compare import compare_not_regex
 
         result = compare_not_regex("text", r"[invalid")
         assert result.success is False
@@ -1683,7 +1683,7 @@ class TestJsonPathEdgeCasesExtended:
 
     def test_path_with_dollar_only(self) -> None:
         """Test path with just '$' prefix - line 192-193."""
-        from outmatch.json_utils import _remove_single_path
+        from mustmatch.json_utils import _remove_single_path
 
         obj = {"a": 1}
         _remove_single_path(obj, "$a")  # $ followed directly by key (not $.)
@@ -1692,7 +1692,7 @@ class TestJsonPathEdgeCasesExtended:
 
     def test_remove_list_index_middle(self) -> None:
         """Test removing element from middle of list - lines 224-226."""
-        from outmatch.json_utils import _remove_single_path
+        from mustmatch.json_utils import _remove_single_path
 
         obj = [1, 2, 3]
         _remove_single_path(obj, "[1]")
@@ -1700,7 +1700,7 @@ class TestJsonPathEdgeCasesExtended:
 
     def test_remove_list_index_out_of_bounds(self) -> None:
         """Test removing with out-of-bounds index - lines 224-226 branch."""
-        from outmatch.json_utils import _remove_single_path
+        from mustmatch.json_utils import _remove_single_path
 
         obj = [1, 2, 3]
         _remove_single_path(obj, "[10]")  # Out of bounds
@@ -1708,7 +1708,7 @@ class TestJsonPathEdgeCasesExtended:
 
     def test_remove_recursive_with_none_obj(self) -> None:
         """Test _remove_path_recursive with None obj - line 207-208."""
-        from outmatch.json_utils import _remove_path_recursive
+        from mustmatch.json_utils import _remove_path_recursive
 
         # Should return early without error
         _remove_path_recursive(None, ["a", "b"])
@@ -1716,7 +1716,7 @@ class TestJsonPathEdgeCasesExtended:
 
     def test_wildcard_on_non_list(self) -> None:
         """Test wildcard on non-list object - line 215 branch."""
-        from outmatch.json_utils import _remove_path_recursive
+        from mustmatch.json_utils import _remove_path_recursive
 
         obj = {"a": 1}  # Not a list
         _remove_path_recursive(obj, ["*", "b"])
@@ -1750,7 +1750,7 @@ class TestFindWildcardMismatchesEdgeCases:
 
     def test_wildcard_returns_empty_list(self) -> None:
         """Test find_wildcard_mismatches with wildcard expected - line 109."""
-        from outmatch.json_utils import find_wildcard_mismatches
+        from mustmatch.json_utils import find_wildcard_mismatches
 
         # When expected is "*", should return empty list immediately
         result = find_wildcard_mismatches({"any": "value"}, "*")
@@ -1758,10 +1758,307 @@ class TestFindWildcardMismatchesEdgeCases:
 
     def test_nested_array_mismatches(self) -> None:
         """Test find_wildcard_mismatches with array element differences."""
-        from outmatch.json_utils import find_wildcard_mismatches
+        from mustmatch.json_utils import find_wildcard_mismatches
 
         actual = [1, 2, 3]
         expected = [1, 2, 4]
         mismatches = find_wildcard_mismatches(actual, expected)
         assert len(mismatches) == 1
         assert "expected 4" in mismatches[0]
+
+
+class TestPythonExecution:
+    """Tests for Python code execution in python_exec.py."""
+
+    def test_execute_python_success(self) -> None:
+        """Test successful Python execution."""
+        from mustmatch.python_exec import execute_python
+
+        code = "x = 1 + 1\nprint(x)"
+        result, namespace = execute_python(code)
+        assert result.success is True
+        assert result.output.strip() == "2"
+        assert namespace["x"] == 2
+
+    def test_execute_python_with_namespace(self) -> None:
+        """Test Python execution with pre-existing namespace."""
+        from mustmatch.python_exec import execute_python
+
+        namespace = {"x": 10}
+        code = "y = x + 5\nprint(y)"
+        result, namespace = execute_python(code, namespace)
+        assert result.success is True
+        assert result.output.strip() == "15"
+        assert namespace["y"] == 15
+
+    def test_execute_python_syntax_error(self) -> None:
+        """Test Python execution with syntax error."""
+        from mustmatch.python_exec import execute_python
+
+        code = "def broken("  # Syntax error
+        result, _ = execute_python(code)
+        assert result.success is False
+        assert "SyntaxError" in result.error
+
+    def test_execute_python_runtime_error(self) -> None:
+        """Test Python execution with runtime error."""
+        from mustmatch.python_exec import execute_python
+
+        code = "undefined_variable + 1"
+        result, _ = execute_python(code)
+        assert result.success is False
+        assert "NameError" in result.error
+
+    def test_execute_python_blocks_memory_mode(self) -> None:
+        """Test executing multiple blocks with shared state."""
+        from mustmatch.python_exec import execute_python_blocks
+
+        blocks = [
+            ("x = 10", 1),
+            ("y = x + 5", 5),
+            ("print(y)", 9),
+        ]
+        result = execute_python_blocks(blocks, memory=True)
+        assert result.success is True
+        assert result.passed == 3
+
+    def test_execute_python_blocks_no_memory(self) -> None:
+        """Test executing blocks without shared state."""
+        from mustmatch.python_exec import execute_python_blocks
+
+        blocks = [
+            ("x = 10", 1),
+            ("y = x + 5", 5),  # This will fail - x not defined
+        ]
+        result = execute_python_blocks(blocks, memory=False)
+        assert result.failed > 0
+
+
+class TestPythonBlockMdtest:
+    """Tests for Python block execution in mdtest.py."""
+
+    def test_parse_python_blocks(self, tmp_path: Path) -> None:
+        """Test parsing Python blocks from markdown."""
+        from mustmatch.mdtest import parse_markdown
+
+        content = '''# Test
+
+```python
+x = 1
+print(x)
+```
+
+```bash
+echo hello
+```
+'''
+        blocks = parse_markdown(content, lang="python")
+        assert len(blocks) == 1
+        assert blocks[0].lang == "python"
+
+    def test_parse_all_blocks(self, tmp_path: Path) -> None:
+        """Test parsing both Python and bash blocks."""
+        from mustmatch.mdtest import parse_markdown
+
+        content = '''# Test
+
+```python
+x = 1
+```
+
+```bash
+echo hello
+```
+'''
+        blocks = parse_markdown(content, lang="all")
+        assert len(blocks) == 2
+        assert blocks[0].lang == "python"
+        assert blocks[1].lang == "bash"
+
+    def test_run_file_python_memory(self, tmp_path: Path) -> None:
+        """Test running Python blocks with memory mode."""
+        from mustmatch.mdtest import TestConfig, run_file
+
+        md = tmp_path / "test.md"
+        md.write_text('''# Test
+
+```python
+x = 10
+```
+
+```python
+y = x + 5
+assert y == 15
+```
+''')
+        config = TestConfig(lang="python", memory=True)
+        result = run_file(md, config)
+        assert result.passed == 2
+        assert result.failed == 0
+
+    def test_run_file_python_no_memory(self, tmp_path: Path) -> None:
+        """Test Python blocks fail without memory when depending on each other."""
+        from mustmatch.mdtest import TestConfig, run_file
+
+        md = tmp_path / "test.md"
+        md.write_text('''# Test
+
+```python
+x = 10
+```
+
+```python
+y = x + 5  # This will fail - x not defined
+```
+''')
+        config = TestConfig(lang="python", memory=False)
+        result = run_file(md, config)
+        # First block passes, second fails
+        assert result.passed == 1
+        assert result.failed == 1
+
+    def test_cli_python_lang(self, tmp_path: Path, monkeypatch) -> None:
+        """Test mustmatch test --lang python."""
+        md = tmp_path / "test.md"
+        md.write_text('''```python
+assert 1 + 1 == 2
+```
+''')
+        monkeypatch.chdir(tmp_path)
+        result = main(["test", "--lang", "python", str(md)])
+        assert result == 0
+
+    def test_cli_python_memory(self, tmp_path: Path, monkeypatch) -> None:
+        """Test mustmatch test --lang python --memory."""
+        md = tmp_path / "test.md"
+        md.write_text('''```python
+x = 42
+```
+
+```python
+assert x == 42
+```
+''')
+        monkeypatch.chdir(tmp_path)
+        result = main(["test", "--lang", "python", "--memory", str(md)])
+        assert result == 0
+
+
+class TestMarkdownTestPython:
+    """Tests for MarkdownTest Python support in pytest.py."""
+
+    def test_parse_file_python(self, tmp_path: Path) -> None:
+        """Test parsing Python blocks from file."""
+        from mustmatch.pytest import MarkdownTest
+
+        md = tmp_path / "test.md"
+        md.write_text('''```python
+x = 1
+```
+''')
+        tests = list(MarkdownTest._parse_file(md, lang="python"))
+        assert len(tests) == 1
+        assert tests[0].lang == "python"
+
+    def test_run_python_block(self, tmp_path: Path) -> None:
+        """Test running a Python block."""
+        from mustmatch.pytest import MarkdownTest
+
+        test = MarkdownTest(
+            tmp_path / "test.md",
+            line=1,
+            content="x = 1 + 1\nassert x == 2",
+            name="test block",
+            lang="python",
+        )
+        test.run()  # Should not raise
+
+    def test_run_python_block_failure(self, tmp_path: Path) -> None:
+        """Test Python block failure."""
+        from mustmatch.pytest import MarkdownTest
+
+        test = MarkdownTest(
+            tmp_path / "test.md",
+            line=1,
+            content="assert False",
+            name="test block",
+            lang="python",
+        )
+        with pytest.raises(AssertionError) as exc:
+            test.run()
+        assert "assert False" in str(exc.value)
+
+    def test_run_python_block_memory(self, tmp_path: Path) -> None:
+        """Test running Python block with shared namespace."""
+        from mustmatch.pytest import MarkdownTest
+
+        test1 = MarkdownTest(
+            tmp_path / "test.md",
+            line=1,
+            content="x = 42",
+            name="define x",
+            lang="python",
+        )
+        test2 = MarkdownTest(
+            tmp_path / "test.md",
+            line=5,
+            content="assert x == 42",
+            name="use x",
+            lang="python",
+        )
+        # First test returns namespace
+        namespace = test1.run()
+        # Second test uses that namespace
+        test2.run(namespace=namespace)  # Should not raise
+
+
+class TestCheckMdFileApi:
+    """Tests for the check_md_file API function."""
+
+    def test_check_md_file_bash(self, tmp_path: Path) -> None:
+        """Test check_md_file with bash blocks."""
+        from mustmatch import check_md_file
+
+        md = tmp_path / "test.md"
+        md.write_text('''```bash
+echo hello
+```
+''')
+        assert check_md_file(md) is True
+
+    def test_check_md_file_python(self, tmp_path: Path) -> None:
+        """Test check_md_file with Python blocks."""
+        from mustmatch import check_md_file
+
+        md = tmp_path / "test.md"
+        md.write_text('''```python
+assert 1 + 1 == 2
+```
+''')
+        assert check_md_file(md, lang="python") is True
+
+    def test_check_md_file_python_memory(self, tmp_path: Path) -> None:
+        """Test check_md_file with Python memory mode."""
+        from mustmatch import check_md_file
+
+        md = tmp_path / "test.md"
+        md.write_text('''```python
+x = 10
+```
+
+```python
+assert x == 10
+```
+''')
+        assert check_md_file(md, lang="python", memory=True) is True
+
+    def test_check_md_file_failure(self, tmp_path: Path) -> None:
+        """Test check_md_file returns False on failure."""
+        from mustmatch import check_md_file
+
+        md = tmp_path / "test.md"
+        md.write_text('''```bash
+exit 1
+```
+''')
+        assert check_md_file(md) is False

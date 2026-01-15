@@ -1,4 +1,4 @@
-"""Configuration dataclasses for outmatch."""
+"""Configuration dataclasses for mustmatch."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from enum import Enum, auto
 
 
 class CompareMode(Enum):
-    """Comparison mode for outmatch."""
+    """Comparison mode for mustmatch."""
 
     EXACT = auto()
     CONTAINS = auto()

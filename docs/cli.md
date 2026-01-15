@@ -1,11 +1,11 @@
 # CLI Reference
 
-Complete reference for outmatch command-line options.
+Complete reference for mustmatch command-line options.
 
 ## Version
 
 ```bash
-outmatch --version | outmatch --contains "0.0.0.dev0"
+mustmatch --version | mustmatch --contains "0.0.0.dev0"
 ```
 
 ## Exit Codes
@@ -18,13 +18,13 @@ outmatch --version | outmatch --contains "0.0.0.dev0"
 
 ```bash
 # Exit 0 on match
-echo "hello" | outmatch "hello"
+echo "hello" | mustmatch "hello"
 
 # Exit 1 on mismatch
-echo "hello" | outmatch "world" || test $? -eq 1
+echo "hello" | mustmatch "world" || test $? -eq 1
 
 # Exit 2 on error (missing expected value)
-echo "test" | outmatch 2>&1 || test $? -eq 2
+echo "test" | mustmatch 2>&1 || test $? -eq 2
 ```
 
 ## Quiet Mode
@@ -33,7 +33,7 @@ Suppress all output, use exit code only. Useful in scripts:
 
 ```bash
 # -q / --quiet suppresses output
-if echo "hello" | outmatch -q "hello"; then
+if echo "hello" | mustmatch -q "hello"; then
     echo "matched"
 fi
 ```
@@ -41,7 +41,7 @@ fi
 Verify no output is produced:
 
 ```bash
-output=$(echo "hello" | outmatch --quiet "world" 2>&1) || true
+output=$(echo "hello" | mustmatch --quiet "world" 2>&1) || true
 test -z "$output"
 ```
 
@@ -57,12 +57,12 @@ Control ANSI color output with `--color`:
 
 ```bash
 # Force no color
-echo "hello" | outmatch --color never "world" 2>&1 | \
-    outmatch --contains "FAIL"
+echo "hello" | mustmatch --color never "world" 2>&1 | \
+    mustmatch --contains "FAIL"
 
 # Force color
-echo "hello" | outmatch --color always "world" 2>&1 | \
-    outmatch --contains "FAIL"
+echo "hello" | mustmatch --color always "world" 2>&1 | \
+    mustmatch --contains "FAIL"
 ```
 
 ## Diff Context
@@ -71,12 +71,12 @@ Control how many context lines appear in diffs with `--diff-context`:
 
 ```bash
 # Default is 3 lines of context
-echo "actual" | outmatch "expected" 2>&1 | \
-    outmatch --contains "actual"
+echo "actual" | mustmatch "expected" 2>&1 | \
+    mustmatch --contains "actual"
 
 # Show more context
-echo "actual" | outmatch --diff-context 5 "expected" 2>&1 | \
-    outmatch --contains "actual"
+echo "actual" | mustmatch --diff-context 5 "expected" 2>&1 | \
+    mustmatch --contains "actual"
 ```
 
 ## Diff Format
@@ -92,16 +92,16 @@ Control the diff output format with `--diff-format`:
 
 ```bash
 # Side-by-side diff
-echo "hello world" | outmatch --diff-format side-by-side "hello there" 2>&1 | \
-    outmatch --contains "expected"
+echo "hello world" | mustmatch --diff-format side-by-side "hello there" 2>&1 | \
+    mustmatch --contains "expected"
 
 # Inline word-level diff
-echo "hello world" | outmatch --diff-format inline "hello there" 2>&1 | \
-    outmatch --contains "[-there-]"
+echo "hello world" | mustmatch --diff-format inline "hello there" 2>&1 | \
+    mustmatch --contains "[-there-]"
 
 # No diff output
-echo "hello" | outmatch --diff-format none "world" 2>&1 | \
-    outmatch "FAIL: Exact match failed."
+echo "hello" | mustmatch --diff-format none "world" 2>&1 | \
+    mustmatch "FAIL: Exact match failed."
 ```
 
 ## Negative Assertions
@@ -110,14 +110,14 @@ Assert that content is NOT present with `--not-contains` and `--not-regex`:
 
 ```bash
 # Assert substring is absent
-echo "hello world" | outmatch --not-contains "error"
+echo "hello world" | mustmatch --not-contains "error"
 
 # Assert regex does not match
-echo "success: ok" | outmatch --not-regex "[Ee]rror|FAIL"
+echo "success: ok" | mustmatch --not-regex "[Ee]rror|FAIL"
 
 # Fails when pattern is found
-echo "Error occurred" | outmatch --not-contains "Error" 2>&1 | \
-    outmatch --contains "Expected NOT to contain"
+echo "Error occurred" | mustmatch --not-contains "Error" 2>&1 | \
+    mustmatch --contains "Expected NOT to contain"
 ```
 
 ## File-Based Expected Values
@@ -127,20 +127,20 @@ Read expected value from a file with `-f` / `--expected-file`:
 ```bash
 # Create expected file
 echo "test content" > /tmp/expected.txt
-echo "test content" | outmatch -f /tmp/expected.txt
+echo "test content" | mustmatch -f /tmp/expected.txt
 rm /tmp/expected.txt
 
 # Works with all comparison modes
 echo '{"id": 1}' > /tmp/expected.json
-echo '{"id": 1}' | outmatch --json -f /tmp/expected.json
+echo '{"id": 1}' | mustmatch --json -f /tmp/expected.json
 rm /tmp/expected.json
 ```
 
 Missing files return exit code 2:
 
 ```bash
-echo "test" | outmatch -f /nonexistent.txt 2>&1 | \
-    outmatch --contains "not found"
+echo "test" | mustmatch -f /nonexistent.txt 2>&1 | \
+    mustmatch --contains "not found"
 ```
 
 ## Snapshot Updates
@@ -150,12 +150,12 @@ Update expected files when output changes with `--update`:
 ```bash
 # Create snapshot on first run
 rm -f /tmp/snapshot.txt
-echo "new content" | outmatch -f /tmp/snapshot.txt --update
-cat /tmp/snapshot.txt | outmatch "new content"
+echo "new content" | mustmatch -f /tmp/snapshot.txt --update
+cat /tmp/snapshot.txt | mustmatch "new content"
 
 # Update existing snapshot
-echo "updated" | outmatch -f /tmp/snapshot.txt --update
-cat /tmp/snapshot.txt | outmatch "updated"
+echo "updated" | mustmatch -f /tmp/snapshot.txt --update
+cat /tmp/snapshot.txt | mustmatch "updated"
 rm /tmp/snapshot.txt
 ```
 
@@ -165,58 +165,58 @@ Common error messages and their meanings:
 
 **Missing expected value:**
 ```bash
-echo "test" | outmatch 2>&1 | outmatch --contains "expected"
+echo "test" | mustmatch 2>&1 | mustmatch --contains "expected"
 ```
 
 **Invalid --replace format** (must be `REGEX=>REPL`):
 ```bash
-echo "test" | outmatch --replace 'bad' "test" 2>&1 | \
-    outmatch --contains "REGEX=>REPL"
+echo "test" | mustmatch --replace 'bad' "test" 2>&1 | \
+    mustmatch --contains "REGEX=>REPL"
 ```
 
 **Invalid regex pattern:**
 ```bash
-echo "test" | outmatch --regex '[invalid' 2>&1 | \
-    outmatch --contains "Invalid regex"
+echo "test" | mustmatch --regex '[invalid' 2>&1 | \
+    mustmatch --contains "Invalid regex"
 ```
 
 **Invalid JSON in actual output:**
 ```bash
-echo "not json" | outmatch --json '{}' 2>&1 | \
-    outmatch --contains "not valid JSON"
+echo "not json" | mustmatch --json '{}' 2>&1 | \
+    mustmatch --contains "not valid JSON"
 ```
 
 **Invalid JSON in expected value:**
 ```bash
-echo '{}' | outmatch --json 'not json' 2>&1 | \
-    outmatch --contains "not valid JSON"
+echo '{}' | mustmatch --json 'not json' 2>&1 | \
+    mustmatch --contains "not valid JSON"
 ```
 
 **JSONL parse error:**
 ```bash
-printf '{"a":1}\nnot json' | outmatch --jsonl '{"a":1}' 2>&1 | \
-    outmatch --contains "JSON parse error"
+printf '{"a":1}\nnot json' | mustmatch --jsonl '{"a":1}' 2>&1 | \
+    mustmatch --contains "JSON parse error"
 ```
 
 ## Command Execution Mode
 
-Run a command and assert on its output with `outmatch exec`:
+Run a command and assert on its output with `mustmatch exec`:
 
 ```bash
 # Assert exit code
-outmatch exec --exit-code 0 -- echo "hello"
+mustmatch exec --exit-code 0 -- echo "hello"
 
 # Assert stdout contains text
-outmatch exec --stdout-contains "hello" -- echo "hello world"
+mustmatch exec --stdout-contains "hello" -- echo "hello world"
 
 # Assert stderr is empty
-outmatch exec --stderr "" -- echo "output"
+mustmatch exec --stderr "" -- echo "output"
 
 # Assert command fails
-outmatch exec --exit-code 1 -- false
+mustmatch exec --exit-code 1 -- false
 
 # Multiple assertions
-outmatch exec --exit-code 0 --stdout-contains "done" --stderr "" -- echo "done"
+mustmatch exec --exit-code 0 --stdout-contains "done" --stderr "" -- echo "done"
 ```
 
 ### Combined JSON Output
@@ -225,7 +225,7 @@ Match all outputs at once with `--output-json` (supports wildcards):
 
 ```bash
 # Match exit code and ignore stdout content
-outmatch exec --output-json '{"exit_code": 0, "stdout": "*", "stderr": ""}' -- echo "hello"
+mustmatch exec --output-json '{"exit_code": 0, "stdout": "*", "stderr": ""}' -- echo "hello"
 ```
 
 ### Exec Options
@@ -249,7 +249,7 @@ outmatch exec --output-json '{"exit_code": 0, "stdout": "*", "stderr": ""}' -- e
 ## Full Options List
 
 ```
-outmatch [OPTIONS] [EXPECTED]
+mustmatch [OPTIONS] [EXPECTED]
 
 Comparison modes:
   --contains             Substring match
@@ -291,6 +291,6 @@ Info:
   --help                 Show help and exit
 
 Subcommands:
-  outmatch exec          Execute command and assert on output
-  outmatch test          Run markdown documentation tests
+  mustmatch exec          Execute command and assert on output
+  mustmatch test          Run markdown documentation tests
 ```

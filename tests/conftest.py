@@ -12,7 +12,7 @@ def pytest_configure(config):
     coverage tracking in subprocesses without modifying system site-packages.
     """
     # Import the module to ensure it's in coverage
-    import outmatch  # noqa: F401
+    import mustmatch  # noqa: F401
 
     # Find the project root (where pyproject.toml is)
     project_root = Path(__file__).parent.parent

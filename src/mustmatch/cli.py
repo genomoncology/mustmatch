@@ -34,7 +34,7 @@ app = typer.Typer(
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        print(f"outmatch {__version__}")
+        print(f"mustmatch {__version__}")
         raise typer.Exit()
 
 
@@ -399,7 +399,7 @@ exec_app = typer.Typer(
 )
 
 test_app = typer.Typer(
-    help="Run bash blocks in markdown files as tests.",
+    help="Run code blocks in markdown files as tests.",
     add_completion=False,
     context_settings={"allow_interspersed_args": True},
 )
@@ -623,8 +623,16 @@ def _test_callback(
         Optional[Path],
         typer.Option(help="Working directory"),
     ] = None,
+    lang: Annotated[
+        str,
+        typer.Option("--lang", help="Language to test: bash, python, all"),
+    ] = "bash",
+    memory: Annotated[
+        bool,
+        typer.Option("--memory", help="Share state between Python blocks"),
+    ] = False,
 ) -> None:
-    """Run bash blocks in markdown files as tests."""
+    """Run code blocks in markdown files as tests."""
     from .mdtest import TestConfig, test_command
 
     # Parse env variables
@@ -649,6 +657,8 @@ def _test_callback(
         junit_xml=junit_xml,
         json_output=json_out,
         tap_output=tap,
+        lang=lang,
+        memory=memory,
     )
 
     exit_code = test_command(list(paths) if paths else [], config)
