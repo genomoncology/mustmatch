@@ -1,6 +1,6 @@
-# MustMatch: Unified Documentation Testing
+# MustMatch: CLI Assertions & Documentation Testing
 
-**Objective:** Rename outmatch to mustmatch and merge mktestdocs Python execution capabilities to create a single, unified tool for testing documentation.
+**Objective:** Rename outmatch to mustmatch and merge mktestdocs Python execution capabilities to create a unified assertion tool for both DevOps scripts and documentation testing.
 
 ---
 
@@ -25,6 +25,86 @@ Merging eliminates the mktestdocs dependency and provides a single, memorable to
 - One package to install
 - One API to learn
 - Full control over implementation
+
+---
+
+## Use Cases
+
+### 1. DevOps & Script Assertions
+
+`mustmatch` is `assert` for shell scripts. Use it anywhere you need to fail fast if output doesn't match expectations:
+
+```bash
+#!/bin/bash
+set -e
+
+# Deployment script - bail if service isn't healthy
+curl -s localhost:8080/health | mustmatch --json '{"status": "healthy"}'
+
+# CI pipeline - verify build output
+./build.sh | mustmatch --contains "BUILD SUCCESSFUL"
+
+# Infrastructure check - verify config
+kubectl get configmap myapp -o json | mustmatch --json-contains '{"replicas": 3}'
+
+# Version gate - ensure minimum version
+python --version 2>&1 | mustmatch --regex "Python 3\.(1[0-9]|[2-9][0-9])"
+```
+
+**Key properties for DevOps:**
+- Exit 0 on match, exit 1 on mismatch (standard Unix convention)
+- No output on success (quiet by default in pipes)
+- Clear diff output on failure for debugging
+- Works with any command that produces stdout
+
+```bash
+# Use in conditionals
+if echo "$response" | mustmatch --contains "error" -q; then
+    echo "Error detected, rolling back..."
+    rollback
+fi
+
+# Use with set -e (fail the script)
+set -e
+deploy_service
+curl -s localhost/health | mustmatch '{"status":"ok"}'
+echo "Deployment verified"
+```
+
+### 2. Documentation Testing
+
+Test that code examples in your docs actually work:
+
+```bash
+# Run all bash blocks in docs/
+mustmatch test docs/
+
+# Run Python examples with state sharing
+mustmatch test --lang python --memory docs/
+
+# Integrate with pytest
+pytest docs/  # Auto-discovers markdown files
+```
+
+### 3. Inline Test Assertions
+
+Use in bash blocks within documentation to make examples self-verifying:
+
+````markdown
+## API Response Format
+
+The `/users` endpoint returns JSON:
+
+```bash
+curl -s localhost:8080/users/1 | mustmatch --json '{
+  "id": 1,
+  "name": "alice",
+  "email": "alice@example.com"
+}'
+```
+````
+
+When you run `mustmatch test docs/`, this block executes and verifies the API actually returns that structure.
 
 ---
 
