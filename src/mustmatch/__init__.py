@@ -63,7 +63,7 @@ def check_md_file(
     )
 
     result = run_file(path, config)
-    return result.failed == 0 and result.error is None
+    return result.failed == 0 and result.timeout == 0 and result.error is None
 
 
 __all__ = [

@@ -7,8 +7,8 @@ state sharing (memory mode) between blocks.
 from __future__ import annotations
 
 import io
-import sys
 import traceback
+from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -50,14 +50,13 @@ def execute_python(
     if namespace is None:
         namespace = create_namespace()
 
-    # Capture stdout
-    old_stdout = sys.stdout
+    # Capture stdout using redirect_stdout (thread-safe)
     captured_output = io.StringIO()
-    sys.stdout = captured_output
 
     try:
         compiled = compile(code, filename, "exec")
-        exec(compiled, namespace)
+        with redirect_stdout(captured_output):
+            exec(compiled, namespace)
         output = captured_output.getvalue()
         return PythonResult(success=True, output=output), namespace
     except SyntaxError as e:
@@ -99,8 +98,6 @@ def execute_python(
             error=error_msg,
             exception=e,
         ), namespace
-    finally:
-        sys.stdout = old_stdout
 
 
 @dataclass

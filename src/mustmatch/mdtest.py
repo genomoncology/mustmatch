@@ -279,7 +279,14 @@ def parse_markdown(
                     lang=detected_lang,
                 )
                 blocks.append(block)
-                pending_metadata = None
+            else:
+                # Non-target fence: skip content until closing fence
+                i += 1
+                while i < len(lines) and not lines[i].startswith('```'):
+                    i += 1
+
+            # Clear metadata after any fence (prevents bleed to later blocks)
+            pending_metadata = None
 
         i += 1
 
