@@ -1,7 +1,7 @@
 """Minimal tests for code paths that can't be covered by documentation tests.
 
 These tests exist because:
-1. Subprocess execution (doc tests run outmatch as subprocess, can't measure coverage)
+1. Subprocess execution (doc tests run mustmatch as subprocess, can't measure coverage)
 2. Terminal-dependent behavior (colors, TTY detection)
 3. Error conditions that would break doc test execution
 4. Internal methods not exposed via CLI
@@ -137,16 +137,16 @@ class TestOutputColorization:
         assert "\033[31mFAIL:\033[0m" in output
 
 
-class TestOutmatchTestCommand:
-    """Tests for the 'outmatch test' subcommand - lines 315-387 in cli.py.
+class TestMustmatchTestCommand:
+    """Tests for the 'mustmatch test' subcommand - lines 315-387 in cli.py.
 
     Can't test via doc tests because:
-    1. Doc tests ARE the tests, running 'outmatch test' on docs would be circular
+    1. Doc tests ARE the tests, running 'mustmatch test' on docs would be circular
     2. The test command is an alternative to pytest, not used within pytest
     """
 
     def test_basic_pass(self, tmp_path: Path, monkeypatch) -> None:
-        """Test outmatch test runs markdown tests - covers _run_mdtest."""
+        """Test mustmatch test runs markdown tests - covers _run_mdtest."""
         md = tmp_path / "test.md"
         md.write_text("# Test\n\n```bash\necho hello\n```\n")
         monkeypatch.chdir(tmp_path)
@@ -155,7 +155,7 @@ class TestOutmatchTestCommand:
         assert result == 0
 
     def test_failing_test(self, tmp_path: Path, monkeypatch) -> None:
-        """Test outmatch test reports failures."""
+        """Test mustmatch test reports failures."""
         md = tmp_path / "test.md"
         md.write_text("# Test\n\n```bash\nexit 1\n```\n")
         monkeypatch.chdir(tmp_path)
@@ -164,7 +164,7 @@ class TestOutmatchTestCommand:
         assert result == 1
 
     def test_quiet_mode(self, tmp_path: Path, monkeypatch) -> None:
-        """Test outmatch test --quiet."""
+        """Test mustmatch test --quiet."""
         md = tmp_path / "test.md"
         md.write_text("# Test\n\n```bash\necho hi\n```\n")
         monkeypatch.chdir(tmp_path)
@@ -173,7 +173,7 @@ class TestOutmatchTestCommand:
         assert result == 0
 
     def test_verbose_mode(self, tmp_path: Path, monkeypatch) -> None:
-        """Test outmatch test --verbose."""
+        """Test mustmatch test --verbose."""
         md = tmp_path / "test.md"
         md.write_text("# Test\n\n```bash\necho hi\n```\n")
         monkeypatch.chdir(tmp_path)
