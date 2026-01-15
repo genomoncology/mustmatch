@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -16,6 +17,7 @@ METADATA_PATTERN = re.compile(
     r'<!--\s*mustmatch:\s*(.*?)\s*-->',
     re.IGNORECASE
 )
+
 # Default exclusion patterns
 DEFAULT_EXCLUDE_DIRS = frozenset({
     'node_modules', '.git', '_site', 'build', 'dist',
@@ -70,7 +72,7 @@ class Block:
     line_end: int
     name: str | None = None
     metadata: BlockMetadata = field(default_factory=BlockMetadata)
-    lang: str = "bash"  # "bash" or "python"
+    lang: str = "bash"
 
 
 @dataclass
@@ -90,7 +92,7 @@ class FileResult:
     path: Path
     blocks: list[BlockResult] = field(default_factory=list)
     duration: float = 0.0
-    error: str | None = None  # File-level error (e.g., read failure)
+    error: str | None = None
 
     @property
     def passed(self) -> int:
@@ -110,7 +112,7 @@ class FileResult:
 
 
 @dataclass
-class RunResult:
+class TestResult:
     """Overall test result."""
     files: list[FileResult] = field(default_factory=list)
     duration: float = 0.0
@@ -137,16 +139,11 @@ class RunResult:
 
     @property
     def errors(self) -> int:
-        """Count of files with read/execution errors."""
         return sum(1 for f in self.files if f.error is not None)
 
 
-# Alias for backward compatibility
-TestResult = RunResult
-
-
 @dataclass
-class RunConfig:
+class TestConfig:
     """Configuration for test command."""
     quiet: bool = False
     verbose: bool = False
@@ -162,15 +159,12 @@ class RunConfig:
     junit_xml: Path | None = None
     json_output: Path | None = None
     tap_output: bool = False
-    # Language options
-    lang: str = "bash"  # "bash", "python", or "all"
-    memory: bool = False  # For Python: share state between blocks
-    # Pre-compiled patterns (computed in __post_init__)
+    lang: str = "bash"
+    memory: bool = False
     _include_re: re.Pattern[str] | None = field(default=None, repr=False)
     _exclude_re: re.Pattern[str] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
-        """Pre-compile regex patterns for efficient reuse."""
         if self.include_pattern and self._include_re is None:
             object.__setattr__(
                 self, '_include_re',
@@ -183,26 +177,12 @@ class RunConfig:
             )
 
 
-# Alias for backward compatibility
-TestConfig = RunConfig
-
-
 def parse_markdown(
     content: str,
     heading_context: bool = True,
     lang: str = "bash",
 ) -> list[Block]:
-    """Parse markdown content and extract code blocks.
-
-    Args:
-        content: Markdown content.
-        heading_context: If True, use headings as block names.
-        lang: Language to parse: "bash", "python", or "all".
-
-    Returns:
-        List of Block instances.
-    """
-    # Define fence patterns
+    """Parse markdown content and extract code blocks."""
     bash_fences = {"bash", "sh", "shell"}
     python_fences = {"python", "py"}
 
@@ -210,13 +190,11 @@ def parse_markdown(
         target_fences = bash_fences
     elif lang == "python":
         target_fences = python_fences
-    else:  # "all"
+    else:
         target_fences = bash_fences | python_fences
 
     blocks: list[Block] = []
     lines = content.split('\n')
-
-    # Track current heading for block names
     current_heading: str | None = None
     pending_metadata: BlockMetadata | None = None
 
@@ -224,24 +202,20 @@ def parse_markdown(
     while i < len(lines):
         line = lines[i]
 
-        # Track headings for block names
         if heading_context and line.startswith('#'):
             match = re.match(r'^#+\s+(.+)$', line)
             if match:
                 current_heading = match.group(1).strip()
 
-        # Check for metadata comment
         meta_match = METADATA_PATTERN.search(line)
         if meta_match:
             pending_metadata = BlockMetadata.parse(meta_match.group(1))
             i += 1
             continue
 
-        # Check for code fence
         fence_match = re.match(r'^```(\w+)\s*$', line)
         if fence_match:
             fence_lang = fence_match.group(1).lower()
-            # Determine if this fence matches our target
             detected_lang = None
             if fence_lang in bash_fences and fence_lang in target_fences:
                 detected_lang = "bash"
@@ -249,19 +223,17 @@ def parse_markdown(
                 detected_lang = "python"
 
             if detected_lang:
-                block_start = i + 2  # Line number (1-indexed, first line of content)
+                block_start = i + 2
                 block_lines: list[str] = []
                 i += 1
 
-                # Collect block content until closing fence
                 while i < len(lines) and not lines[i].startswith('```'):
                     block_lines.append(lines[i])
                     i += 1
 
-                block_end = i + 1  # Line number (1-indexed)
+                block_end = i + 1
                 block_content = '\n'.join(block_lines)
 
-                # Extract name from first comment or heading
                 block_name = current_heading
                 if block_lines:
                     first_line = block_lines[0].strip()
@@ -280,12 +252,10 @@ def parse_markdown(
                 )
                 blocks.append(block)
             else:
-                # Non-target fence: skip content until closing fence
                 i += 1
                 while i < len(lines) and not lines[i].startswith('```'):
                     i += 1
 
-            # Clear metadata after any fence (prevents bleed to later blocks)
             pending_metadata = None
 
         i += 1
@@ -295,22 +265,18 @@ def parse_markdown(
 
 def should_skip_block(block: Block, config: TestConfig) -> bool:
     """Check if block should be skipped."""
-    # Skip directive
     if block.metadata.skip:
         return True
 
-    # Skip-if directive (check env var)
     if block.metadata.skip_if:
         import os
         if os.environ.get(block.metadata.skip_if):
             return True
 
-    # Line filter
     if config.line_filter is not None:
         if not (block.line_start <= config.line_filter <= block.line_end):
             return True
 
-    # Include pattern (use pre-compiled regex)
     if config._include_re:
         if not config._include_re.search(block.content):
             if block.name and not config._include_re.search(block.name):
@@ -318,7 +284,6 @@ def should_skip_block(block: Block, config: TestConfig) -> bool:
             elif not block.name:
                 return True
 
-    # Exclude pattern (use pre-compiled regex)
     if config._exclude_re:
         if config._exclude_re.search(block.content):
             return True
@@ -339,17 +304,13 @@ def execute_block(
 
     start_time = time.time()
 
-    # Build environment
     block_env = os.environ.copy()
     block_env.update(config.env)
     block_env.update(block.metadata.env)
     if env:
         block_env.update(env)
 
-    # Determine timeout
     timeout = block.metadata.timeout or config.timeout
-
-    # Determine working directory
     cwd = config.cwd
 
     try:
@@ -376,7 +337,6 @@ def execute_block(
 
         duration = time.time() - start_time
 
-        # Check exit code
         if proc.returncode != 0:
             return BlockResult(
                 block=block,
@@ -393,7 +353,6 @@ def execute_block(
         )
 
     except OSError as e:
-        # Handle file not found, permission errors, etc.
         duration = time.time() - start_time
         return BlockResult(
             block=block,
@@ -402,7 +361,6 @@ def execute_block(
             error=f"OS error: {e}",
         )
     except subprocess.SubprocessError as e:
-        # Handle subprocess-specific errors
         duration = time.time() - start_time
         return BlockResult(
             block=block,
@@ -417,16 +375,7 @@ def execute_python_block(
     namespace: dict[str, Any] | None = None,
     filename: str = "<markdown>",
 ) -> tuple[BlockResult, dict[str, Any]]:
-    """Execute a single Python block.
-
-    Args:
-        block: The Python block to execute.
-        namespace: Optional namespace for state sharing.
-        filename: Filename for error reporting.
-
-    Returns:
-        Tuple of (BlockResult, namespace) for memory mode.
-    """
+    """Execute a single Python block."""
     import time
 
     from .python_exec import execute_python
@@ -473,7 +422,6 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
 
     blocks = parse_markdown(content, lang=config.lang)
 
-    # Set working directory to file's directory if not specified
     file_config = TestConfig(
         quiet=config.quiet,
         verbose=config.verbose,
@@ -493,13 +441,11 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
         memory=config.memory,
     )
 
-    # For Python memory mode, we need to share namespace across blocks
     python_namespace: dict[str, Any] | None = None
     if config.memory and config.lang in ("python", "all"):
         from .python_exec import create_namespace
         python_namespace = create_namespace()
 
-    # Execute blocks sequentially
     for block in blocks:
         if should_skip_block(block, file_config):
             result.blocks.append(BlockResult(
@@ -508,19 +454,17 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
             ))
             continue
 
-        # Execute based on block language
         if block.lang == "python":
             block_result, python_namespace = execute_python_block(
                 block,
                 namespace=python_namespace if config.memory else None,
                 filename=str(path),
             )
-        else:  # bash
+        else:
             block_result = execute_block(block, file_config)
 
         result.blocks.append(block_result)
 
-        # Stop on first failure if fail-fast
         if config.fail_fast and block_result.status == BlockStatus.FAILED:
             break
 
@@ -541,12 +485,10 @@ def discover_files(
                 files.append(path)
         elif path.is_dir():
             for md_file in path.rglob('*.md'):
-                # Skip excluded directories
                 if any(part in exclude_dirs for part in md_file.parts):
                     continue
                 files.append(md_file)
 
-    # Sort for deterministic order
     return sorted(files)
 
 
@@ -557,14 +499,12 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
     start_time = time.time()
     result = TestResult()
 
-    # Discover files
     files = discover_files(paths)
 
     if not files:
         result.duration = time.time() - start_time
         return result
 
-    # Run tests in parallel across files (ThreadPool for I/O-bound subprocess work)
     if config.parallel > 1 and len(files) > 1:
         with ThreadPoolExecutor(max_workers=config.parallel) as executor:
             futures = {
@@ -576,21 +516,17 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
                     file_result = future.result()
                     result.files.append(file_result)
                 except Exception as e:
-                    # Preserve error information for debugging
                     path = futures[future]
                     result.files.append(FileResult(
                         path=path,
                         error=f"Execution error: {type(e).__name__}: {e}",
                     ))
 
-                # Check fail-fast (include errors as failures)
                 if config.fail_fast and (result.failed > 0 or result.errors > 0):
-                    # Cancel remaining futures
                     for f in futures:
                         f.cancel()
                     break
     else:
-        # Sequential execution
         for path in files:
             file_result = run_file(path, config)
             result.files.append(file_result)
@@ -602,115 +538,110 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
     return result
 
 
-# Output formatting functions
+# =============================================================================
+# Literate Output Formatting
+# =============================================================================
 
-def format_block_name(block: Block) -> str:
-    """Format block name for display."""
+def format_block_name(block: Block, file_path: Path) -> str:
+    """Format block name in literate style: Name (file:line)"""
+    location = f"({file_path}:{block.line_start})"
     if block.name:
-        return f"Block (line {block.line_start}): {block.name}"
-    return f"Block (line {block.line_start})"
+        return f"{block.name} {location}"
+    return f"Block {location}"
 
 
 def format_result_quiet(result: TestResult) -> str:
-    """Format result in quiet mode."""
-    total = result.total
-    passed = result.passed
-    failed = result.failed
-    skipped = result.skipped
-    errors = result.errors
+    """Format result in quiet mode - summary only."""
+    status = "✓" if (result.failed == 0 and result.errors == 0) else "✗"
+    parts = [f"{status} {result.passed} passed"]
 
-    status = "✓" if (failed == 0 and errors == 0) else "✗"
-    parts = [f"{status} {passed} passed"]
-    if failed > 0:
-        parts.append(f"✗ {failed} failed")
-    if errors > 0:
-        parts.append(f"⚠ {errors} errors")
-    if skipped > 0:
-        parts.append(f"⊘ {skipped} skipped")
-    parts.append(f"{total} total")
+    if result.failed > 0:
+        parts.append(f"✗ {result.failed} failed")
+    if result.errors > 0:
+        parts.append(f"⚠ {result.errors} errors")
+    if result.skipped > 0:
+        parts.append(f"⊘ {result.skipped} skipped")
+    parts.append(f"{result.total} total")
 
     return ", ".join(parts)
 
 
 def format_result_default(result: TestResult) -> str:
-    """Format result in default mode."""
+    """Format result in default mode - failures only, literate style."""
     lines: list[str] = []
 
     for file_result in result.files:
-        lines.append(f"\nRunning tests in {file_result.path}...")
-        lines.append("")
-
-        # Show file-level errors
         if file_result.error:
-            lines.append(f"  ✗ {file_result.error}")
-            continue
-
-        for block_result in file_result.blocks:
-            name = format_block_name(block_result.block)
-            if block_result.status == BlockStatus.PASSED:
-                lines.append(f"  ✓ {name}")
-            elif block_result.status == BlockStatus.FAILED:
-                lines.append(f"  ✗ {name}")
-            elif block_result.status == BlockStatus.SKIPPED:
-                lines.append(f"  ⊘ {name} (skipped)")
-            elif block_result.status == BlockStatus.TIMEOUT:
-                lines.append(f"  ⏱ {name} (timeout)")
-
-    lines.append("")
-    passed, failed, total = result.passed, result.failed, result.total
-    lines.append(f"Results: {passed} passed, {failed} failed, {total} total")
-    return "\n".join(lines)
-
-
-def format_result_verbose(result: TestResult) -> str:
-    """Format result in verbose mode."""
-    lines: list[str] = []
-
-    for file_result in result.files:
-        lines.append(f"\nRunning tests in {file_result.path}...")
-        lines.append("")
-
-        # Show file-level errors
-        if file_result.error:
-            lines.append(f"  ✗ {file_result.error}")
+            lines.append(f"ERROR: {file_result.path} - {file_result.error}")
             lines.append("")
             continue
 
         for block_result in file_result.blocks:
-            name = format_block_name(block_result.block)
-            if block_result.status == BlockStatus.PASSED:
-                lines.append(f"  ✓ {name}")
-            elif block_result.status == BlockStatus.FAILED:
-                lines.append(f"  ✗ {name}")
-                lines.append("")
-                lines.append("    Command:")
-                for line in block_result.block.content.split('\n')[:5]:
-                    lines.append(f"      {line}")
-                if len(block_result.block.content.split('\n')) > 5:
-                    lines.append("      ...")
-                lines.append("")
-                if block_result.error:
-                    lines.append(f"    Error: {block_result.error}")
+            if block_result.status == BlockStatus.FAILED:
+                name = format_block_name(block_result.block, file_result.path)
+                lines.append(f"FAILED: {name}")
+                if block_result.expected:
+                    lines.append(f"  Expected: {block_result.expected}")
                 if block_result.actual:
-                    lines.append("    Output:")
-                    for line in block_result.actual.split('\n')[:10]:
-                        lines.append(f"      {line}")
-                    if len(block_result.actual.split('\n')) > 10:
-                        lines.append("      ...")
+                    # Truncate long output
+                    actual = block_result.actual[:200]
+                    if len(block_result.actual) > 200:
+                        actual += "..."
+                    lines.append(f"  Got: {actual}")
+                elif block_result.error:
+                    lines.append(f"  Error: {block_result.error}")
                 lines.append("")
-                blk = block_result.block
-                lines.append(f"    {file_result.path}:{blk.line_start}-{blk.line_end}")
+            elif block_result.status == BlockStatus.TIMEOUT:
+                name = format_block_name(block_result.block, file_result.path)
+                lines.append(f"TIMEOUT: {name}")
+                if block_result.error:
+                    lines.append(f"  {block_result.error}")
+                lines.append("")
+
+    # Summary line
+    f, p, t = result.failed, result.passed, result.total
+    lines.append(f"{f} failed, {p} passed, {t} total")
+    return "\n".join(lines)
+
+
+def format_result_verbose(result: TestResult) -> str:
+    """Format result in verbose mode - all tests, literate style."""
+    lines: list[str] = []
+
+    for file_result in result.files:
+        if file_result.error:
+            lines.append(f"ERROR: {file_result.path} - {file_result.error}")
+            lines.append("")
+            continue
+
+        for block_result in file_result.blocks:
+            name = format_block_name(block_result.block, file_result.path)
+
+            if block_result.status == BlockStatus.PASSED:
+                lines.append(f"✓ {name}")
+            elif block_result.status == BlockStatus.FAILED:
+                lines.append(f"FAILED: {name}")
+                if block_result.expected:
+                    lines.append(f"  Expected: {block_result.expected}")
+                if block_result.actual:
+                    actual = block_result.actual[:200]
+                    if len(block_result.actual) > 200:
+                        actual += "..."
+                    lines.append(f"  Got: {actual}")
+                elif block_result.error:
+                    lines.append(f"  Error: {block_result.error}")
                 lines.append("")
             elif block_result.status == BlockStatus.SKIPPED:
-                lines.append(f"  ⊘ {name} (skipped)")
+                lines.append(f"⊘ {name} (skipped)")
             elif block_result.status == BlockStatus.TIMEOUT:
-                lines.append(f"  ⏱ {name} (timeout)")
-                lines.append(f"    {block_result.error}")
+                lines.append(f"⏱ {name} (timeout)")
+                if block_result.error:
+                    lines.append(f"  {block_result.error}")
                 lines.append("")
 
     lines.append("")
-    passed, failed, total = result.passed, result.failed, result.total
-    lines.append(f"Results: {passed} passed, {failed} failed, {total} total")
+    f, p, t = result.failed, result.passed, result.total
+    lines.append(f"{f} failed, {p} passed, {t} total")
     return "\n".join(lines)
 
 
@@ -723,6 +654,10 @@ def format_result(result: TestResult, config: TestConfig) -> str:
     else:
         return format_result_default(result)
 
+
+# =============================================================================
+# Report Writers
+# =============================================================================
 
 def write_junit_xml(result: TestResult, path: Path) -> None:
     """Write JUnit XML report."""
@@ -739,7 +674,8 @@ def write_junit_xml(result: TestResult, path: Path) -> None:
         for block_result in file_result.blocks:
             testcase = ET.SubElement(testsuite, "testcase")
             testcase.set("classname", classname)
-            testcase.set("name", format_block_name(block_result.block))
+            name = format_block_name(block_result.block, file_result.path)
+            testcase.set("name", name)
             testcase.set("time", f"{block_result.duration:.2f}")
 
             if block_result.status == BlockStatus.FAILED:
@@ -760,8 +696,6 @@ def write_junit_xml(result: TestResult, path: Path) -> None:
 
 def write_json_report(result: TestResult, path: Path) -> None:
     """Write JSON report."""
-    import json
-
     data = {
         "summary": {
             "total": result.total,
@@ -805,9 +739,7 @@ def format_tap(result: TestResult) -> str:
     for file_result in result.files:
         for block_result in file_result.blocks:
             test_num += 1
-            name = f"{file_result.path}:{block_result.block.line_start}"
-            if block_result.block.name:
-                name += f" {block_result.block.name}"
+            name = format_block_name(block_result.block, file_result.path)
 
             if block_result.status == BlockStatus.PASSED:
                 lines.append(f"ok {test_num} - {name}")
@@ -827,36 +759,28 @@ def format_tap(result: TestResult) -> str:
     return "\n".join(lines)
 
 
-def run_command(
-    paths: list[Path],
-    config: TestConfig,
-) -> int:
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
+def run_command(paths: list[Path], config: TestConfig) -> int:
     """Main entry point for test command."""
-    # Use current directory if no paths specified
     if not paths:
         paths = [Path.cwd()]
 
     result = run_tests(paths, config)
 
-    # Write reports
     if config.junit_xml:
         write_junit_xml(result, config.junit_xml)
 
     if config.json_output:
         write_json_report(result, config.json_output)
 
-    # Output to stdout
     if config.tap_output:
         print(format_tap(result))
     else:
         print(format_result(result, config))
 
-    # Exit code
     if result.failed > 0 or result.timeout > 0 or result.errors > 0:
         return 1
     return 0
-
-
-# Aliases for backward compatibility (avoid pytest collection issues with test_ prefix)
-test_command = run_command
-test_file = run_file

@@ -3,7 +3,7 @@
 import difflib
 import sys
 
-from .config import ColorMode, CompareResult, DiffFormat, ExpectConfig
+from .config import ColorMode, CompareResult, DiffFormat, MatchConfig
 
 
 def unified_diff(actual: str, expected: str, context: int = 3) -> str:
@@ -26,14 +26,11 @@ def side_by_side_diff(actual: str, expected: str, width: int = 80) -> str:
     actual_lines = actual.splitlines()
     expected_lines = expected.splitlines()
 
-    # Calculate column width (account for separator)
     col_width = (width - 3) // 2
-
     result = []
     result.append(f"{'expected':<{col_width}} | {'actual':<{col_width}}")
     result.append("-" * col_width + " | " + "-" * col_width)
 
-    # Use SequenceMatcher to align lines
     matcher = difflib.SequenceMatcher(None, expected_lines, actual_lines)
 
     for op, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -83,9 +80,7 @@ def inline_diff(actual: str, expected: str) -> str:
     return " ".join(result)
 
 
-def format_diff(
-    actual: str, expected: str, config: ExpectConfig
-) -> str:
+def format_diff(actual: str, expected: str, config: MatchConfig) -> str:
     """Format diff according to config.diff_format."""
     if config.diff_format == DiffFormat.NONE:
         return ""
@@ -93,7 +88,6 @@ def format_diff(
         return side_by_side_diff(actual, expected)
     if config.diff_format == DiffFormat.INLINE:
         return inline_diff(actual, expected)
-    # Default to unified
     return unified_diff(actual, expected, context=config.diff_context)
 
 
@@ -102,20 +96,20 @@ def colorize_diff(diff: str) -> str:
     lines = []
     for line in diff.splitlines(keepends=True):
         if line.startswith("+++") or line.startswith("---"):
-            lines.append(f"\033[1m{line}\033[0m")  # Bold
+            lines.append(f"\033[1m{line}\033[0m")
         elif line.startswith("+"):
-            lines.append(f"\033[32m{line}\033[0m")  # Green
+            lines.append(f"\033[32m{line}\033[0m")
         elif line.startswith("-"):
-            lines.append(f"\033[31m{line}\033[0m")  # Red
+            lines.append(f"\033[31m{line}\033[0m")
         elif line.startswith("@@"):
-            lines.append(f"\033[36m{line}\033[0m")  # Cyan
+            lines.append(f"\033[36m{line}\033[0m")
         else:
             lines.append(line)
     return "".join(lines)
 
 
 def should_use_color(color_mode: ColorMode) -> bool:
-    """Determine if color should be used based on mode and terminal."""
+    """Determine if color should be used."""
     if color_mode == ColorMode.ALWAYS:
         return True
     if color_mode == ColorMode.NEVER:
@@ -123,7 +117,7 @@ def should_use_color(color_mode: ColorMode) -> bool:
     return sys.stderr.isatty()
 
 
-def format_error(result: CompareResult, config: ExpectConfig) -> str:
+def format_error(result: CompareResult, config: MatchConfig) -> str:
     """Format error message for output."""
     use_color = should_use_color(config.color)
     msg = result.message

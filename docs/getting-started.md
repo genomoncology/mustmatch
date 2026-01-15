@@ -31,22 +31,28 @@ No output means success (exit code 0). On mismatch, you get a diff and exit code
 echo "hello world" | mustmatch "hello world"
 ```
 
-### Contains (`--contains`)
+### Contains (`like`)
+
+Use `like` for substring matching:
 
 ```bash
-mustmatch --help | mustmatch --contains "Usage:"
+echo "Usage: mustmatch [OPTIONS]" | mustmatch like "Usage:"
 ```
 
-### Regex (`--regex`)
+### Regex (auto-detected)
+
+Wrap patterns in `/.../' for regex matching:
 
 ```bash
-echo "completed in 42ms" | mustmatch --regex 'completed in \d+ms'
+echo "completed in 42ms" | mustmatch "/completed in \d+ms/"
 ```
 
-### JSON (`--json`)
+### JSON (auto-detected)
+
+JSON is auto-detected from `{...}` or `[...]`:
 
 ```bash
-echo '{"b":2,"a":1}' | mustmatch --json '{"a":1,"b":2}'
+echo '{"b":2,"a":1}' | mustmatch '{"a":1,"b":2}'
 ```
 
 ## Multi-line Output
@@ -59,22 +65,10 @@ line 2
 line 3"
 ```
 
-Or test against real CLI output:
+Or test for substring:
 
 ```bash
-ls --help | mustmatch --contains "list"
-```
-
-## Handling Volatile Values
-
-Use `--replace` for timestamps, IDs, or paths that change:
-
-```bash
-echo "time: 1.5s" | mustmatch --replace '\d+\.\d+s=>TIME' "time: TIME"
-echo "user: alice, id: 12345" | mustmatch \
-  --replace '\d+=><id>' \
-  --replace 'alice=><user>' \
-  "user: <user>, id: <id>"
+ls --help | mustmatch like "list"
 ```
 
 ## Testing Your Documentation
@@ -97,10 +91,5 @@ Skip blocks with HTML comments:
 
 ## Next Steps
 
-- [Text Matching](matching.md) - Exact, contains, regex
-- [JSON Comparison](json.md) - Semantic comparison, field ignoring
-- [JSONL Comparison](jsonl.md) - JSON Lines modes
-- [Preprocessing](preprocessing.md) - Normalization, replace, redact
 - [CLI Reference](cli.md) - All options, exit codes, errors
 - [Test Runner](mdtest.md) - `mustmatch test` documentation
-- [Pytest Plugin](pytest-plugin.md) - pytest integration

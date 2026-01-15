@@ -22,22 +22,22 @@ If it matches, exit 0. If it doesn't, exit 1 with a helpful diff. Simple enough 
 
 **Exact matching** - The default. Output must match exactly.
 ```bash
-mustmatch --version | mustmatch --contains "0.0.0.dev0"
+echo "hello world" | mustmatch "hello world"
 ```
 
 **Substring matching** - Check that output contains expected text.
 ```bash
-mustmatch --help | mustmatch --contains "Usage:"
+echo "Usage: mustmatch" | mustmatch like "Usage:"
 ```
 
 **Pattern matching** - Handle dynamic values like timestamps.
 ```bash
-echo "Completed in 1.23s" | mustmatch --regex 'Completed in \d+\.\d+s'
+echo "Completed in 1.23s" | mustmatch "/Completed in \d+\.\d+s/"
 ```
 
 **JSON comparison** - Compare structure, not formatting.
 ```bash
-echo '{"b":2,"a":1}' | mustmatch --json '{"a":1,"b":2}'
+echo '{"b":2,"a":1}' | mustmatch '{"a":1,"b":2}'
 ```
 
 ## Documentation as Tests

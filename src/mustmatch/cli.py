@@ -1,646 +1,313 @@
-"""CLI interface using Typer."""
+"""CLI interface for mustmatch.
+
+Grammar:
+    mustmatch [-i] [not] [like] EXPECTED
+    mustmatch test PATHS
+    mustmatch exec -- CMD
+"""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Annotated, Optional
-
-import typer
 
 from .compare import compare
-from .config import (
-    ColorMode,
-    CompareMode,
-    DiffFormat,
-    ExpectConfig,
-    NormalizeOptions,
-    RegexError,
-    compile_redactions,
-    compile_replacements,
-)
+from .config import ColorMode, CompareMode, MatchConfig
 from .normalize import preprocess
 from .output import format_error
 from .version import __version__
 
-app = typer.Typer(
-    help="Assert CLI output matches expected value.",
-    add_completion=False,
-    no_args_is_help=False,
-)
+
+def parse_args(args: list[str]) -> tuple[MatchConfig, str | None, Path | None]:
+    """Parse command line arguments for main match command.
+
+    Grammar: mustmatch [-i] [not] [like] EXPECTED
+
+    Returns:
+        Tuple of (config, expected_value, expected_file)
+    """
+    ignore_case = False
+    negated = False
+    partial = False  # "like" modifier
+    expected: str | None = None
+    expected_file: Path | None = None
+    quiet = False
+    color = ColorMode.AUTO
+    json_ignore: list[str] = []
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        # Flags
+        if arg in ("-i", "--ignore-case"):
+            ignore_case = True
+            i += 1
+            continue
+
+        if arg in ("-q", "--quiet"):
+            quiet = True
+            i += 1
+            continue
+
+        if arg in ("-f", "--file"):
+            if i + 1 >= len(args):
+                print("Error: -f requires a file path", file=sys.stderr)
+                sys.exit(2)
+            expected_file = Path(args[i + 1])
+            i += 2
+            continue
+
+        if arg == "--color":
+            if i + 1 >= len(args):
+                print("Error: --color requires a value", file=sys.stderr)
+                sys.exit(2)
+            try:
+                color = ColorMode(args[i + 1])
+            except ValueError:
+                print(f"Error: invalid color mode: {args[i + 1]}", file=sys.stderr)
+                sys.exit(2)
+            i += 2
+            continue
+
+        if arg == "--ignore":
+            if i + 1 >= len(args):
+                print("Error: --ignore requires a JSON path", file=sys.stderr)
+                sys.exit(2)
+            json_ignore.append(args[i + 1])
+            i += 2
+            continue
+
+        if arg == "--version":
+            print(f"mustmatch {__version__}")
+            sys.exit(0)
+
+        if arg in ("-h", "--help"):
+            print_help()
+            sys.exit(0)
+
+        # Modifiers (positional keywords)
+        if arg == "not":
+            negated = True
+            i += 1
+            continue
+
+        if arg == "like":
+            partial = True
+            i += 1
+            continue
+
+        # Expected value (first non-flag, non-modifier argument)
+        if not arg.startswith("-"):
+            expected = arg
+            i += 1
+            # Consume remaining args as part of expected if quoted badly
+            break
+
+        # Unknown flag
+        print(f"Error: unknown option: {arg}", file=sys.stderr)
+        sys.exit(2)
+
+    # Determine mode
+    if negated and partial:
+        mode = CompareMode.NOT_CONTAINS
+    elif negated:
+        mode = CompareMode.NOT_EXACT
+    elif partial:
+        mode = CompareMode.CONTAINS
+    else:
+        mode = CompareMode.EXACT
+
+    config = MatchConfig(
+        mode=mode,
+        ignore_case=ignore_case,
+        json_ignore_paths=tuple(json_ignore),
+        quiet=quiet,
+        color=color,
+    )
+
+    return config, expected, expected_file
 
 
+def print_help() -> None:
+    """Print help message."""
+    print("""mustmatch - CLI output assertion tool
 
-def version_callback(value: bool) -> None:
-    """Print version and exit."""
-    if value:
-        print(f"mustmatch {__version__}")
-        raise typer.Exit()
+USAGE:
+    command | mustmatch [OPTIONS] [not] [like] EXPECTED
+    mustmatch test [OPTIONS] PATHS...
+    mustmatch exec [OPTIONS] -- COMMAND...
+
+MAIN COMMAND:
+    Pipe output to mustmatch to verify it matches expected value.
+
+    Modifiers:
+        not         Negate the match (must NOT match)
+        like        Partial match (contains/subset)
+
+    Auto-detection:
+        /pattern/   Treated as regex
+        {...}       Treated as JSON object
+        [...]       Treated as JSON array
+        other       Treated as string
+
+OPTIONS:
+    -i, --ignore-case   Case-insensitive comparison
+    -q, --quiet         Suppress error output
+    -f, --file FILE     Read expected value from file
+    --ignore PATH       Ignore JSON path (repeatable)
+    --color MODE        Color mode: auto, always, never
+    --version           Show version
+    -h, --help          Show this help
+
+EXAMPLES:
+    echo "hello" | mustmatch "hello"
+    echo "hello world" | mustmatch like "hello"
+    echo "success" | mustmatch not like "error"
+    echo '{"a":1}' | mustmatch '{"a":1}'
+    echo "v1.2.3" | mustmatch "/v\\d+\\.\\d+/"
+
+SUBCOMMANDS:
+    test    Run code blocks in markdown files as tests
+    exec    Execute command and assert on output
+
+EXIT CODES:
+    0       Match successful
+    1       Match failed
+    2       Invalid arguments
+""")
 
 
-def _run_expect(
-    expected: str | None,
-    expected_file: Path | None,
-    contains: bool,
-    regex: bool,
-    json_mode: bool,
-    jsonl: bool,
-    jsonl_set: bool,
-    jsonl_key: str | None,
-    jsonl_contains: bool,
-    not_contains: bool,
-    not_regex: bool,
-    strip_ansi: bool,
-    normalize_newlines_opt: bool,
-    trim: bool,
-    collapse_whitespace_opt: bool,
-    ignore_case: bool,
-    replace: list[str] | None,
-    redact: list[str] | None,
-    json_ignore: list[str] | None,
-    quiet: bool,
-    color: str,
-    diff_context: int,
-    diff_format: str,
-    update: bool,
-) -> None:
-    """Run the expect (match) command logic."""
+def run_match(args: list[str]) -> int:
+    """Run the main match command."""
+    config, expected, expected_file = parse_args(args)
+
     # Read actual from stdin
+    if sys.stdin.isatty():
+        print("Error: no input (pipe command output to mustmatch)", file=sys.stderr)
+        return 2
+
     actual = sys.stdin.read()
 
     # Get expected value
-    expected_text = _get_expected(expected, expected_file, update)
-    if expected_text is None:
-        print(
-            "Error: expected value required (argument or -f FILE)",
-            file=sys.stderr,
-        )
-        raise typer.Exit(2)
-
-    # Build config
-    mode = _determine_mode(
-        contains, regex, json_mode, jsonl, jsonl_set, jsonl_key, jsonl_contains,
-        not_contains, not_regex
-    )
-
-    # Parse and compile regex patterns with validation
-    try:
-        raw_replacements = _parse_replacements(replace or [])
-        compiled_replacements = compile_replacements(raw_replacements)
-        compiled_redactions = compile_redactions(tuple(redact or []))
-    except RegexError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        raise typer.Exit(2)
-
-    norm_opts = NormalizeOptions(
-        strip_ansi=strip_ansi,
-        normalize_newlines=normalize_newlines_opt,
-        trim=trim,
-        collapse_whitespace=collapse_whitespace_opt,
-        ignore_case=ignore_case,
-        replacements=compiled_replacements,
-        redactions=compiled_redactions,
-    )
-    config = ExpectConfig(
-        mode=mode,
-        normalize=norm_opts,
-        json_ignore_paths=tuple(json_ignore or []),
-        jsonl_key_field=jsonl_key,
-        quiet=quiet,
-        color=ColorMode(color),
-        diff_context=diff_context,
-        diff_format=DiffFormat(diff_format),
-        update_file=update,
-    )
+    if expected_file:
+        if not expected_file.exists():
+            print(f"Error: file not found: {expected_file}", file=sys.stderr)
+            return 2
+        try:
+            expected = expected_file.read_text()
+        except OSError as e:
+            print(f"Error reading file: {e}", file=sys.stderr)
+            return 2
+        except UnicodeDecodeError as e:
+            print(f"Error reading file: {e}", file=sys.stderr)
+            return 2
+    elif expected is None:
+        print("Error: expected value required", file=sys.stderr)
+        return 2
 
     # Preprocess
-    actual_processed = preprocess(actual, norm_opts)
-    expected_processed = preprocess(expected_text, norm_opts)
+    actual = preprocess(actual)
+    expected = preprocess(expected)
+
+    # Apply ignore_case
+    if config.ignore_case:
+        actual = actual.lower()
+        expected = expected.lower()
 
     # Compare
-    result = compare(actual_processed, expected_processed, config)
+    result = compare(actual, expected, config)
 
     if result.success:
-        raise typer.Exit(0)
+        return 0
 
-    # Handle update mode
-    if update and expected_file:
-        expected_file.write_text(actual)
-        print(f"Updated: {expected_file}", file=sys.stderr)
-        raise typer.Exit(0)
-
-    # Output error
-    if not quiet:
-        print(format_error(result, config), file=sys.stderr)
-    raise typer.Exit(1)
-
-
-@app.callback(
-    invoke_without_command=True,
-    context_settings={"allow_interspersed_args": False},
-)
-def callback(
-    ctx: typer.Context,
-    # Expected value sources
-    expected: Annotated[
-        Optional[str],
-        typer.Argument(help="Expected output"),
-    ] = None,
-    expected_file: Annotated[
-        Optional[Path],
-        typer.Option(
-            "-f",
-            "--expected-file",
-            help="Read expected from file",
-        ),
-    ] = None,
-    # Comparison modes
-    contains: Annotated[
-        bool,
-        typer.Option(help="Check substring containment"),
-    ] = False,
-    regex: Annotated[
-        bool,
-        typer.Option(help="Match against regex pattern"),
-    ] = False,
-    json_mode: Annotated[
-        bool,
-        typer.Option("--json", help="Compare as JSON (semantic)"),
-    ] = False,
-    jsonl: Annotated[
-        bool,
-        typer.Option(help="Compare as JSONL (semantic)"),
-    ] = False,
-    jsonl_set: Annotated[
-        bool,
-        typer.Option(help="Compare JSONL as unordered set"),
-    ] = False,
-    jsonl_key: Annotated[
-        Optional[str],
-        typer.Option(help="Compare JSONL by key field"),
-    ] = None,
-    jsonl_contains: Annotated[
-        bool,
-        typer.Option(help="Check JSONL contains expected records"),
-    ] = False,
-    # Negative assertions
-    not_contains: Annotated[
-        bool,
-        typer.Option(help="Assert substring is NOT present"),
-    ] = False,
-    not_regex: Annotated[
-        bool,
-        typer.Option(help="Assert regex does NOT match"),
-    ] = False,
-    # Normalization options
-    strip_ansi: Annotated[
-        bool,
-        typer.Option(help="Remove ANSI escape sequences"),
-    ] = False,
-    normalize_newlines_opt: Annotated[
-        bool,
-        typer.Option("--normalize-newlines", help="Convert CRLF to LF"),
-    ] = False,
-    trim: Annotated[
-        bool,
-        typer.Option(help="Strip leading/trailing whitespace"),
-    ] = False,
-    collapse_whitespace_opt: Annotated[
-        bool,
-        typer.Option("--collapse-whitespace", help="Collapse whitespace runs"),
-    ] = False,
-    ignore_case: Annotated[
-        bool,
-        typer.Option("-i", "--ignore-case", help="Case-insensitive"),
-    ] = False,
-    # Pattern transformation
-    replace: Annotated[
-        Optional[list[str]],
-        typer.Option(help="Replace REGEX=>REPL (repeatable)"),
-    ] = None,
-    redact: Annotated[
-        Optional[list[str]],
-        typer.Option(help="Replace REGEX with <redacted>"),
-    ] = None,
-    # JSON options
-    json_ignore: Annotated[
-        Optional[list[str]],
-        typer.Option(help="Ignore JSON path (repeatable)"),
-    ] = None,
-    # Output options
-    quiet: Annotated[
-        bool,
-        typer.Option("-q", "--quiet", help="Suppress error output"),
-    ] = False,
-    color: Annotated[
-        str,
-        typer.Option(help="Color mode: auto, always, never"),
-    ] = "auto",
-    diff_context: Annotated[
-        int,
-        typer.Option(help="Diff context lines"),
-    ] = 3,
-    diff_format: Annotated[
-        str,
-        typer.Option(help="Diff format: unified, side-by-side, inline, none"),
-    ] = "unified",
-    # Update mode
-    update: Annotated[
-        bool,
-        typer.Option(help="Update expected file on mismatch"),
-    ] = False,
-    # Version
-    version: Annotated[
-        Optional[bool],
-        typer.Option(
-            "--version",
-            callback=version_callback,
-            is_eager=True,
-            help="Show version",
-        ),
-    ] = None,
-) -> None:
-    """Assert CLI output matches expected value."""
-    # If a subcommand is invoked, don't run the default expect behavior
-    if ctx.invoked_subcommand is not None:
-        return
-
-    # Run expect logic
-    _run_expect(
-        expected,
-        expected_file,
-        contains,
-        regex,
-        json_mode,
-        jsonl,
-        jsonl_set,
-        jsonl_key,
-        jsonl_contains,
-        not_contains,
-        not_regex,
-        strip_ansi,
-        normalize_newlines_opt,
-        trim,
-        collapse_whitespace_opt,
-        ignore_case,
-        replace,
-        redact,
-        json_ignore,
-        quiet,
-        color,
-        diff_context,
-        diff_format,
-        update,
-    )
-
-
-def _get_expected(
-    arg: str | None,
-    file_path: Path | None,
-    update_mode: bool,
-) -> str | None:
-    """Get expected value from argument or file."""
-    if file_path:
-        if not file_path.exists():
-            if update_mode:
-                return ""  # Will create on update
-            print(f"Error: file not found: {file_path}", file=sys.stderr)
-            raise typer.Exit(2)
-        try:
-            return file_path.read_text()
-        except (OSError, UnicodeDecodeError) as e:
-            print(f"Error reading file: {e}", file=sys.stderr)
-            raise typer.Exit(2)
-    return arg
-
-
-def _determine_mode(
-    contains: bool,
-    regex: bool,
-    json_mode: bool,
-    jsonl: bool,
-    jsonl_set: bool,
-    jsonl_key: str | None,
-    jsonl_contains: bool,
-    not_contains: bool,
-    not_regex: bool,
-) -> CompareMode:
-    """Determine comparison mode from flags."""
-    if not_contains:
-        return CompareMode.NOT_CONTAINS
-    if not_regex:
-        return CompareMode.NOT_REGEX
-    if jsonl_key:
-        return CompareMode.JSONL_KEY
-    if jsonl_set:
-        return CompareMode.JSONL_SET
-    if jsonl_contains:
-        return CompareMode.JSONL_CONTAINS
-    if jsonl:
-        return CompareMode.JSONL
-    if json_mode:
-        return CompareMode.JSON
-    if regex:
-        return CompareMode.REGEX
-    if contains:
-        return CompareMode.CONTAINS
-    return CompareMode.EXACT
-
-
-def _parse_replacements(args: list[str]) -> tuple[tuple[str, str], ...]:
-    """Parse --replace arguments (REGEX=>REPL format) into tuples."""
-    result = []
-    for arg in args:
-        if "=>" not in arg:
-            print(f"Error: --replace needs REGEX=>REPL: {arg}", file=sys.stderr)
-            raise typer.Exit(2)
-        pattern, repl = arg.split("=>", 1)
-        result.append((pattern, repl))
-    return tuple(result)
-
-
-def main(args: list[str] | None = None) -> int:
-    """Main entry point for backwards compatibility."""
-    # Use sys.argv if args not provided
-    if args is None:
-        args = sys.argv[1:]
-
-    # Handle "test" subcommand - routed manually because Typer's callback
-    # with positional expected argument conflicts with subcommand detection
-    if args and args[0] == "test":
-        try:
-            _run_test_command(args[1:])
-            return 0
-        except typer.Exit as e:
-            return e.exit_code
-
-    # Handle "exec" subcommand
-    if args and args[0] == "exec":
-        try:
-            _run_exec_command(args[1:])
-            return 0
-        except typer.Exit as e:
-            return e.exit_code
-
-    try:
-        result = app(args, standalone_mode=False)
-        return result if result is not None else 0
-    except typer.Exit as e:
-        return e.exit_code
-
-
-# Separate Typer apps for subcommands - used to provide consistent help and parsing
-# These are invoked via manual routing in main() because the main app's callback
-# has a positional expected argument that conflicts with subcommand detection
-
-exec_app = typer.Typer(
-    help="Execute command and assert on output.",
-    add_completion=False,
-)
-
-test_app = typer.Typer(
-    help="Run code blocks in markdown files as tests.",
-    add_completion=False,
-    context_settings={"allow_interspersed_args": True},
-)
-
-
-@exec_app.callback(invoke_without_command=True)
-def _exec_callback(
-    ctx: typer.Context,
-    exit_code: Annotated[
-        Optional[int],
-        typer.Option("--exit-code", help="Expected exit code"),
-    ] = None,
-    stdout: Annotated[
-        Optional[str],
-        typer.Option(help="Expected stdout (exact)"),
-    ] = None,
-    stdout_contains: Annotated[
-        Optional[str],
-        typer.Option(help="Stdout must contain"),
-    ] = None,
-    stdout_not_contains: Annotated[
-        Optional[str],
-        typer.Option(help="Stdout must NOT contain"),
-    ] = None,
-    stdout_regex: Annotated[
-        Optional[str],
-        typer.Option(help="Stdout must match regex"),
-    ] = None,
-    stdout_not_regex: Annotated[
-        Optional[str],
-        typer.Option(help="Stdout must NOT match regex"),
-    ] = None,
-    stderr: Annotated[
-        Optional[str],
-        typer.Option(help="Expected stderr (exact)"),
-    ] = None,
-    stderr_contains: Annotated[
-        Optional[str],
-        typer.Option(help="Stderr must contain"),
-    ] = None,
-    stderr_not_contains: Annotated[
-        Optional[str],
-        typer.Option(help="Stderr must NOT contain"),
-    ] = None,
-    stderr_regex: Annotated[
-        Optional[str],
-        typer.Option(help="Stderr must match regex"),
-    ] = None,
-    stderr_not_regex: Annotated[
-        Optional[str],
-        typer.Option(help="Stderr must NOT match regex"),
-    ] = None,
-    output_json: Annotated[
-        Optional[str],
-        typer.Option(help='Match output as JSON: {"stdout":..., "exit_code": N}'),
-    ] = None,
-    quiet: Annotated[
-        bool,
-        typer.Option("-q", "--quiet", help="Suppress output"),
-    ] = False,
-    color: Annotated[
-        str,
-        typer.Option(help="Color mode: auto, always, never"),
-    ] = "auto",
-    timeout: Annotated[
-        Optional[float],
-        typer.Option(help="Command timeout in seconds"),
-    ] = None,
-    command: Annotated[
-        Optional[list[str]],
-        typer.Argument(help="Command to execute (after --)"),
-    ] = None,
-) -> None:
-    """Execute command and assert on output."""
-    from .exec import ExecConfig, check_assertions, run_command
-
-    # Extract command (skip leading -- if present)
-    cmd = list(command) if command else []
-    if cmd and cmd[0] == "--":
-        cmd = cmd[1:]
-
-    if not cmd:
-        print("Error: no command specified", file=sys.stderr)
-        raise typer.Exit(2)
-
-    # Build config
-    config = ExecConfig(
-        expected_exit_code=exit_code,
-        stdout_exact=stdout,
-        stdout_contains=stdout_contains,
-        stdout_not_contains=stdout_not_contains,
-        stdout_regex=stdout_regex,
-        stdout_not_regex=stdout_not_regex,
-        stderr_exact=stderr,
-        stderr_contains=stderr_contains,
-        stderr_not_contains=stderr_not_contains,
-        stderr_regex=stderr_regex,
-        stderr_not_regex=stderr_not_regex,
-        output_json=output_json,
-        quiet=quiet,
-        color=ColorMode(color),
-        timeout=timeout,
-    )
-
-    # Check if any assertion was specified
-    has_assertion = any(
-        [
-            exit_code is not None,
-            stdout is not None,
-            stdout_contains is not None,
-            stdout_not_contains is not None,
-            stdout_regex is not None,
-            stdout_not_regex is not None,
-            stderr is not None,
-            stderr_contains is not None,
-            stderr_not_contains is not None,
-            stderr_regex is not None,
-            stderr_not_regex is not None,
-            output_json is not None,
-        ]
-    )
-
-    if not has_assertion:
-        print(
-            "Error: at least one assertion required (--exit-code, --stdout, etc.)",
-            file=sys.stderr,
-        )
-        raise typer.Exit(2)
-
-    # Run the command
-    try:
-        result = run_command(cmd, timeout=config.timeout)
-    except FileNotFoundError:
-        print(f"Error: command not found: {cmd[0]}", file=sys.stderr)
-        raise typer.Exit(2)
-
-    # Check timeout
-    if result.exit_code == -1 and config.timeout is not None:
-        if not config.quiet:
-            print(
-                f"FAIL: Command timed out after {config.timeout}s",
-                file=sys.stderr,
-            )
-        raise typer.Exit(1)
-
-    # Check assertions
-    failures = check_assertions(result, config)
-
-    if not failures:
-        raise typer.Exit(0)
-
-    # Output failures
     if not config.quiet:
-        for failure in failures:
-            expect_config = ExpectConfig(quiet=config.quiet, color=config.color)
-            print(format_error(failure, expect_config), file=sys.stderr)
+        print(format_error(result, config), file=sys.stderr)
 
-    raise typer.Exit(1)
+    return 1
 
 
-@test_app.callback(invoke_without_command=True)
-def _test_callback(
-    ctx: typer.Context,
-    paths: Annotated[
-        Optional[list[Path]],
-        typer.Argument(help="Files or directories to test"),
-    ] = None,
-    quiet: Annotated[
-        bool,
-        typer.Option("-q", "--quiet", help="Minimal output"),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("-v", "--verbose", help="Verbose output"),
-    ] = False,
-    fail_fast: Annotated[
-        bool,
-        typer.Option("--fail-fast", help="Stop on first failure"),
-    ] = False,
-    parallel: Annotated[
-        int,
-        typer.Option(help="Number of parallel workers"),
-    ] = 4,
-    timeout: Annotated[
-        int,
-        typer.Option(help="Timeout per block in seconds"),
-    ] = 30,
-    shell: Annotated[
-        str,
-        typer.Option(help="Shell to use for execution"),
-    ] = "/bin/bash",
-    include: Annotated[
-        Optional[str],
-        typer.Option(help="Include pattern for blocks"),
-    ] = None,
-    exclude: Annotated[
-        Optional[str],
-        typer.Option(help="Exclude pattern for blocks"),
-    ] = None,
-    line: Annotated[
-        Optional[int],
-        typer.Option(help="Run only block at this line"),
-    ] = None,
-    junit_xml: Annotated[
-        Optional[Path],
-        typer.Option(help="Write JUnit XML report"),
-    ] = None,
-    json_out: Annotated[
-        Optional[Path],
-        typer.Option("--json", help="Write JSON report"),
-    ] = None,
-    tap: Annotated[
-        bool,
-        typer.Option("--tap", help="Output in TAP format"),
-    ] = False,
-    env: Annotated[
-        Optional[list[str]],
-        typer.Option(help="Environment variable (KEY=VALUE)"),
-    ] = None,
-    cwd: Annotated[
-        Optional[Path],
-        typer.Option(help="Working directory"),
-    ] = None,
-    lang: Annotated[
-        str,
-        typer.Option("--lang", help="Language to test: bash, python, all"),
-    ] = "bash",
-    memory: Annotated[
-        bool,
-        typer.Option("--memory", help="Share state between Python blocks"),
-    ] = False,
-) -> None:
-    """Run code blocks in markdown files as tests."""
-    from .mdtest import TestConfig, test_command
+def run_test(args: list[str]) -> int:
+    """Run the test subcommand."""
+    from .mdtest import TestConfig, run_command
 
-    # Parse env variables
-    env_dict: dict[str, str] = {}
-    for item in env or []:
-        if "=" in item:
-            key, val = item.split("=", 1)
-            env_dict[key] = val
+    # Parse test-specific args
+    quiet = False
+    verbose = False
+    fail_fast = False
+    parallel = 4
+    timeout = 30
+    shell = "/bin/bash"
+    include_pattern = None
+    exclude_pattern = None
+    line_filter = None
+    env: dict[str, str] = {}
+    cwd = None
+    junit_xml = None
+    json_output = None
+    tap_output = False
+    lang = "bash"
+    memory = False
+    paths: list[Path] = []
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        if arg in ("-q", "--quiet"):
+            quiet = True
+        elif arg in ("-v", "--verbose"):
+            verbose = True
+        elif arg == "--fail-fast":
+            fail_fast = True
+        elif arg == "--parallel" and i + 1 < len(args):
+            parallel = int(args[i + 1])
+            i += 1
+        elif arg == "--timeout" and i + 1 < len(args):
+            timeout = int(args[i + 1])
+            i += 1
+        elif arg == "--shell" and i + 1 < len(args):
+            shell = args[i + 1]
+            i += 1
+        elif arg == "--include" and i + 1 < len(args):
+            include_pattern = args[i + 1]
+            i += 1
+        elif arg == "--exclude" and i + 1 < len(args):
+            exclude_pattern = args[i + 1]
+            i += 1
+        elif arg == "--line" and i + 1 < len(args):
+            line_filter = int(args[i + 1])
+            i += 1
+        elif arg == "--env" and i + 1 < len(args):
+            key, val = args[i + 1].split("=", 1)
+            env[key] = val
+            i += 1
+        elif arg == "--cwd" and i + 1 < len(args):
+            cwd = Path(args[i + 1])
+            i += 1
+        elif arg == "--junit-xml" and i + 1 < len(args):
+            junit_xml = Path(args[i + 1])
+            i += 1
+        elif arg == "--json" and i + 1 < len(args):
+            json_output = Path(args[i + 1])
+            i += 1
+        elif arg == "--tap":
+            tap_output = True
+        elif arg == "--lang" and i + 1 < len(args):
+            lang = args[i + 1]
+            i += 1
+        elif arg == "--memory":
+            memory = True
+        elif arg in ("-h", "--help"):
+            print_test_help()
+            return 0
+        elif not arg.startswith("-"):
+            paths.append(Path(arg))
+        else:
+            print(f"Error: unknown option: {arg}", file=sys.stderr)
+            return 2
+
+        i += 1
 
     config = TestConfig(
         quiet=quiet,
@@ -649,49 +316,234 @@ def _test_callback(
         parallel=parallel,
         timeout=timeout,
         shell=shell,
-        include_pattern=include,
-        exclude_pattern=exclude,
-        line_filter=line,
-        env=env_dict,
+        include_pattern=include_pattern,
+        exclude_pattern=exclude_pattern,
+        line_filter=line_filter,
+        env=env,
         cwd=cwd,
         junit_xml=junit_xml,
-        json_output=json_out,
-        tap_output=tap,
+        json_output=json_output,
+        tap_output=tap_output,
         lang=lang,
         memory=memory,
     )
 
-    exit_code = test_command(list(paths) if paths else [], config)
-    raise typer.Exit(exit_code)
+    return run_command(paths, config)
 
 
-def _run_exec_command(args: list[str]) -> None:
-    """Route exec subcommand to dedicated Typer app."""
+def print_test_help() -> None:
+    """Print test subcommand help."""
+    print("""mustmatch test - Run code blocks in markdown files
+
+USAGE:
+    mustmatch test [OPTIONS] PATHS...
+
+OPTIONS:
+    -q, --quiet         Minimal output (summary only)
+    -v, --verbose       Verbose output (show all tests)
+    --fail-fast         Stop on first failure
+    --parallel N        Number of parallel workers (default: 4)
+    --timeout N         Timeout per block in seconds (default: 30)
+    --shell PATH        Shell to use (default: /bin/bash)
+    --include PATTERN   Include blocks matching pattern
+    --exclude PATTERN   Exclude blocks matching pattern
+    --line N            Run only block at line N
+    --env KEY=VALUE     Set environment variable
+    --cwd PATH          Working directory
+    --junit-xml PATH    Write JUnit XML report
+    --json PATH         Write JSON report
+    --tap               Output in TAP format
+    --lang LANG         Language: bash, python, all (default: bash)
+    --memory            Share state between Python blocks
+    -h, --help          Show this help
+
+EXAMPLES:
+    mustmatch test docs/
+    mustmatch test -v README.md
+    mustmatch test --lang python --memory docs/tutorial.md
+""")
+
+
+def run_exec(args: list[str]) -> int:
+    """Run the exec subcommand."""
+    from .exec import ExecConfig, check_assertions, run_command
+
+    # Parse exec-specific args
+    exit_code = None
+    stdout_exact = None
+    stdout_contains = None
+    stdout_not_contains = None
+    stdout_regex = None
+    stderr_exact = None
+    stderr_contains = None
+    stderr_not_contains = None
+    stderr_regex = None
+    quiet = False
+    color = ColorMode.AUTO
+    timeout = None
+    command: list[str] = []
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        if arg == "--":
+            command = args[i + 1:]
+            break
+        elif arg == "--exit-code" and i + 1 < len(args):
+            exit_code = int(args[i + 1])
+            i += 1
+        elif arg == "--stdout" and i + 1 < len(args):
+            stdout_exact = args[i + 1]
+            i += 1
+        elif arg == "--stdout-like" and i + 1 < len(args):
+            stdout_contains = args[i + 1]
+            i += 1
+        elif arg == "--stdout-not-like" and i + 1 < len(args):
+            stdout_not_contains = args[i + 1]
+            i += 1
+        elif arg == "--stdout-regex" and i + 1 < len(args):
+            stdout_regex = args[i + 1]
+            i += 1
+        elif arg == "--stderr" and i + 1 < len(args):
+            stderr_exact = args[i + 1]
+            i += 1
+        elif arg == "--stderr-like" and i + 1 < len(args):
+            stderr_contains = args[i + 1]
+            i += 1
+        elif arg == "--stderr-not-like" and i + 1 < len(args):
+            stderr_not_contains = args[i + 1]
+            i += 1
+        elif arg == "--stderr-regex" and i + 1 < len(args):
+            stderr_regex = args[i + 1]
+            i += 1
+        elif arg in ("-q", "--quiet"):
+            quiet = True
+        elif arg == "--color" and i + 1 < len(args):
+            color = ColorMode(args[i + 1])
+            i += 1
+        elif arg == "--timeout" and i + 1 < len(args):
+            timeout = float(args[i + 1])
+            i += 1
+        elif arg in ("-h", "--help"):
+            print_exec_help()
+            return 0
+        else:
+            print(f"Error: unknown option: {arg}", file=sys.stderr)
+            return 2
+
+        i += 1
+
+    if not command:
+        print("Error: no command specified (use -- before command)", file=sys.stderr)
+        return 2
+
+    # Check at least one assertion
+    has_assertion = any([
+        exit_code is not None,
+        stdout_exact is not None,
+        stdout_contains is not None,
+        stdout_not_contains is not None,
+        stdout_regex is not None,
+        stderr_exact is not None,
+        stderr_contains is not None,
+        stderr_not_contains is not None,
+        stderr_regex is not None,
+    ])
+
+    if not has_assertion:
+        print("Error: at least one assertion required", file=sys.stderr)
+        return 2
+
+    config = ExecConfig(
+        expected_exit_code=exit_code,
+        stdout_exact=stdout_exact,
+        stdout_contains=stdout_contains,
+        stdout_not_contains=stdout_not_contains,
+        stdout_regex=stdout_regex,
+        stderr_exact=stderr_exact,
+        stderr_contains=stderr_contains,
+        stderr_not_contains=stderr_not_contains,
+        stderr_regex=stderr_regex,
+        quiet=quiet,
+        color=color,
+        timeout=timeout,
+    )
+
     try:
-        result = exec_app(args, standalone_mode=False)
-        # Typer returns exit code when standalone_mode=False
-        if result is not None:
-            raise typer.Exit(result)
-    except SystemExit as e:
-        # Typer may raise SystemExit, convert to typer.Exit
-        raise typer.Exit(e.code if e.code is not None else 0)
+        result = run_command(command, timeout=timeout)
+    except FileNotFoundError:
+        print(f"Error: command not found: {command[0]}", file=sys.stderr)
+        return 2
+
+    if result.exit_code == -1 and timeout is not None:
+        if not quiet:
+            print(f"FAIL: Command timed out after {timeout}s", file=sys.stderr)
+        return 1
+
+    failures = check_assertions(result, config)
+
+    if not failures:
+        return 0
+
+    if not quiet:
+        match_config = MatchConfig(quiet=quiet, color=color)
+        for failure in failures:
+            print(format_error(failure, match_config), file=sys.stderr)
+
+    return 1
 
 
-def _run_test_command(args: list[str]) -> None:
-    """Route test subcommand to dedicated Typer app."""
-    try:
-        result = test_app(args, standalone_mode=False)
-        # Typer returns exit code when standalone_mode=False
-        if result is not None:
-            raise typer.Exit(result)
-    except SystemExit as e:
-        # Typer may raise SystemExit, convert to typer.Exit
-        raise typer.Exit(e.code if e.code is not None else 0)
+def print_exec_help() -> None:
+    """Print exec subcommand help."""
+    print("""mustmatch exec - Execute command and assert on output
+
+USAGE:
+    mustmatch exec [OPTIONS] -- COMMAND...
+
+OPTIONS:
+    --exit-code N       Expected exit code
+    --stdout VALUE      Expected stdout (exact)
+    --stdout-like VALUE Stdout must contain
+    --stdout-not-like   Stdout must NOT contain
+    --stdout-regex PAT  Stdout must match regex
+    --stderr VALUE      Expected stderr (exact)
+    --stderr-like VALUE Stderr must contain
+    --stderr-not-like   Stderr must NOT contain
+    --stderr-regex PAT  Stderr must match regex
+    --timeout N         Command timeout in seconds
+    -q, --quiet         Suppress error output
+    --color MODE        Color mode: auto, always, never
+    -h, --help          Show this help
+
+EXAMPLES:
+    mustmatch exec --exit-code 0 -- echo hello
+    mustmatch exec --stdout-like "ok" -- curl localhost
+""")
+
+
+def main(args: list[str] | None = None) -> int:
+    """Main entry point."""
+    if args is None:
+        args = sys.argv[1:]
+
+    if not args:
+        print_help()
+        return 0
+
+    # Route to subcommands
+    if args[0] == "test":
+        return run_test(args[1:])
+    if args[0] == "exec":
+        return run_exec(args[1:])
+
+    # Main match command
+    return run_match(args)
 
 
 def cli() -> None:
     """CLI entry point."""
-    raise SystemExit(main())
+    sys.exit(main())
 
 
 if __name__ == "__main__":

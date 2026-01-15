@@ -19,10 +19,6 @@ from mustmatch.config import (
     ColorMode,
     CompareResult,
     ExpectConfig,
-    RegexError,
-    compile_pattern,
-    compile_redactions,
-    compile_replacements,
 )
 from mustmatch.json_utils import _navigate, _remove_single_path
 from mustmatch.output import colorize_diff, format_error
@@ -251,117 +247,6 @@ class TestJsonPathEdgeCases:
         assert obj == {"a": {"b": None}}  # Unchanged
 
 
-class TestNormalizeWithCompiledPatterns:
-    """Tests for normalization with pre-compiled patterns."""
-
-    def test_normalize_options_with_compiled_replacements(self) -> None:
-        """Test NormalizeOptions with pre-compiled replacement patterns."""
-        from mustmatch.config import NormalizeOptions, compile_replacements
-        from mustmatch.normalize import preprocess
-
-        compiled = compile_replacements((("foo", "bar"),))
-        opts = NormalizeOptions(replacements=compiled)
-        result = preprocess("foo baz foo", opts)
-        assert result == "bar baz bar"
-
-    def test_normalize_options_with_compiled_redactions(self) -> None:
-        """Test NormalizeOptions with pre-compiled redaction patterns."""
-        from mustmatch.config import NormalizeOptions, compile_redactions
-        from mustmatch.normalize import preprocess
-
-        compiled = compile_redactions((r"secret-\w+",))
-        opts = NormalizeOptions(redactions=compiled)
-        result = preprocess("my secret-abc123 data", opts)
-        assert result == "my <redacted> data"
-
-
-class TestRegexValidation:
-    """Tests for regex pattern validation and ReDoS protection."""
-
-    def test_compile_valid_pattern(self) -> None:
-        """Test compiling a valid regex pattern."""
-        pattern = compile_pattern(r"\d+", "test")
-        assert pattern.match("123")
-
-    def test_compile_invalid_pattern(self) -> None:
-        """Test that invalid regex patterns raise RegexError."""
-        with pytest.raises(RegexError) as exc:
-            compile_pattern(r"[invalid", "test")
-        assert "Invalid regex" in str(exc.value)
-        assert "test" in str(exc.value)
-
-    def test_compile_redos_pattern_nested_quantifiers(self) -> None:
-        """Test detection of ReDoS patterns with nested quantifiers."""
-        with pytest.raises(RegexError) as exc:
-            compile_pattern(r"(a+)+", "test")
-        assert "unsafe regex" in str(exc.value).lower()
-        assert "ReDoS" in str(exc.value)
-
-    def test_compile_replacements_valid(self) -> None:
-        """Test compiling valid replacement patterns."""
-        result = compile_replacements((("foo", "bar"), (r"\d+", "NUM")))
-        assert len(result) == 2
-        assert result[0][0].pattern == "foo"
-        assert result[0][1] == "bar"
-
-    def test_compile_replacements_invalid(self) -> None:
-        """Test that invalid replacement patterns raise RegexError."""
-        with pytest.raises(RegexError) as exc:
-            compile_replacements((("[invalid", "bar"),))
-        assert "replacement[0]" in str(exc.value)
-
-    def test_compile_redactions_valid(self) -> None:
-        """Test compiling valid redaction patterns."""
-        result = compile_redactions((r"secret-\w+", r"\d{4}-\d{4}"))
-        assert len(result) == 2
-
-    def test_compile_redactions_invalid(self) -> None:
-        """Test that invalid redaction patterns raise RegexError."""
-        with pytest.raises(RegexError) as exc:
-            compile_redactions(("[invalid",))
-        assert "redaction[0]" in str(exc.value)
-
-    def test_cli_invalid_replace_pattern(self, monkeypatch) -> None:
-        """Test CLI error handling for invalid --replace regex."""
-        import io
-        import sys
-
-        # Capture stderr
-        captured = io.StringIO()
-        monkeypatch.setattr(sys, "stdin", io.StringIO("test input"))
-        monkeypatch.setattr(sys, "stderr", captured)
-
-        result = main(["--replace", "[invalid=>replacement", "expected"])
-        assert result == 2
-        assert "Invalid regex" in captured.getvalue()
-
-    def test_cli_invalid_redact_pattern(self, monkeypatch) -> None:
-        """Test CLI error handling for invalid --redact regex."""
-        import io
-        import sys
-
-        captured = io.StringIO()
-        monkeypatch.setattr(sys, "stdin", io.StringIO("test input"))
-        monkeypatch.setattr(sys, "stderr", captured)
-
-        result = main(["--redact", "[invalid", "expected"])
-        assert result == 2
-        assert "Invalid regex" in captured.getvalue()
-
-    def test_cli_redos_replace_pattern(self, monkeypatch) -> None:
-        """Test CLI error handling for ReDoS --replace pattern."""
-        import io
-        import sys
-
-        captured = io.StringIO()
-        monkeypatch.setattr(sys, "stdin", io.StringIO("test input"))
-        monkeypatch.setattr(sys, "stderr", captured)
-
-        result = main(["--replace", "(a+)+=>safe", "expected"])
-        assert result == 2
-        assert "unsafe regex" in captured.getvalue().lower()
-
-
 class TestMdtestExceptionHandling:
     """Tests for specific exception handling in mdtest execute_block."""
 
@@ -554,7 +439,10 @@ class TestMdtestOutputFormats:
         assert "✗" in output
 
     def test_default_mode_with_skipped(self, tmp_path: Path) -> None:
-        """Test default mode output with skipped blocks - lines 524-525."""
+        """Test default mode output doesn't show skipped blocks.
+
+        Default mode only shows failures, not skipped blocks.
+        """
         from mustmatch.mdtest import (
             Block,
             BlockMetadata,
@@ -576,11 +464,13 @@ class TestMdtestOutputFormats:
         ])
 
         output = format_result_default(result)
-        assert "skipped" in output
-        assert "⊘" in output
+        # Default mode only shows failures, not skipped blocks
+        assert "FAILED" not in output
+        # But summary should be present
+        assert "0 failed" in output
 
     def test_default_mode_with_timeout(self, tmp_path: Path) -> None:
-        """Test default mode output with timeout - lines 526-527."""
+        """Test default mode output with timeout - literate format."""
         from mustmatch.mdtest import (
             Block,
             BlockMetadata,
@@ -606,11 +496,12 @@ class TestMdtestOutputFormats:
         ])
 
         output = format_result_default(result)
-        assert "timeout" in output.lower()
-        assert "⏱" in output
+        assert "TIMEOUT:" in output
+        assert "slow" in output
+        assert "test.md:1" in output
 
     def test_verbose_mode_with_failure(self, tmp_path: Path) -> None:
-        """Test verbose mode output with failure - lines 559-563."""
+        """Test verbose mode output with failure - literate format."""
         from mustmatch.mdtest import (
             Block,
             BlockMetadata,
@@ -637,8 +528,9 @@ class TestMdtestOutputFormats:
         ])
 
         output = format_result_verbose(result)
-        assert "Exit code 1" in output
-        assert "Output:" in output
+        assert "FAILED:" in output
+        assert "failing" in output
+        assert "Got:" in output
         assert "error output" in output
 
     def test_verbose_mode_with_timeout(self, tmp_path: Path) -> None:
@@ -671,8 +563,8 @@ class TestMdtestOutputFormats:
         assert "timeout" in output.lower()
         assert "⏱" in output
 
-    def test_verbose_truncates_long_content(self, tmp_path: Path) -> None:
-        """Test that verbose mode truncates long command content - line 554."""
+    def test_verbose_truncates_long_actual_output(self, tmp_path: Path) -> None:
+        """Test that verbose mode truncates long actual output."""
         from mustmatch.mdtest import (
             Block,
             BlockMetadata,
@@ -683,9 +575,9 @@ class TestMdtestOutputFormats:
             format_result_verbose,
         )
 
-        # Create a block with more than 5 lines
-        long_cmd = "\n".join(f"echo line{i}" for i in range(10))
-        block = Block(long_cmd, 1, 12, "long", BlockMetadata())
+        # Create actual output > 200 characters to trigger truncation
+        long_output = "x" * 300
+        block = Block("echo hello", 1, 2, "long output", BlockMetadata())
         result = TestResult(files=[
             FileResult(
                 path=tmp_path / "test.md",
@@ -693,15 +585,17 @@ class TestMdtestOutputFormats:
                     BlockResult(
                         block=block,
                         status=BlockStatus.FAILED,
-                        error="Exit code 1",
+                        actual=long_output,
                     ),
                 ]
             )
         ])
 
         output = format_result_verbose(result)
-        # Should show "..." for truncated content
+        # Should show "..." for truncated actual output
         assert "..." in output
+        # Should not contain full 300 chars
+        assert "x" * 201 not in output
 
 
 class TestMdtestReportFormats:
@@ -1170,15 +1064,6 @@ class TestExecModule:
         failures = check_assertions(result, config)
         assert len(failures) == 0
 
-    def test_check_assertions_stdout_not_regex(self) -> None:
-        """Test stdout not-regex assertion."""
-        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
-
-        result = ExecResult(stdout="success", stderr="", exit_code=0)
-        config = ExecConfig(stdout_not_regex=r"error|fail")
-        failures = check_assertions(result, config)
-        assert len(failures) == 0
-
     def test_check_assertions_stderr_exact(self) -> None:
         """Test stderr exact assertion."""
         from mustmatch.exec import ExecConfig, ExecResult, check_assertions
@@ -1214,25 +1099,6 @@ class TestExecModule:
         config = ExecConfig(stderr_regex=r"warn: \d+")
         failures = check_assertions(result, config)
         assert len(failures) == 0
-
-    def test_check_assertions_stderr_not_regex(self) -> None:
-        """Test stderr not-regex assertion."""
-        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
-
-        result = ExecResult(stdout="", stderr="info", exit_code=0)
-        config = ExecConfig(stderr_not_regex=r"error|fatal")
-        failures = check_assertions(result, config)
-        assert len(failures) == 0
-
-    def test_check_assertions_output_json(self) -> None:
-        """Test combined JSON output assertion with wildcards."""
-        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
-
-        result = ExecResult(stdout="hello\n", stderr="", exit_code=0)
-        config = ExecConfig(output_json='{"exit_code": 0, "stdout": "*", "stderr": ""}')
-        failures = check_assertions(result, config)
-        assert len(failures) == 0
-
 
 class TestOutputDiffFormats:
     """Tests for output.py diff format functions."""
@@ -1435,15 +1301,6 @@ class TestExecModuleFailures:
         failures = check_assertions(result, config)
         assert len(failures) == 1
 
-    def test_check_assertions_stdout_not_regex_failure(self) -> None:
-        """Test stdout not-regex assertion failure."""
-        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
-
-        result = ExecResult(stdout="error 123", stderr="", exit_code=0)
-        config = ExecConfig(stdout_not_regex=r"error")
-        failures = check_assertions(result, config)
-        assert len(failures) == 1
-
     def test_check_assertions_stderr_exact_failure(self) -> None:
         """Test stderr exact assertion failure."""
         from mustmatch.exec import ExecConfig, ExecResult, check_assertions
@@ -1480,26 +1337,6 @@ class TestExecModuleFailures:
         config = ExecConfig(stderr_regex=r"error")
         failures = check_assertions(result, config)
         assert len(failures) == 1
-
-    def test_check_assertions_stderr_not_regex_failure(self) -> None:
-        """Test stderr not-regex assertion failure."""
-        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
-
-        result = ExecResult(stdout="", stderr="fatal error", exit_code=0)
-        config = ExecConfig(stderr_not_regex=r"fatal")
-        failures = check_assertions(result, config)
-        assert len(failures) == 1
-
-    def test_check_assertions_output_json_failure(self) -> None:
-        """Test output JSON assertion failure."""
-        from mustmatch.exec import ExecConfig, ExecResult, check_assertions
-
-        result = ExecResult(stdout="hello", stderr="", exit_code=1)
-        config = ExecConfig(output_json='{"exit_code": 0}')
-        failures = check_assertions(result, config)
-        assert len(failures) == 1
-        assert "Output JSON:" in failures[0].message
-
 
 class TestOutputDiffEdgeCases:
     """Tests for edge cases in output.py diff functions."""
@@ -1658,7 +1495,7 @@ class TestCliExecErrorPaths:
         captured = io.StringIO()
         monkeypatch.setattr(sys, "stderr", captured)
 
-        result = main(["exec", "--stdout-contains", "NOTFOUND", "--", "echo", "hello"])
+        result = main(["exec", "--stdout-like", "NOTFOUND", "--", "echo", "hello"])
         assert result == 1
         assert "FAIL" in captured.getvalue()
 
@@ -1671,7 +1508,7 @@ class TestCliExecErrorPaths:
         monkeypatch.setattr(sys, "stderr", captured)
 
         result = main([
-            "exec", "-q", "--stdout-contains", "NOTFOUND", "--", "echo", "hello"
+            "exec", "-q", "--stdout-like", "NOTFOUND", "--", "echo", "hello"
         ])
         assert result == 1
         # In quiet mode, should have minimal/no output

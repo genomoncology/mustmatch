@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
 
-from .config import CompareMode, CompareResult, ExpectConfig
+from .config import CompareMode, CompareResult, MatchConfig
+from .detect import ValueType, detect_type, extract_regex, is_jsonl
 from .json_utils import (
     find_wildcard_mismatches,
     json_matches_with_wildcards,
@@ -17,88 +17,102 @@ from .json_utils import (
 from .output import format_diff, unified_diff
 
 
-def compare_exact(
-    actual: str, expected: str, config: ExpectConfig | None = None
+def compare_exact_string(
+    actual: str, expected: str, config: MatchConfig | None = None
 ) -> CompareResult:
     """Exact string comparison with trailing newline normalization."""
     actual = actual.rstrip("\n")
     expected = expected.rstrip("\n")
+
     if actual == expected:
         return CompareResult(success=True)
 
-    # Generate diff based on format
+    # Generate diff
     if config is not None:
         diff = format_diff(actual, expected, config)
     else:
         diff = unified_diff(actual, expected, context=3)
 
-    if diff:
-        return CompareResult(success=False, message=f"Exact match failed.\n\n{diff}")
-    else:
-        return CompareResult(success=False, message="Exact match failed.")
-
-
-def compare_contains(actual: str, expected: str) -> CompareResult:
-    """Check if actual contains expected substring."""
-    expected_stripped = expected.strip()
-    if expected_stripped in actual:
-        return CompareResult(success=True)
-    excerpt = actual[:500] + ("..." if len(actual) > 500 else "")
+    msg = f"Exact match failed.\n\n{diff}" if diff else "Exact match failed."
     return CompareResult(
         success=False,
-        message=f"Expected to contain:\n{expected_stripped}\n\nActual:\n{excerpt}",
+        message=msg,
+        expected=expected[:200],
+        actual=actual[:200],
     )
 
 
-def compare_regex(actual: str, expected: str) -> CompareResult:
-    """Check if actual matches regex pattern."""
-    try:
-        pattern = re.compile(expected, re.MULTILINE | re.DOTALL)
-    except re.error as e:
-        return CompareResult(success=False, message=f"Invalid regex pattern: {e}")
-
-    if pattern.search(actual):
+def compare_contains_string(actual: str, expected: str) -> CompareResult:
+    """Check if actual contains expected substring."""
+    expected = expected.strip()
+    if expected in actual:
         return CompareResult(success=True)
+
+    excerpt = actual[:500] + ("..." if len(actual) > 500 else "")
     return CompareResult(
         success=False,
-        message=f"Regex not found:\n{expected}\n\nActual:\n{actual}",
+        message=f"Expected to contain:\n{expected}\n\nActual:\n{excerpt}",
+        expected=expected[:200],
+        actual=actual[:200],
+    )
+
+
+def compare_regex(actual: str, pattern: str) -> CompareResult:
+    """Check if actual matches regex pattern."""
+    try:
+        regex = re.compile(pattern, re.MULTILINE | re.DOTALL)
+    except re.error as e:
+        return CompareResult(success=False, message=f"Invalid regex: {e}")
+
+    if regex.search(actual):
+        return CompareResult(success=True)
+
+    return CompareResult(
+        success=False,
+        message=f"Regex not found:\n{pattern}\n\nActual:\n{actual[:500]}",
+        expected=pattern,
+        actual=actual[:200],
     )
 
 
 def compare_not_contains(actual: str, expected: str) -> CompareResult:
     """Check that actual does NOT contain expected substring."""
-    expected_stripped = expected.strip()
-    if expected_stripped not in actual:
+    expected = expected.strip()
+    if expected not in actual:
         return CompareResult(success=True)
-    # Find the position for better error message
-    pos = actual.find(expected_stripped)
+
+    pos = actual.find(expected)
     context_start = max(0, pos - 30)
-    context_end = min(len(actual), pos + len(expected_stripped) + 30)
+    context_end = min(len(actual), pos + len(expected) + 30)
     context = actual[context_start:context_end]
     if context_start > 0:
         context = "..." + context
     if context_end < len(actual):
         context = context + "..."
+
+    msg = (
+        f"Expected NOT to contain:\n{expected}\n\n"
+        f"But found at position {pos}:\n{context}"
+    )
     return CompareResult(
         success=False,
-        message=(
-            f"Expected NOT to contain:\n{expected_stripped}\n\n"
-            f"But found at position {pos}:\n{context}"
-        ),
+        message=msg,
+        expected=f"NOT {expected[:200]}",
+        actual=context,
     )
 
 
-def compare_not_regex(actual: str, expected: str) -> CompareResult:
+def compare_not_regex(actual: str, pattern: str) -> CompareResult:
     """Check that actual does NOT match regex pattern."""
     try:
-        pattern = re.compile(expected, re.MULTILINE | re.DOTALL)
+        regex = re.compile(pattern, re.MULTILINE | re.DOTALL)
     except re.error as e:
-        return CompareResult(success=False, message=f"Invalid regex pattern: {e}")
+        return CompareResult(success=False, message=f"Invalid regex: {e}")
 
-    match = pattern.search(actual)
+    match = regex.search(actual)
     if not match:
         return CompareResult(success=True)
-    # Show the match for context
+
     start, end = match.span()
     context_start = max(0, start - 30)
     context_end = min(len(actual), end + 30)
@@ -107,12 +121,16 @@ def compare_not_regex(actual: str, expected: str) -> CompareResult:
         context = "..." + context
     if context_end < len(actual):
         context = context + "..."
+
+    msg = (
+        f"Expected NOT to match regex:\n{pattern}\n\n"
+        f"But matched at position {start}:\n{context}"
+    )
     return CompareResult(
         success=False,
-        message=(
-            f"Expected NOT to match regex:\n{expected}\n\n"
-            f"But matched at position {start}:\n{context}"
-        ),
+        message=msg,
+        expected=f"NOT /{pattern}/",
+        actual=context,
     )
 
 
@@ -121,11 +139,9 @@ def compare_json(
     expected: str,
     ignore_paths: tuple[str, ...] = (),
 ) -> CompareResult:
-    """Compare single JSON values semantically.
+    """Compare JSON values semantically.
 
-    Supports wildcard matching: use "*" as a value to match any value.
-    Example: {"id": "*", "status": "ok"} matches any object with status "ok"
-    regardless of the id value.
+    Supports wildcard matching: "*" matches any value.
     """
     try:
         actual_obj = json.loads(actual.strip())
@@ -135,225 +151,109 @@ def compare_json(
     try:
         expected_obj = json.loads(expected.strip())
     except json.JSONDecodeError as e:
-        return CompareResult(
-            success=False,
-            message=f"Expected is not valid JSON: {e}",
-        )
+        return CompareResult(success=False, message=f"Expected is not valid JSON: {e}")
 
     if ignore_paths:
         actual_obj = remove_json_paths(actual_obj, ignore_paths)
         expected_obj = remove_json_paths(expected_obj, ignore_paths)
 
-    # Use wildcard matching
     if json_matches_with_wildcards(actual_obj, expected_obj):
         return CompareResult(success=True)
 
-    # Generate detailed mismatch report
+    # Generate mismatch report
     mismatches = find_wildcard_mismatches(actual_obj, expected_obj)
     if mismatches:
-        mismatch_details = "\n".join(f"  {m}" for m in mismatches[:10])
+        details = "\n".join(f"  {m}" for m in mismatches[:10])
         if len(mismatches) > 10:
-            mismatch_details += f"\n  ... and {len(mismatches) - 10} more"
+            details += f"\n  ... and {len(mismatches) - 10} more"
         return CompareResult(
             success=False,
-            message=f"JSON mismatch:\n{mismatch_details}",
+            message=f"JSON mismatch:\n{details}",
+            expected=json.dumps(expected_obj, indent=2)[:200],
+            actual=json.dumps(actual_obj, indent=2)[:200],
         )
 
+    msg = (
+        f"JSON mismatch:\nExpected: {json.dumps(expected_obj)}\n"
+        f"Actual: {json.dumps(actual_obj)}"
+    )
     return CompareResult(
         success=False,
-        message=(
-            f"JSON mismatch:\n"
-            f"Expected: {json.dumps(expected_obj, indent=2)}\n"
-            f"Actual: {json.dumps(actual_obj, indent=2)}"
-        ),
+        message=msg,
+        expected=json.dumps(expected_obj)[:200],
+        actual=json.dumps(actual_obj)[:200],
     )
 
 
-def compare_jsonl(
+def compare_json_contains(
     actual: str,
     expected: str,
     ignore_paths: tuple[str, ...] = (),
 ) -> CompareResult:
-    """Compare JSONL output semantically (record order matters)."""
+    """Check if actual JSON contains expected fields/values (subset match).
+
+    For objects: all expected keys must exist with matching values.
+    For arrays: all expected elements must be present.
+    For JSONL: all expected records must be present.
+    """
     try:
-        actual_records = parse_jsonl(actual)
-        expected_records = parse_jsonl(expected)
+        actual_obj = json.loads(actual.strip())
+    except json.JSONDecodeError:
+        # Try as JSONL
+        if is_jsonl(actual):
+            return _compare_jsonl_contains(actual, expected, ignore_paths)
+        return CompareResult(success=False, message="Actual is not valid JSON")
+
+    try:
+        expected_obj = json.loads(expected.strip())
     except json.JSONDecodeError as e:
-        return CompareResult(success=False, message=f"JSON parse error: {e}")
+        return CompareResult(success=False, message=f"Expected is not valid JSON: {e}")
 
     if ignore_paths:
-        actual_records = [remove_json_paths(r, ignore_paths) for r in actual_records]
-        expected_records = [
-            remove_json_paths(r, ignore_paths) for r in expected_records
-        ]
+        actual_obj = remove_json_paths(actual_obj, ignore_paths)
+        expected_obj = remove_json_paths(expected_obj, ignore_paths)
 
-    if len(actual_records) != len(expected_records):
-        return CompareResult(
-            success=False,
-            message=(
-                f"Record count mismatch: expected {len(expected_records)}, "
-                f"got {len(actual_records)}"
-            ),
-        )
-
-    for i, (act, exp) in enumerate(zip(actual_records, expected_records)):
-        if normalize_json(act) != normalize_json(exp):
-            return CompareResult(
-                success=False,
-                message=(
-                    f"Record {i} mismatch:\n"
-                    f"Expected: {json.dumps(exp)}\n"
-                    f"Actual: {json.dumps(act)}"
-                ),
-            )
-
-    return CompareResult(success=True)
-
-
-def compare_jsonl_set(
-    actual: str,
-    expected: str,
-    ignore_paths: tuple[str, ...] = (),
-) -> CompareResult:
-    """Compare JSONL output as unordered multiset."""
-    try:
-        actual_records = parse_jsonl(actual)
-        expected_records = parse_jsonl(expected)
-    except json.JSONDecodeError as e:
-        return CompareResult(success=False, message=f"JSON parse error: {e}")
-
-    if ignore_paths:
-        actual_records = [remove_json_paths(r, ignore_paths) for r in actual_records]
-        expected_records = [
-            remove_json_paths(r, ignore_paths) for r in expected_records
-        ]
-
-    actual_norm = sorted(
-        json.dumps(normalize_json(r), sort_keys=True) for r in actual_records
-    )
-    expected_norm = sorted(
-        json.dumps(normalize_json(r), sort_keys=True) for r in expected_records
-    )
-
-    if actual_norm == expected_norm:
+    if _json_contains(actual_obj, expected_obj):
         return CompareResult(success=True)
 
-    return _format_set_diff(actual_norm, expected_norm)
+    msg = (
+        f"JSON does not contain expected:\nExpected: {json.dumps(expected_obj)}\n"
+        f"Actual: {json.dumps(actual_obj)}"
+    )
+    return CompareResult(
+        success=False,
+        message=msg,
+        expected=json.dumps(expected_obj)[:200],
+        actual=json.dumps(actual_obj)[:200],
+    )
 
 
-def _format_set_diff(actual: list[str], expected: list[str]) -> CompareResult:
-    """Format difference between two multisets."""
-    actual_counts: dict[str, int] = {}
-    for r in actual:
-        actual_counts[r] = actual_counts.get(r, 0) + 1
+def _json_contains(actual: object, expected: object) -> bool:
+    """Check if actual JSON contains expected (subset match)."""
+    if expected == "*":
+        return True
 
-    expected_counts: dict[str, int] = {}
-    for r in expected:
-        expected_counts[r] = expected_counts.get(r, 0) + 1
-
-    missing = []
-    extra = []
-
-    all_keys = set(actual_counts.keys()) | set(expected_counts.keys())
-    for key in all_keys:
-        act_count = actual_counts.get(key, 0)
-        exp_count = expected_counts.get(key, 0)
-        if act_count > exp_count:
-            extra.extend([key] * (act_count - exp_count))
-        elif exp_count > act_count:
-            missing.extend([key] * (exp_count - act_count))
-
-    parts = ["JSONL set comparison failed:"]
-    if missing:
-        parts.append(f"Missing {len(missing)} record(s):")
-        parts.extend(f"  {r}" for r in missing[:5])
-        if len(missing) > 5:
-            parts.append(f"  ... and {len(missing) - 5} more")
-    if extra:
-        parts.append(f"Extra {len(extra)} record(s):")
-        parts.extend(f"  {r}" for r in extra[:5])
-        if len(extra) > 5:
-            parts.append(f"  ... and {len(extra) - 5} more")
-
-    return CompareResult(success=False, message="\n".join(parts))
-
-
-def compare_jsonl_key(
-    actual: str,
-    expected: str,
-    key_field: str,
-    ignore_paths: tuple[str, ...] = (),
-) -> CompareResult:
-    """Compare JSONL records matched by a key field."""
-    try:
-        actual_records = parse_jsonl(actual)
-        expected_records = parse_jsonl(expected)
-    except json.JSONDecodeError as e:
-        return CompareResult(success=False, message=f"JSON parse error: {e}")
-
-    if ignore_paths:
-        actual_records = [remove_json_paths(r, ignore_paths) for r in actual_records]
-        expected_records = [
-            remove_json_paths(r, ignore_paths) for r in expected_records
-        ]
-
-    # Build dicts by key, detecting duplicates
-    actual_by_key: dict[Any, Any] = {}
-    for r in actual_records:
-        if not isinstance(r, dict) or key_field not in r:
-            return CompareResult(
-                success=False,
-                message=f"Record missing key field '{key_field}': {json.dumps(r)}",
-            )
-        key_val = r[key_field]
-        if key_val in actual_by_key:
-            return CompareResult(
-                success=False,
-                message=f"Duplicate key '{key_val}' in actual records",
-            )
-        actual_by_key[key_val] = r
-
-    expected_by_key: dict[Any, Any] = {}
-    for r in expected_records:
-        if not isinstance(r, dict) or key_field not in r:
-            return CompareResult(
-                success=False,
-                message=f"Expected record missing key '{key_field}': {json.dumps(r)}",
-            )
-        key_val = r[key_field]
-        if key_val in expected_by_key:
-            return CompareResult(
-                success=False,
-                message=f"Duplicate key '{key_val}' in expected records",
-            )
-        expected_by_key[key_val] = r
-
-    actual_keys = set(actual_by_key.keys())
-    expected_keys = set(expected_by_key.keys())
-
-    errors = []
-    if missing := expected_keys - actual_keys:
-        errors.append(f"Missing keys: {sorted(missing)}")
-    if extra := actual_keys - expected_keys:
-        errors.append(f"Extra keys: {sorted(extra)}")
-
-    for key in expected_keys & actual_keys:
-        if normalize_json(actual_by_key[key]) != normalize_json(expected_by_key[key]):
-            errors.append(
-                f"Mismatch for key '{key}':\n"
-                f"  Expected: {json.dumps(expected_by_key[key])}\n"
-                f"  Actual: {json.dumps(actual_by_key[key])}"
-            )
-
-    if errors:
-        return CompareResult(
-            success=False,
-            message="JSONL key comparison failed:\n" + "\n".join(errors),
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        return all(
+            k in actual and _json_contains(actual[k], v)
+            for k, v in expected.items()
         )
-    return CompareResult(success=True)
+
+    if isinstance(expected, list):
+        if not isinstance(actual, list):
+            return False
+        # All expected items must be present in actual
+        return all(
+            any(_json_contains(a, e) for a in actual)
+            for e in expected
+        )
+
+    return actual == expected
 
 
-def compare_jsonl_contains(
+def _compare_jsonl_contains(
     actual: str,
     expected: str,
     ignore_paths: tuple[str, ...] = (),
@@ -366,64 +266,90 @@ def compare_jsonl_contains(
         return CompareResult(success=False, message=f"JSON parse error: {e}")
 
     if ignore_paths:
-        actual_records = [remove_json_paths(r, ignore_paths) for r in actual_records]
+        actual_records = [
+            remove_json_paths(r, ignore_paths) for r in actual_records
+        ]
         expected_records = [
             remove_json_paths(r, ignore_paths) for r in expected_records
         ]
 
     missing = []
     for exp in expected_records:
-        if not _record_contained(exp, actual_records):
+        if not any(_json_contains(act, exp) for act in actual_records):
             missing.append(exp)
 
     if missing:
-        return CompareResult(
-            success=False,
-            message="Missing expected records:\n"
-            + "\n".join(json.dumps(m) for m in missing),
+        msg = "Missing expected records:\n" + "\n".join(
+            json.dumps(m) for m in missing
         )
+        exp = json.dumps(expected_records[0])[:200] if expected_records else ""
+        act = json.dumps(actual_records[0])[:200] if actual_records else ""
+        return CompareResult(success=False, message=msg, expected=exp, actual=act)
+
     return CompareResult(success=True)
-
-
-def _record_contained(expected: Any, actual_list: list[Any]) -> bool:
-    """Check if expected record is contained in actual list."""
-    for act in actual_list:
-        if isinstance(expected, dict) and isinstance(act, dict):
-            if all(act.get(k) == v for k, v in expected.items()):
-                return True
-        elif expected == act:
-            return True
-    return False
 
 
 def compare(
     actual: str,
     expected: str,
-    config: ExpectConfig,
+    config: MatchConfig,
 ) -> CompareResult:
-    """Dispatch to appropriate comparison function based on config."""
-    ignore = config.json_ignore_paths
+    """Main comparison dispatcher.
 
+    Auto-detects value type (string/regex/json) and routes to appropriate
+    comparison function based on config.mode.
+    """
+    value_type = detect_type(expected)
+    ignore_paths = config.json_ignore_paths
+
+    # Handle regex patterns
+    if value_type == ValueType.REGEX:
+        pattern = extract_regex(expected)
+        negated_modes = (
+            CompareMode.NOT_EXACT, CompareMode.NOT_CONTAINS, CompareMode.NOT_REGEX
+        )
+        if config.mode in negated_modes:
+            return compare_not_regex(actual, pattern)
+        return compare_regex(actual, pattern)
+
+    # Handle JSON
+    if value_type == ValueType.JSON:
+        if config.mode == CompareMode.CONTAINS:
+            return compare_json_contains(actual, expected, ignore_paths)
+        if config.mode in (CompareMode.NOT_EXACT, CompareMode.NOT_CONTAINS):
+            # For JSON, NOT means the JSON should not match
+            result = compare_json(actual, expected, ignore_paths)
+            if result.success:
+                return CompareResult(
+                    success=False,
+                    message="Expected JSON NOT to match, but it did",
+                    expected=expected[:200],
+                    actual=actual[:200],
+                )
+            return CompareResult(success=True)
+        return compare_json(actual, expected, ignore_paths)
+
+    # Handle strings
     match config.mode:
         case CompareMode.EXACT:
-            return compare_exact(actual, expected, config=config)
+            return compare_exact_string(actual, expected, config)
         case CompareMode.CONTAINS:
-            return compare_contains(actual, expected)
+            return compare_contains_string(actual, expected)
         case CompareMode.REGEX:
             return compare_regex(actual, expected)
-        case CompareMode.JSON:
-            return compare_json(actual, expected, ignore)
-        case CompareMode.JSONL:
-            return compare_jsonl(actual, expected, ignore)
-        case CompareMode.JSONL_SET:
-            return compare_jsonl_set(actual, expected, ignore)
-        case CompareMode.JSONL_KEY:
-            return compare_jsonl_key(
-                actual, expected, config.jsonl_key_field or "", ignore
-            )
-        case CompareMode.JSONL_CONTAINS:
-            return compare_jsonl_contains(actual, expected, ignore)
+        case CompareMode.NOT_EXACT:
+            result = compare_exact_string(actual, expected, config)
+            if result.success:
+                return CompareResult(
+                    success=False,
+                    message="Expected NOT to match, but it did",
+                    expected=expected[:200],
+                    actual=actual[:200],
+                )
+            return CompareResult(success=True)
         case CompareMode.NOT_CONTAINS:
             return compare_not_contains(actual, expected)
         case CompareMode.NOT_REGEX:
             return compare_not_regex(actual, expected)
+
+    return CompareResult(success=False, message=f"Unknown mode: {config.mode}")

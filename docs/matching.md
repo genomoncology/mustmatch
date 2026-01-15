@@ -1,12 +1,10 @@
-# Text Matching Modes
+# Text Matching
 
-mustmatch supports three text matching modes: exact (default), contains,
-and regex. For structured data, see [JSON](json.md) and [JSONL](jsonl.md).
+mustmatch supports exact, contains, and regex matching with auto-detection.
 
 ## Exact Match (default)
 
-Output must match character-for-character. Trailing newlines are
-normalized automatically.
+Output must match character-for-character:
 
 ```bash
 echo "hello world" | mustmatch "hello world"
@@ -18,8 +16,7 @@ line two"
 Unicode and special characters work:
 
 ```bash
-printf "Hello 世界 🌍" | mustmatch "Hello 世界 🌍"
-printf '{"key": "value"}' | mustmatch '{"key": "value"}'
+printf "Hello 世界" | mustmatch "Hello 世界"
 ```
 
 Mismatch returns exit code 1:
@@ -28,82 +25,53 @@ Mismatch returns exit code 1:
 echo "hello" | mustmatch "world" || test $? -eq 1
 ```
 
-## Contains (`--contains`)
+## Contains (`like`)
 
-Check if output includes a substring anywhere. Whitespace is
-trimmed from expected.
+Use `like` to check if output includes a substring:
 
 ```bash
-echo "hello world" | mustmatch --contains "world"
-echo "hello world" | mustmatch --contains "hello"
-echo "the quick brown fox" | mustmatch --contains "quick brown"
-echo "hello world" | mustmatch --contains "  world  "
+echo "hello world" | mustmatch like "world"
+echo "hello world" | mustmatch like "hello"
 ```
 
 Works across multiple lines:
 
 ```bash
-printf "line one\nline two\nline three" | \
-    mustmatch --contains "line two"
+printf "line one\nline two\nline three" | mustmatch like "line two"
 ```
 
-Case-sensitive by default:
+## Regex (auto-detected)
+
+Wrap patterns in `/.../' for regex matching:
 
 ```bash
-echo "Hello World" | mustmatch --contains "hello" || test $? -eq 1
-echo "Hello World" | mustmatch --contains --ignore-case "hello"
-```
-
-Missing substring returns exit code 1:
-
-```bash
-echo "hello" | mustmatch --contains "goodbye" || test $? -eq 1
-printf "" | mustmatch --contains "something" || test $? -eq 1
-```
-
-## Regex (`--regex`)
-
-Match output against a Python regex pattern. Uses DOTALL mode
-(`.` matches newlines) and MULTILINE mode.
-
-```bash
-echo "finished in 1.23s" | \
-    mustmatch --regex 'finished in \d+\.\d+s'
-echo "abc123xyz" | mustmatch --regex '[a-z]+\d+[a-z]+'
-echo "success" | mustmatch --regex 'success|failure'
-printf "line1\nline2\nline3" | mustmatch --regex 'line1.*line3'
+echo "finished in 1.23s" | mustmatch "/finished in \d+\.\d+s/"
+echo "abc123xyz" | mustmatch "/[a-z]+\d+[a-z]+/"
 ```
 
 Use anchors for full match:
 
 ```bash
-echo "hello world" | mustmatch --regex '^hello.*world$'
+echo "hello world" | mustmatch "/^hello.*world$/"
 ```
 
-Optional groups:
+## Case-Insensitive
+
+Use `-i` for case-insensitive comparison:
 
 ```bash
-echo "color" | mustmatch --regex 'colou?r'
-echo "colour" | mustmatch --regex 'colou?r'
+echo "Hello World" | mustmatch -i "hello world"
+echo "HELLO" | mustmatch -i like "hello"
 ```
 
-Case-sensitive by default:
+## Negation
+
+Use `not` to assert something is NOT present:
 
 ```bash
-echo "HELLO" | mustmatch --regex 'hello' || test $? -eq 1
-```
-
-Invalid regex returns exit code 2:
-
-```bash
-echo "test" | mustmatch --regex '[invalid' 2>&1 | \
-    mustmatch --contains "Invalid regex"
-```
-
-Pattern not found returns exit code 1:
-
-```bash
-echo "hello" | mustmatch --regex '\d+' || test $? -eq 1
+echo "hello world" | mustmatch not "error"
+echo "hello world" | mustmatch not like "error"
+echo "success" | mustmatch not "/error|fail/"
 ```
 
 ## Edge Cases
@@ -112,6 +80,5 @@ Empty output and large output work correctly:
 
 ```bash
 printf "" | mustmatch ""
-python3 -c "print('x' * 1000)" | \
-    mustmatch "$(python3 -c "print('x' * 1000)")"
+python3 -c "print('x' * 100)" | mustmatch "$(python3 -c "print('x' * 100)")"
 ```

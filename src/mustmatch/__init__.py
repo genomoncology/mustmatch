@@ -13,16 +13,11 @@ from .config import (
     ColorMode,
     CompareMode,
     CompareResult,
-    ExpectConfig,
+    MatchConfig,
     NormalizeOptions,
-    RegexError,
-    compile_pattern,
-    compile_redactions,
-    compile_replacements,
 )
-from .normalize import preprocess
-from .pytest import MarkdownTest
-from .python_exec import create_namespace
+from .detect import ValueType, detect_type
+from .normalize import normalize, preprocess
 from .version import __version__
 
 
@@ -34,24 +29,13 @@ def check_md_file(
 ) -> bool:
     """Check all code blocks in a markdown file.
 
-    This is the primary API for programmatic testing of markdown files.
-    It runs all code blocks (bash and/or Python) and returns whether
-    all blocks passed.
-
     Args:
         path: Path to the markdown file.
-        lang: Language to test: "bash", "python", or "all" (default: "all").
-        memory: For Python, share state between blocks (default: False).
+        lang: Language to test: "bash", "python", or "all".
+        memory: For Python, share state between blocks.
 
     Returns:
         True if all blocks passed, False otherwise.
-
-    Example:
-        >>> from mustmatch import check_md_file
-        >>> check_md_file("docs/getting-started.md")
-        True
-        >>> check_md_file("docs/python-tutorial.md", lang="python", memory=True)
-        True
     """
     from .mdtest import TestConfig, run_file
 
@@ -66,21 +50,23 @@ def check_md_file(
     return result.failed == 0 and result.timeout == 0 and result.error is None
 
 
+# Backward compatibility
+ExpectConfig = MatchConfig
+
+
 __all__ = [
     "__version__",
     "main",
     "compare",
+    "normalize",
     "preprocess",
     "check_md_file",
-    "create_namespace",
+    "detect_type",
+    "ValueType",
     "CompareMode",
     "CompareResult",
     "ColorMode",
+    "MatchConfig",
     "ExpectConfig",
     "NormalizeOptions",
-    "RegexError",
-    "compile_pattern",
-    "compile_redactions",
-    "compile_replacements",
-    "MarkdownTest",
 ]
