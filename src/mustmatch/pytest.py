@@ -6,12 +6,24 @@ Provides native pytest integration for testing bash and Python blocks in markdow
 
 from __future__ import annotations
 
+import io
 import os
+import re
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Iterator
 
 from .parsing import parse_markdown_file
+
+# Pattern to detect simple piping to mustmatch (no bash operators after)
+# Only matches: <prefix> | mustmatch <args>
+# Does NOT match if there's || or && or ; after mustmatch (those need bash)
+MUSTMATCH_PIPE_PATTERN = re.compile(
+    r'^(.*?)\s*\|\s*mustmatch\s+(.+)$',
+    re.DOTALL
+)
 
 
 class MarkdownTest:
@@ -94,11 +106,23 @@ class MarkdownTest:
         cwd: Path | None = None,
         timeout: float = 30.0,
     ) -> None:
-        """Execute a bash block."""
+        """Execute a bash block.
+
+        If the command pipes to mustmatch, we intercept and call mustmatch
+        directly via Python to enable code coverage.
+        """
         exec_env = os.environ.copy()
         if env:
             exec_env.update(env)
 
+        # Check if this is a simple pipe to mustmatch
+        result = self._try_run_mustmatch_direct(
+            env=exec_env, cwd=cwd, timeout=timeout
+        )
+        if result is not None:
+            return  # Successfully ran via direct Python call
+
+        # Fall back to subprocess for complex commands
         try:
             proc = subprocess.run(
                 ["bash", "-e", "-u", "-c", self.content],
@@ -123,6 +147,99 @@ class MarkdownTest:
                 error_msg += f"Stderr:\n  {self._indent(proc.stderr)}\n"
             error_msg += f"\nExit code: {proc.returncode}"
             raise AssertionError(error_msg)
+
+    def _try_run_mustmatch_direct(
+        self,
+        *,
+        env: dict[str, str],
+        cwd: Path | None,
+        timeout: float,
+    ) -> bool | None:
+        """Try to run mustmatch commands directly via Python.
+
+        Returns:
+            True if successfully ran directly, None if not applicable.
+
+        Raises:
+            AssertionError: If mustmatch assertion fails.
+        """
+        # Look for pattern: <command> | mustmatch <args>
+        match = MUSTMATCH_PIPE_PATTERN.match(self.content.strip())
+        if not match:
+            return None
+
+        prefix_cmd = match.group(1).strip()
+        mustmatch_args_str = match.group(2).strip()
+
+        # Don't handle complex cases:
+        # - Multiple pipes in prefix
+        # - Bash operators after mustmatch (||, &&, ;)
+        # - Redirections
+        if '|' in prefix_cmd:
+            return None
+        if any(op in mustmatch_args_str for op in ('||', '&&', ';', '>')):
+            return None
+
+        # Run the prefix command to get input
+        try:
+            proc = subprocess.run(
+                ["bash", "-e", "-u", "-c", prefix_cmd],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+                cwd=cwd,
+            )
+        except subprocess.TimeoutExpired as e:
+            error_msg = f"{self.file}:{self.line} ({self.name})\n\n"
+            error_msg += f"Command:\n  {prefix_cmd}\n\n"
+            error_msg += f"Timeout: Execution exceeded {timeout}s limit"
+            raise TimeoutError(error_msg) from e
+
+        if proc.returncode != 0:
+            error_msg = f"{self.file}:{self.line} ({self.name})\n\n"
+            error_msg += f"Command:\n  {self._indent(prefix_cmd)}\n\n"
+            if proc.stdout:
+                error_msg += f"Stdout:\n  {self._indent(proc.stdout)}\n\n"
+            if proc.stderr:
+                error_msg += f"Stderr:\n  {self._indent(proc.stderr)}\n"
+            error_msg += f"\nExit code: {proc.returncode}"
+            raise AssertionError(error_msg)
+
+        # Parse mustmatch args
+        try:
+            args = shlex.split(mustmatch_args_str)
+        except ValueError:
+            # Can't parse args, fall back to subprocess
+            return None
+
+        # Call mustmatch directly
+        from .cli import main
+
+        # Capture stdin/stdout/stderr
+        old_stdin = sys.stdin
+        old_stderr = sys.stderr
+        captured_stderr = io.StringIO()
+
+        try:
+            sys.stdin = io.StringIO(proc.stdout)
+            sys.stderr = captured_stderr
+
+            exit_code = main(args)
+        finally:
+            sys.stdin = old_stdin
+            sys.stderr = old_stderr
+
+        if exit_code != 0:
+            error_msg = f"{self.file}:{self.line} ({self.name})\n\n"
+            error_msg += f"Command:\n  {self._indent(self.content)}\n\n"
+            stderr_output = captured_stderr.getvalue()
+            if stderr_output:
+                error_msg += f"Stderr:\n  {self._indent(stderr_output)}\n"
+            error_msg += f"\nExit code: {exit_code}"
+            raise AssertionError(error_msg)
+
+        return True
 
     def _run_python(
         self,
