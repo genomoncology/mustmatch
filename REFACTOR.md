@@ -96,6 +96,61 @@ mustmatch test --fail-fast .   # Stop on first failure
 
 Flags: `-q`, `-v`, `--fail-fast`, `--parallel N`, `--timeout N`, `--lang`, `--memory`
 
+##### Test Output Modes
+
+Output follows progressive disclosure: quiet shows summary, default shows failures, verbose shows all.
+
+**Quiet (`-q`):**
+```
+✓ 42 passed, ✗ 2 failed, 44 total
+```
+
+**Default (failures only, literate):**
+```
+FAILED: Adding items increases total (docs/cart.md:25)
+  Expected: 50.00
+  Got: 45.00
+
+FAILED: Login returns session token (docs/auth.md:18)
+  Expected: {"token": "..."}
+  Got: {"error": "unauthorized"}
+
+2 failed, 42 passed, 44 total
+```
+
+**Verbose (`-v`) (all tests, literate):**
+```
+✓ Adding items to cart (docs/cart.md:12)
+✓ Removing items from cart (docs/cart.md:18)
+FAILED: Adding items increases total (docs/cart.md:25)
+  Expected: 50.00
+  Got: 45.00
+
+✓ User can register (docs/auth.md:8)
+FAILED: Login returns session token (docs/auth.md:18)
+  Expected: {"token": "..."}
+  Got: {"error": "unauthorized"}
+
+2 failed, 42 passed, 44 total
+```
+
+The heading IS the specification. Failures read like broken promises — the name tells you what broke, not `test_cart_003`.
+
+##### Data Model
+
+`BlockResult` gains an `expected` field for clean Expected/Got formatting:
+
+```python
+@dataclass
+class BlockResult:
+    block: Block
+    status: BlockStatus
+    actual: str | None = None
+    expected: str | None = None  # NEW
+    error: str | None = None
+    duration: float = 0.0
+```
+
 #### `mustmatch exec`
 
 ```bash
