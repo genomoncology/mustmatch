@@ -12,11 +12,12 @@ This document has the following sections:
 | Sections | 2 |
 | Tables | 2 |
 | Accessing Tables | 2 |
+| Row Methods | 2 |
 | Dot Notation | 2 |
 
 ```python
 # md.sections gives access to all headings
-assert len(md.sections) == 5
+assert len(md.sections) == 6
 
 # Access by index
 first = md.sections[0]
@@ -39,7 +40,7 @@ Tables are accessible via `md.tables`:
 
 ```python
 # md.tables gives access to all tables
-assert len(md.tables) == 3  # sections table, users table, features table
+assert len(md.tables) == 4  # sections, users, features, methods tables
 
 # Tables are iterable
 users = md.tables[1]  # second table (under "Tables" heading)
@@ -65,6 +66,31 @@ assert len(features) == 2
 for row in features:
     assert row.Feature in ("auth", "logging")
     assert row.Enabled in ("yes", "no")
+```
+
+## Row Methods
+
+Rows have helper methods for introspection:
+
+| Method | Returns |
+|--------|---------|
+| keys | column names |
+| values | column values |
+| items | name-value pairs |
+
+```python
+# Get a row
+users = md.tables.tables
+row = users[0]
+
+# keys() returns column names
+assert row.keys() == ["Name", "Type"]
+
+# values() returns column values
+assert row.values() == ["Alice", "admin"]
+
+# items() returns name-value pairs
+assert row.items() == [("Name", "Alice"), ("Type", "admin")]
 ```
 
 ## Dot Notation
