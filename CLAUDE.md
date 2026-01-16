@@ -88,9 +88,9 @@ mustmatch exec --exit-code 0 --stdout "hello" -- echo hello
 
 ## Documentation Testing
 
-Tests live in `docs/tests/` as markdown files with code blocks. The pytest plugin collects and runs these blocks.
+Tests live in `docs/` as markdown files with code blocks. The pytest plugin collects and runs these blocks.
 
-To run: `uv run pytest docs/tests/ -v`
+To run: `uv run pytest docs/ -v`
 
 ### Block Directives
 

@@ -235,13 +235,13 @@ class BashItem(pytest.Item):
 ### Phase 1 Deliverable
 
 ```bash
-# docs/tests/smoke.md contains:
+# docs/smoke.md contains:
 # ```bash
 # echo "hello"
 # ```
 
-uv run pytest docs/tests/smoke.md -v
-# ✓ echo hello (docs/tests/smoke.md:5)
+uv run pytest docs/smoke.md -v
+# ✓ echo hello (docs/smoke.md:5)
 ```
 
 ---
@@ -559,7 +559,7 @@ printf "hello\n" | mustmatch "hello"
    - Create `services/parser.py` — Mistune-based AST parsing
    - Create `services/runner.py` — run bash blocks
    - Create `pytest_plugin.py` — collect and run tests
-   - Test: `uv run pytest docs/tests/smoke.md`
+   - Test: `uv run pytest docs/smoke.md`
 
 2. **Phase 2: Comparison**
    - Create `services/comparator.py` — exact, contains, regex, json

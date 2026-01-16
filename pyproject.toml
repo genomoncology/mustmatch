@@ -52,7 +52,7 @@ dev = [
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["docs/tests"]
+testpaths = ["docs"]
 pythonpath = ["src"]
 python_files = []
 python_classes = []
