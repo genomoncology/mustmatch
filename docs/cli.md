@@ -5,8 +5,8 @@ mustmatch has a CLI for asserting command output and testing documentation.
 ## Help Command
 
 ````bash
-# mustmatch --help / and works the same way
-mustmatch | mustmatch "mustmatch - Assert CLI output matches expected value.
+# mustmatch --help works the same way
+mustmatch -h | mustmatch "mustmatch - Assert CLI output matches expected value.
 
 Usage:
     command | mustmatch [not] [like] EXPECTED

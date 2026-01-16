@@ -153,7 +153,7 @@ def _run_test(
         if not blocks:
             continue
 
-        namespace = create_python_namespace() if memory else None
+        namespace = create_python_namespace(parse_result=result) if memory else None
 
         for block in blocks:
             if "skip" in block.directives:
@@ -184,7 +184,11 @@ def _run_test(
                         globals_dict=namespace,
                     )
                 else:
-                    run_result = run_python(block.content)
+                    ns = create_python_namespace(
+                        parse_result=result,
+                        current_block=block,
+                    )
+                    run_result = run_python(block.content, globals_dict=ns)
             else:
                 continue
 

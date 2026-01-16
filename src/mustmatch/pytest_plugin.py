@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from .services.parser import Block, Table, get_table_for_block, parse_markdown
+from .services.parser import (
+    Block,
+    ParseResult,
+    Table,
+    get_table_for_block,
+    parse_markdown,
+)
 from .services.runner import create_python_namespace, run_bash, run_python
 
 if TYPE_CHECKING:
@@ -118,6 +124,7 @@ class MarkdownFile(pytest.File):
                     name=f"Python blocks ({len(python_blocks)} blocks) [memory]",
                     blocks=python_blocks,
                     tables=result.tables,
+                    parse_result=result,
                     timeout=timeout,
                 )
         else:
@@ -139,6 +146,7 @@ class MarkdownFile(pytest.File):
                         name=name,
                         block=block,
                         table=table,
+                        parse_result=result,
                         timeout=timeout,
                     )
 
@@ -223,11 +231,13 @@ class PythonItem(pytest.Item):
         parent: MarkdownFile,
         block: Block,
         table: Table | None = None,
+        parse_result: ParseResult | None = None,
         timeout: int = 30,
     ) -> None:
         super().__init__(name, parent)
         self.block = block
         self.table = table
+        self.parse_result = parse_result
         self.timeout = timeout
 
     def runtest(self) -> None:
@@ -240,7 +250,11 @@ class PythonItem(pytest.Item):
                 for row in self.table.rows
             ]
 
-        namespace = create_python_namespace(table=table_data)
+        namespace = create_python_namespace(
+            table=table_data,
+            parse_result=self.parse_result,
+            current_block=self.block,
+        )
         result = run_python(self.block.content, globals_dict=namespace)
 
         if result.exit_code != 0:
@@ -271,16 +285,18 @@ class PythonMemoryItem(pytest.Item):
         parent: MarkdownFile,
         blocks: list[Block],
         tables: list[Table],
+        parse_result: ParseResult | None = None,
         timeout: int = 30,
     ) -> None:
         super().__init__(name, parent)
         self.blocks = blocks
         self.tables = tables
+        self.parse_result = parse_result
         self.timeout = timeout
 
     def runtest(self) -> None:
         """Execute all Python blocks with shared namespace."""
-        namespace = create_python_namespace()
+        namespace = create_python_namespace(parse_result=self.parse_result)
 
         for block in self.blocks:
             result = run_python(block.content, globals_dict=namespace)

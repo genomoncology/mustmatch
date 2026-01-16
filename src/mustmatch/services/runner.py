@@ -146,12 +146,16 @@ def run_python(
 def create_python_namespace(
     *,
     table: list[dict[str, str]] | None = None,
+    parse_result: Any | None = None,
+    current_block: Any | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a namespace for Python code execution.
 
     Args:
         table: Optional table data to inject as 'table' variable.
+        parse_result: Optional ParseResult to create 'md' fixture.
+        current_block: Optional current Block for context.
         extra: Optional extra variables to inject.
 
     Returns:
@@ -161,6 +165,10 @@ def create_python_namespace(
 
     if table is not None:
         namespace["table"] = table
+
+    if parse_result is not None:
+        from .fixture import create_md_fixture
+        namespace["md"] = create_md_fixture(parse_result, current_block)
 
     if extra:
         namespace.update(extra)
