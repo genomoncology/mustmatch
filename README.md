@@ -119,10 +119,6 @@ echo "this block is skipped"
 ```bash timeout=60
 slow-command
 ```
-
-```bash expect-exit=1
-echo "hello" | mustmatch "world"
-```
 ````
 
 ## CLI Reference

@@ -172,14 +172,6 @@ class BashItem(pytest.Item):
             except ValueError:
                 pass
 
-        # Get expected exit code (default: 0)
-        expected_exit = 0
-        if "expect-exit" in self.block.directives:
-            try:
-                expected_exit = int(self.block.directives["expect-exit"])
-            except ValueError:
-                pass
-
         result = run_bash(
             self.block.content,
             cwd=Path.cwd(),
@@ -194,8 +186,8 @@ class BashItem(pytest.Item):
                 exit_code=result.exit_code,
             )
 
-        if result.exit_code != expected_exit:
-            msg = f"Exit code {result.exit_code}, expected {expected_exit}"
+        if result.exit_code != 0:
+            msg = f"Exit code {result.exit_code}"
             if result.stderr:
                 msg = f"{msg}\n{result.stderr}"
             raise BlockAssertionError(

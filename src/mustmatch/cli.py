@@ -171,13 +171,6 @@ def _run_test(
                 except ValueError:
                     pass
 
-            expected_exit = 0
-            if "expect-exit" in block.directives:
-                try:
-                    expected_exit = int(block.directives["expect-exit"])
-                except ValueError:
-                    pass
-
             if block.language == "bash":
                 run_result = run_bash(
                     block.content,
@@ -205,12 +198,12 @@ def _run_test(
                     )
                 if fail_fast:
                     break
-            elif run_result.exit_code != expected_exit:
+            elif run_result.exit_code != 0:
                 failed += 1
                 if not quiet:
                     msg = (
                         f"FAIL {file}:{block.line_start} {name} - "
-                        f"exit {run_result.exit_code}, expected {expected_exit}"
+                        f"exit {run_result.exit_code}"
                     )
                     print(msg, file=sys.stderr)
                     if verbose and run_result.stderr:

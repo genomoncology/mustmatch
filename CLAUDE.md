@@ -99,11 +99,6 @@ Code blocks support directives in the info string:
 \`\`\`bash timeout=5
 # This block has a 5-second timeout
 \`\`\`
-
-\`\`\`bash expect-exit=1
-# This block is expected to fail with exit code 1
-echo "hello" | mustmatch "world"
-\`\`\`
 ```
 
 ---
