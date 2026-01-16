@@ -6,7 +6,6 @@ Extracts code blocks and tables from markdown files with heading context.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 import mistune
@@ -184,7 +183,8 @@ def parse_markdown(content: str) -> ParseResult:
                     # Find line number using the actual marker (``` or ````)
                     code_marker = f"{marker}{info}" if info else marker
                     line_num = find_line_number(code_marker, current_search_line)
-                    current_search_line = line_num
+                    # Advance search past this line to avoid matching same fence again
+                    current_search_line = line_num + 1
 
                     blocks.append(
                         Block(
@@ -204,7 +204,8 @@ def parse_markdown(content: str) -> ParseResult:
                     line_num = find_line_number("|---", current_search_line)
                     if line_num > 1:
                         line_num -= 1  # Go to header row
-                    current_search_line = line_num
+                    # Advance search past this table to avoid matching same table again
+                    current_search_line = line_num + 1
 
                     tables.append(
                         Table(

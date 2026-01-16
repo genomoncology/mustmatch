@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import io
 import subprocess
-import sys
 import time
 import traceback
 from contextlib import redirect_stderr, redirect_stdout

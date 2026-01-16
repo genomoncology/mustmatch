@@ -150,7 +150,11 @@ def json_match(
             return CompareResult(matches=True, mode=CompareMode.JSON)
         return CompareResult(
             matches=False,
-            message=f"Expected subset not found\nExpected: {json.dumps(expected_obj, indent=2)}\nActual: {json.dumps(actual_obj, indent=2)}",
+            message=(
+                f"Expected subset not found\n"
+                f"Expected: {json.dumps(expected_obj, indent=2)}\n"
+                f"Actual: {json.dumps(actual_obj, indent=2)}"
+            ),
             mode=CompareMode.JSON,
         )
 
@@ -232,7 +236,10 @@ def jsonl_match(
 
     return CompareResult(
         matches=False,
-        message=f"JSONL mismatch\nExpected {len(expected_objects)} objects, got {len(actual_objects)}",
+        message=(
+            f"JSONL mismatch\n"
+            f"Expected {len(expected_objects)} objects, got {len(actual_objects)}"
+        ),
         mode=CompareMode.JSONL,
     )
 
