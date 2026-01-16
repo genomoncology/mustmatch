@@ -215,6 +215,35 @@ class Calculator:
 calc = Calculator()
 ```
 
+### Writing Multiline JSON
+
+Bash preserves literal newlines inside single quotes, making multiline JSON easy to write:
+
+```bash
+# Multiline JSONL - newlines inside quotes are literal
+printf '{"id":1}\n{"id":2}' | outmatch --jsonl '{"id":1}
+{"id":2}'
+
+# Multiline JSON object
+echo '{"name":"alice","age":30}' | outmatch --json '{
+  "name": "alice",
+  "age": 30
+}'
+
+# Command continuation with backslash (outside quotes)
+printf '{"id":1}\n{"id":2}' \
+  | outmatch --jsonl '{"id":1}
+{"id":2}'
+```
+
+For complex JSON, use a file instead:
+
+<!-- outmatch: skip -->
+```bash
+mycli export | outmatch --jsonl -f expected/records.jsonl
+```
+
+---
 Use it in subsequent blocks:
 
 ```python
