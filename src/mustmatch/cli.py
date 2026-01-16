@@ -9,6 +9,7 @@ Grammar:
 
 from __future__ import annotations
 
+import shlex
 import sys
 from pathlib import Path
 from typing import Annotated, Optional
@@ -368,8 +369,8 @@ def exec_callback(
         )
         raise typer.Exit(2)
 
-    # Run command
-    code = " ".join(cmd)
+    # Run command - use shlex.join to preserve argument boundaries
+    code = shlex.join(cmd)
     result = run_bash(code, timeout=timeout)
 
     # Check timeout
