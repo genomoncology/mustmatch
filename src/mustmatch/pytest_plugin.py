@@ -1,22 +1,38 @@
 """
 Pytest plugin for mustmatch markdown testing.
 
-Automatically collects and runs bash and Python blocks from markdown files.
+Uses services layer directly - no subprocess spawning for comparisons.
+Bash blocks run via subprocess, Python blocks via exec().
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from mustmatch.pytest import MarkdownTest
+from .services.parser import Block, Table, get_table_for_block, parse_markdown
+from .services.runner import create_python_namespace, run_bash, run_python
 
 if TYPE_CHECKING:
     from typing import Iterator
 
-__all__ = ["MarkdownTest"]
+
+class BlockAssertionError(AssertionError):
+    """Error raised when a code block fails."""
+
+    def __init__(
+        self,
+        message: str,
+        stdout: str = "",
+        stderr: str = "",
+        exit_code: int = 0,
+    ) -> None:
+        super().__init__(message)
+        self.stdout = stdout
+        self.stderr = stderr
+        self.exit_code = exit_code
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -35,6 +51,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="Share state between Python blocks within a file",
     )
+    group.addoption(
+        "--mustmatch-timeout",
+        action="store",
+        type=int,
+        default=30,
+        help="Timeout per block in seconds (default: 30)",
+    )
 
 
 def pytest_collect_file(
@@ -50,67 +73,190 @@ def pytest_collect_file(
 class MarkdownFile(pytest.File):
     """Collector for markdown files containing code blocks."""
 
-    def collect(self) -> Iterator[MarkdownItem]:
+    def collect(self) -> Iterator[pytest.Item]:
         """Yield test items for each code block in the file."""
         lang = self.config.getoption("--mustmatch-lang", default="all")
         memory = self.config.getoption("--mustmatch-memory", default=False)
+        timeout = self.config.getoption("--mustmatch-timeout", default=30)
 
-        tests = list(MarkdownTest._parse_file(self.path, lang=lang))
+        # Parse markdown using services layer
+        content = self.path.read_text()
+        result = parse_markdown(content)
 
-        if memory and any(t.lang == "python" for t in tests):
-            # In memory mode, run all Python blocks together as one item
-            python_tests = [t for t in tests if t.lang == "python"]
-            bash_tests = [t for t in tests if t.lang == "bash"]
+        # Filter blocks by language
+        blocks = []
+        for block in result.blocks:
+            # Check skip directive
+            if "skip" in block.directives:
+                continue
+
+            if lang == "all" or block.language == lang:
+                blocks.append(block)
+
+        if not blocks:
+            return
+
+        if memory:
+            # Separate bash and python blocks
+            python_blocks = [b for b in blocks if b.language == "python"]
+            bash_blocks = [b for b in blocks if b.language == "bash"]
 
             # Yield bash blocks individually
-            for test in bash_tests:
-                yield MarkdownItem.from_parent(
+            for block in bash_blocks:
+                name = self._make_name(block)
+                yield BashItem.from_parent(
                     self,
-                    name=f"{test.name} (line {test.line}) [bash]",
-                    test=test,
+                    name=name,
+                    block=block,
+                    timeout=timeout,
                 )
 
             # Yield Python blocks as a single memory-mode item
-            if python_tests:
+            if python_blocks:
                 yield PythonMemoryItem.from_parent(
                     self,
-                    name=f"Python blocks ({len(python_tests)} blocks) [memory]",
-                    tests=python_tests,
+                    name=f"Python blocks ({len(python_blocks)} blocks) [memory]",
+                    blocks=python_blocks,
+                    tables=result.tables,
+                    timeout=timeout,
                 )
         else:
             # Run each block independently
-            for test in tests:
-                lang_tag = f"[{test.lang}]"
-                yield MarkdownItem.from_parent(
-                    self,
-                    name=f"{test.name} (line {test.line}) {lang_tag}",
-                    test=test,
-                )
+            for block in blocks:
+                name = self._make_name(block)
+                table = get_table_for_block(result, block)
+
+                if block.language == "bash":
+                    yield BashItem.from_parent(
+                        self,
+                        name=name,
+                        block=block,
+                        timeout=timeout,
+                    )
+                elif block.language == "python":
+                    yield PythonItem.from_parent(
+                        self,
+                        name=name,
+                        block=block,
+                        table=table,
+                        timeout=timeout,
+                    )
+
+    def _make_name(self, block: Block) -> str:
+        """Generate a test name from a block."""
+        heading = block.name or "unnamed"
+        return f"{heading} (line {block.line_start}) [{block.language}]"
 
 
-class MarkdownItem(pytest.Item):
-    """Test item for a single code block."""
+class BashItem(pytest.Item):
+    """Test item for a bash code block."""
 
     def __init__(
         self,
         name: str,
         parent: MarkdownFile,
-        test: MarkdownTest,
+        block: Block,
+        timeout: int = 30,
     ) -> None:
         super().__init__(name, parent)
-        self.test = test
+        self.block = block
+        self.timeout = timeout
 
     def runtest(self) -> None:
-        """Execute the code block."""
-        self.test.run(cwd=Path.cwd())
+        """Execute the bash block."""
+        # Get timeout from directives if specified
+        timeout = self.timeout
+        if "timeout" in self.block.directives:
+            try:
+                timeout = int(self.block.directives["timeout"])
+            except ValueError:
+                pass
 
-    def repr_failure(self, excinfo: pytest.ExceptionInfo) -> str:
+        result = run_bash(
+            self.block.content,
+            cwd=Path.cwd(),
+            timeout=float(timeout),
+        )
+
+        if result.exception is not None:
+            raise BlockAssertionError(
+                f"Command timed out after {timeout}s",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+
+        if result.exit_code != 0:
+            raise BlockAssertionError(
+                f"Exit code {result.exit_code}\n{result.stderr}",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+
+    def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
         """Format failure message."""
+        if isinstance(excinfo.value, BlockAssertionError):
+            err = excinfo.value
+            parts = [str(err)]
+            if err.stdout:
+                parts.append(f"stdout:\n{err.stdout}")
+            if err.stderr:
+                parts.append(f"stderr:\n{err.stderr}")
+            return "\n".join(parts)
         return str(excinfo.value)
 
     def reportinfo(self) -> tuple[Path, int, str]:
         """Report test location."""
-        return self.path, self.test.line - 1, self.name
+        return self.path, self.block.line_start - 1, self.name
+
+
+class PythonItem(pytest.Item):
+    """Test item for a Python code block."""
+
+    def __init__(
+        self,
+        name: str,
+        parent: MarkdownFile,
+        block: Block,
+        table: Table | None = None,
+        timeout: int = 30,
+    ) -> None:
+        super().__init__(name, parent)
+        self.block = block
+        self.table = table
+        self.timeout = timeout
+
+    def runtest(self) -> None:
+        """Execute the Python block."""
+        # Prepare table data if present
+        table_data = None
+        if self.table:
+            table_data = [
+                dict(zip(self.table.headers, row))
+                for row in self.table.rows
+            ]
+
+        namespace = create_python_namespace(table=table_data)
+        result = run_python(self.block.content, globals_dict=namespace)
+
+        if result.exit_code != 0:
+            raise BlockAssertionError(
+                result.stderr or str(result.exception),
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+
+    def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
+        """Format failure message."""
+        if isinstance(excinfo.value, BlockAssertionError):
+            return str(excinfo.value)
+        return str(excinfo.value)
+
+    def reportinfo(self) -> tuple[Path, int, str]:
+        """Report test location."""
+        return self.path, self.block.line_start - 1, self.name
 
 
 class PythonMemoryItem(pytest.Item):
@@ -120,24 +266,35 @@ class PythonMemoryItem(pytest.Item):
         self,
         name: str,
         parent: MarkdownFile,
-        tests: list[MarkdownTest],
+        blocks: list[Block],
+        tables: list[Table],
+        timeout: int = 30,
     ) -> None:
         super().__init__(name, parent)
-        self.tests = tests
+        self.blocks = blocks
+        self.tables = tables
+        self.timeout = timeout
 
     def runtest(self) -> None:
         """Execute all Python blocks with shared namespace."""
-        from mustmatch.python_exec import create_namespace
+        namespace = create_python_namespace()
 
-        namespace = create_namespace()
-        for test in self.tests:
-            namespace = test.run(namespace=namespace) or namespace
+        for block in self.blocks:
+            result = run_python(block.content, globals_dict=namespace)
 
-    def repr_failure(self, excinfo: pytest.ExceptionInfo) -> str:
+            if result.exit_code != 0:
+                raise BlockAssertionError(
+                    f"Failed at line {block.line_start}: {result.stderr}",
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    exit_code=result.exit_code,
+                )
+
+    def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
         """Format failure message."""
         return str(excinfo.value)
 
     def reportinfo(self) -> tuple[Path, int | None, str]:
         """Report test location."""
-        first_line = self.tests[0].line - 1 if self.tests else None
+        first_line = self.blocks[0].line_start - 1 if self.blocks else None
         return self.path, first_line, self.name
