@@ -19,18 +19,18 @@ build:
 test:
 	@echo "Running tests..."
 	@uv sync --extra dev
-	@uv run pytest docs/ -q
+	@uv run pytest docs/ README.md -q
 	@echo "✓ Tests passed"
 
 coverage:
 	@echo "Running coverage..."
 	@uv sync --extra dev
-	@uv run pytest docs/ old_docs/ --mustmatch-lang python \
-		--cov=src/mustmatch \
-		--cov-report=html \
-		--cov-report=xml \
-		--cov-report=term \
-		-q
+	@rm -f .coverage .coverage.*
+	@COVERAGE_PROCESS_START=.coveragerc uv run coverage run -m pytest docs/ README.md -q
+	@uv run coverage combine --quiet
+	@uv run coverage report
+	@uv run coverage html
+	@uv run coverage xml
 	@echo "✓ Coverage: htmlcov/index.html"
 
 clean:
