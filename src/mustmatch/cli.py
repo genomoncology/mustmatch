@@ -396,7 +396,9 @@ def exec_callback(
     if stdout is not None:
         expected = normalize(stdout, norm_opts)
         if actual_stdout != expected:
-            failures.append(f"Stdout mismatch:\n  Expected: {expected!r}\n  Got: {actual_stdout!r}")
+            failures.append(
+                f"Stdout mismatch:\n  Expected: {expected!r}\n  Got: {actual_stdout!r}"
+            )
 
     if stdout_like is not None and stdout_like not in actual_stdout:
         failures.append(f"Stdout does not contain: {stdout_like!r}")
@@ -408,7 +410,9 @@ def exec_callback(
     if stderr is not None:
         expected = normalize(stderr, norm_opts)
         if actual_stderr != expected:
-            failures.append(f"Stderr mismatch:\n  Expected: {expected!r}\n  Got: {actual_stderr!r}")
+            failures.append(
+                f"Stderr mismatch:\n  Expected: {expected!r}\n  Got: {actual_stderr!r}"
+            )
 
     if stderr_like is not None and stderr_like not in actual_stderr:
         failures.append(f"Stderr does not contain: {stderr_like!r}")

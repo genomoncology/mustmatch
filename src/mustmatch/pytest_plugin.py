@@ -8,7 +8,7 @@ Bash blocks run via subprocess, Python blocks via exec().
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 

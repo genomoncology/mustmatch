@@ -6,7 +6,6 @@ Extracts code blocks and tables from markdown files with heading context.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 import mistune

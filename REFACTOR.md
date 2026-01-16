@@ -1,5 +1,10 @@
 # CLI Refactor Proposal
 
+> **Status: COMPLETED** (January 2025)
+>
+> This CLI design has been fully implemented. The new grammar with `like`,
+> `not`, and auto-detection is live. Kept for historical reference.
+
 ## Problem
 
 Current CLI has 25+ flags creating cognitive overload:
@@ -177,9 +182,9 @@ Multi-line JSON auto-detected when stdin contains newline-delimited JSON objects
 echo -e '{"a":1}\n{"a":2}' | mustmatch like '{"a":1}'
 ```
 
-## Open Questions
+## Open Questions (Resolved)
 
-1. Should `like` have an alias (`contains`, `has`, `includes`)?
-2. Should regex support flags like `/pattern/i` for case-insensitive?
-3. How to handle JSONL-specific modes (set, key-based)?
-4. Should `--ignore` work on strings too (line numbers)?
+1. ~~Should `like` have an alias?~~ → No, kept simple with just `like`
+2. ~~Should regex support `/pattern/i`?~~ → No, use `-i` flag instead
+3. ~~How to handle JSONL-specific modes?~~ → Auto-detected, `like` for subset
+4. ~~Should `--ignore` work on strings?~~ → No, JSON paths only (`$.timestamp`)
