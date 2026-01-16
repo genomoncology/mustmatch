@@ -7,8 +7,9 @@ Bash blocks run via subprocess, Python blocks via exec().
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -102,53 +103,32 @@ class MarkdownFile(pytest.File):
         if not blocks:
             return
 
+        shared_namespace: dict[str, Any] | None = None
         if memory:
-            # Separate bash and python blocks
-            python_blocks = [b for b in blocks if b.language == "python"]
-            bash_blocks = [b for b in blocks if b.language == "bash"]
+            shared_namespace = create_python_namespace(parse_result=result)
 
-            # Yield bash blocks individually
-            for block in bash_blocks:
-                name = self._make_name(block)
+        # Yield test items in the order they appear in the file.
+        for block in blocks:
+            name = self._make_name(block)
+            table = get_table_for_block(result, block)
+
+            if block.language == "bash":
                 yield BashItem.from_parent(
                     self,
                     name=name,
                     block=block,
                     timeout=timeout,
                 )
-
-            # Yield Python blocks as a single memory-mode item
-            if python_blocks:
-                yield PythonMemoryItem.from_parent(
+            elif block.language == "python":
+                yield PythonItem.from_parent(
                     self,
-                    name=f"Python blocks ({len(python_blocks)} blocks) [memory]",
-                    blocks=python_blocks,
-                    tables=result.tables,
+                    name=name,
+                    block=block,
+                    table=table,
                     parse_result=result,
                     timeout=timeout,
+                    shared_namespace=shared_namespace,
                 )
-        else:
-            # Run each block independently
-            for block in blocks:
-                name = self._make_name(block)
-                table = get_table_for_block(result, block)
-
-                if block.language == "bash":
-                    yield BashItem.from_parent(
-                        self,
-                        name=name,
-                        block=block,
-                        timeout=timeout,
-                    )
-                elif block.language == "python":
-                    yield PythonItem.from_parent(
-                        self,
-                        name=name,
-                        block=block,
-                        table=table,
-                        parse_result=result,
-                        timeout=timeout,
-                    )
 
     def _make_name(self, block: Block) -> str:
         """Generate a test name from a block."""
@@ -182,13 +162,20 @@ class BashItem(pytest.Item):
 
         result = run_bash(
             self.block.content,
-            cwd=Path.cwd(),
+            cwd=self.path.parent,
             timeout=float(timeout),
         )
 
-        if result.exception is not None:
+        if isinstance(result.exception, subprocess.TimeoutExpired):
             raise BlockAssertionError(
                 f"Command timed out after {timeout}s",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+        if result.exception is not None:
+            raise BlockAssertionError(
+                result.stderr or str(result.exception),
                 stdout=result.stdout,
                 stderr=result.stderr,
                 exit_code=result.exit_code,
@@ -233,29 +220,60 @@ class PythonItem(pytest.Item):
         table: Table | None = None,
         parse_result: ParseResult | None = None,
         timeout: int = 30,
+        shared_namespace: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(name, parent)
         self.block = block
         self.table = table
         self.parse_result = parse_result
         self.timeout = timeout
+        self.shared_namespace = shared_namespace
 
     def runtest(self) -> None:
         """Execute the Python block."""
         # Prepare table data if present
-        table_data = None
+        table_data: list[dict[str, str]] | None = None
         if self.table:
             table_data = [
                 dict(zip(self.table.headers, row))
                 for row in self.table.rows
             ]
 
-        namespace = create_python_namespace(
-            table=table_data,
-            parse_result=self.parse_result,
-            current_block=self.block,
-        )
-        result = run_python(self.block.content, globals_dict=namespace)
+        timeout = self.timeout
+        if "timeout" in self.block.directives:
+            try:
+                timeout = int(self.block.directives["timeout"])
+            except ValueError:
+                pass
+
+        if self.shared_namespace is not None:
+            namespace = self.shared_namespace
+            if table_data is None:
+                namespace.pop("table", None)
+            else:
+                namespace["table"] = table_data
+
+            if self.parse_result is not None:
+                from .services.fixture import create_md_fixture
+
+                namespace["md"] = create_md_fixture(self.parse_result, self.block)
+
+            result = run_python(
+                self.block.content,
+                globals_dict=namespace,
+                timeout=float(timeout),
+            )
+        else:
+            namespace = create_python_namespace(
+                table=table_data,
+                parse_result=self.parse_result,
+                current_block=self.block,
+            )
+            result = run_python(
+                self.block.content,
+                globals_dict=namespace,
+                timeout=float(timeout),
+            )
 
         if result.exit_code != 0:
             raise BlockAssertionError(
@@ -274,46 +292,3 @@ class PythonItem(pytest.Item):
     def reportinfo(self) -> tuple[Path, int, str]:
         """Report test location."""
         return self.path, self.block.line_start - 1, self.name
-
-
-class PythonMemoryItem(pytest.Item):
-    """Test item for Python blocks with shared state (memory mode)."""
-
-    def __init__(
-        self,
-        name: str,
-        parent: MarkdownFile,
-        blocks: list[Block],
-        tables: list[Table],
-        parse_result: ParseResult | None = None,
-        timeout: int = 30,
-    ) -> None:
-        super().__init__(name, parent)
-        self.blocks = blocks
-        self.tables = tables
-        self.parse_result = parse_result
-        self.timeout = timeout
-
-    def runtest(self) -> None:
-        """Execute all Python blocks with shared namespace."""
-        namespace = create_python_namespace(parse_result=self.parse_result)
-
-        for block in self.blocks:
-            result = run_python(block.content, globals_dict=namespace)
-
-            if result.exit_code != 0:
-                raise BlockAssertionError(
-                    f"Failed at line {block.line_start}: {result.stderr}",
-                    stdout=result.stdout,
-                    stderr=result.stderr,
-                    exit_code=result.exit_code,
-                )
-
-    def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
-        """Format failure message."""
-        return str(excinfo.value)
-
-    def reportinfo(self) -> tuple[Path, int | None, str]:
-        """Report test location."""
-        first_line = self.blocks[0].line_start - 1 if self.blocks else None
-        return self.path, first_line, self.name

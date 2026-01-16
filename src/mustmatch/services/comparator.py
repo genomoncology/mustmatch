@@ -33,6 +33,31 @@ class CompareResult:
     mode: CompareMode = CompareMode.EXACT
 
 
+def _parse_regex_literal(value: str) -> tuple[str, int, str] | None:
+    """Parse /pattern/flags syntax.
+
+    Returns:
+        (pattern, flags, unsupported_flags) or None if not a literal.
+    """
+    value = value.strip()
+    match = re.match(r"^/(.+)/([a-zA-Z]*)$", value)
+    if not match:
+        return None
+
+    pattern = match.group(1)
+    flag_str = match.group(2) or ""
+
+    flags = 0
+    unsupported: set[str] = set()
+    for ch in flag_str:
+        if ch == "i":
+            flags |= re.IGNORECASE
+        else:
+            unsupported.add(ch)
+
+    return pattern, flags, "".join(sorted(unsupported))
+
+
 def exact(actual: str, expected: str) -> CompareResult:
     """Exact string comparison.
 
@@ -75,22 +100,27 @@ def contains(actual: str, expected: str) -> CompareResult:
     )
 
 
-def regex(actual: str, pattern: str) -> CompareResult:
+def regex(actual: str, pattern: str, *, flags: int = 0) -> CompareResult:
     """Regex pattern match.
 
     Args:
         actual: The actual string to check.
         pattern: The regex pattern (without delimiters).
+        flags: re module flags, e.g. re.IGNORECASE.
 
     Returns:
         CompareResult indicating if pattern matches.
     """
     try:
-        compiled = re.compile(pattern)
+        compiled = re.compile(pattern, flags=flags)
     except re.error as e:
+        msg = getattr(e, "msg", str(e))
+        pos = getattr(e, "pos", None)
+        if pos is not None:
+            msg = f"{msg} at position {pos}"
         return CompareResult(
             matches=False,
-            message=f"Invalid regex pattern: {e}",
+            message=f"Invalid regex pattern: {msg}",
             mode=CompareMode.REGEX,
         )
 
@@ -259,16 +289,38 @@ def compare(
     Returns:
         CompareResult from the appropriate comparison function.
     """
-    if ignore_case:
-        actual = actual.lower()
-        expected = expected.lower()
-
     if mode == CompareMode.EXACT:
+        if ignore_case and actual.casefold() == expected.casefold():
+            return CompareResult(matches=True, mode=CompareMode.EXACT)
         return exact(actual, expected)
     elif mode == CompareMode.CONTAINS:
+        if ignore_case:
+            actual_folded = actual.casefold()
+            expected_folded = expected.casefold()
+            if expected_folded in actual_folded:
+                return CompareResult(matches=True, mode=CompareMode.CONTAINS)
         return contains(actual, expected)
     elif mode == CompareMode.REGEX:
-        return regex(actual, expected)
+        parsed = _parse_regex_literal(expected)
+        if parsed is None:
+            return CompareResult(
+                matches=False,
+                message="Expected regex literal like /pattern/",
+                mode=CompareMode.REGEX,
+            )
+
+        pattern, flags, unsupported = parsed
+
+        if unsupported:
+            return CompareResult(
+                matches=False,
+                message=f"Unsupported regex flags: {unsupported}",
+                mode=CompareMode.REGEX,
+            )
+
+        if ignore_case:
+            flags |= re.IGNORECASE
+        return regex(actual, pattern, flags=flags)
     elif mode == CompareMode.JSON:
         return json_match(actual, expected, subset=subset)
     else:  # CompareMode.JSONL
@@ -293,8 +345,8 @@ def detect_mode(expected: str) -> CompareMode:
     """
     expected = expected.strip()
 
-    # Regex: /pattern/
-    if expected.startswith("/") and expected.endswith("/") and len(expected) > 2:
+    # Regex: /pattern/flags
+    if _parse_regex_literal(expected) is not None:
         return CompareMode.REGEX
 
     # JSON object or array
@@ -321,15 +373,11 @@ def extract_regex_pattern(expected: str) -> str:
     Returns:
         The pattern without delimiters.
     """
-    expected = expected.strip()
-    if expected.startswith("/") and expected.endswith("/"):
-        return expected[1:-1]
-    # Handle flags like /pattern/i
-    if expected.startswith("/"):
-        match = re.match(r"^/(.+)/([gimsuxy]*)$", expected)
-        if match:
-            return match.group(1)
-    return expected
+    parsed = _parse_regex_literal(expected)
+    if parsed is None:
+        return expected.strip()
+    pattern, _, _ = parsed
+    return pattern
 
 
 def _generate_diff(actual: str, expected: str) -> str:
@@ -365,5 +413,3 @@ def _is_subset(subset: Any, superset: Any) -> bool:
         return True
     else:
         return subset == superset
-
-

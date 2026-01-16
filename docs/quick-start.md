@@ -17,7 +17,7 @@ Use `like` to check if output contains text:
 ```bash
 echo "hello world" | mustmatch like "hello"
 echo "hello world" | mustmatch like "world"
-date | mustmatch like "2026"
+date +%Y-%m-%d | mustmatch like "-"
 ```
 
 ## Negation
@@ -83,7 +83,7 @@ mustmatch automatically cleans output:
 
 ```bash
 # ANSI codes stripped
-ls --color=always | mustmatch like "README"
+printf "\033[31mREADME\033[0m\n" | mustmatch "README"
 
 # Whitespace trimmed
 echo "  hello  " | mustmatch "hello"

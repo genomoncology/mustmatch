@@ -50,6 +50,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools]
+py-modules = ["sitecustomize"]
+
 [tool.pytest.ini_options]
 testpaths = ["docs"]
 pythonpath = ["src"]
@@ -65,18 +68,24 @@ target-version = "py310"
 select = ["E", "F", "I", "W"]
 
 [tool.coverage.run]
-source = ["src/mustmatch"]
+source = ["mustmatch"]
 branch = true
 parallel = true
 omit = [
-    "src/mustmatch/__main__.py",
-    "src/mustmatch/version.py",
-    "src/mustmatch/pytest_plugin.py",
-    "src/mustmatch/cli.py",
+    "*/src/mustmatch/__main__.py",
+    "*/src/mustmatch/version.py",
+    "*/src/mustmatch/pytest_plugin.py",
+    "*/src/mustmatch/cli.py",
 ]
 
 [tool.coverage.report]
 fail_under = 45
+omit = [
+    "*/src/mustmatch/__main__.py",
+    "*/src/mustmatch/version.py",
+    "*/src/mustmatch/pytest_plugin.py",
+    "*/src/mustmatch/cli.py",
+]
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",

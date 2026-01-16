@@ -46,10 +46,11 @@ def run_bash(
         RunResult with stdout, stderr, exit_code, and duration.
     """
     start = time.perf_counter()
+    bash_code = f"set -e\n{code}"
 
     try:
         result = subprocess.run(
-            ["bash", "-c", code],
+            ["bash", "-c", bash_code],
             capture_output=True,
             text=True,
             cwd=cwd,
@@ -89,6 +90,7 @@ def run_python(
     *,
     globals_dict: dict[str, Any] | None = None,
     locals_dict: dict[str, Any] | None = None,
+    timeout: float | None = None,
 ) -> RunResult:
     """Execute Python code via exec().
 
@@ -105,9 +107,29 @@ def run_python(
     if locals_dict is None:
         locals_dict = globals_dict
 
+    class _RunPythonTimeout(Exception):
+        pass
+
     stdout_capture = io.StringIO()
     stderr_capture = io.StringIO()
     start = time.perf_counter()
+
+    timer_enabled = False
+    old_handler: Any | None = None
+    if timeout is not None:
+        try:
+            import signal
+
+            def _handle_timeout(signum: int, frame: Any) -> None:  # noqa: ARG001
+                raise _RunPythonTimeout
+
+            old_handler = signal.getsignal(signal.SIGALRM)
+            signal.signal(signal.SIGALRM, _handle_timeout)
+            signal.setitimer(signal.ITIMER_REAL, timeout)
+            timer_enabled = True
+        except Exception:
+            timer_enabled = False
+            old_handler = None
 
     try:
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
@@ -119,6 +141,15 @@ def run_python(
             stderr=stderr_capture.getvalue(),
             exit_code=0,
             duration=duration,
+        )
+    except _RunPythonTimeout as e:
+        duration = time.perf_counter() - start
+        return RunResult(
+            stdout=stdout_capture.getvalue(),
+            stderr=f"Timed out after {timeout}s",
+            exit_code=-1,
+            duration=duration,
+            exception=e,
         )
     except AssertionError as e:
         duration = time.perf_counter() - start
@@ -141,6 +172,13 @@ def run_python(
             duration=duration,
             exception=e,
         )
+    finally:
+        if timer_enabled:
+            import signal
+
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            if old_handler is not None:
+                signal.signal(signal.SIGALRM, old_handler)
 
 
 def create_python_namespace(
@@ -148,7 +186,6 @@ def create_python_namespace(
     table: list[dict[str, str]] | None = None,
     parse_result: Any | None = None,
     current_block: Any | None = None,
-    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a namespace for Python code execution.
 
@@ -156,7 +193,6 @@ def create_python_namespace(
         table: Optional table data to inject as 'table' variable.
         parse_result: Optional ParseResult to create 'md' fixture.
         current_block: Optional current Block for context.
-        extra: Optional extra variables to inject.
 
     Returns:
         A namespace dictionary ready for exec().
@@ -169,8 +205,5 @@ def create_python_namespace(
     if parse_result is not None:
         from .fixture import create_md_fixture
         namespace["md"] = create_md_fixture(parse_result, current_block)
-
-    if extra:
-        namespace.update(extra)
 
     return namespace

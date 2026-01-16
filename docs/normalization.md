@@ -10,9 +10,6 @@ ANSI escape sequences are always stripped:
 # Color codes stripped automatically
 echo -e "\033[31mhello\033[0m" | mustmatch "hello"
 echo -e "\033[1;32mworld\033[0m" | mustmatch "world"
-
-# Works with ls --color
-ls --color=always | mustmatch like "."
 ```
 
 ## Whitespace Trimming

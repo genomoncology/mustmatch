@@ -85,6 +85,7 @@ echo "Hello World" | mustmatch -i like "WORLD"
 Suppress error output:
 
 ```bash
-echo "test" | mustmatch -q "other"
-echo $?  # 1 (failed silently)
+status=0
+echo "test" | mustmatch -q "other" || status=$?
+echo "$status" | mustmatch "1"
 ```

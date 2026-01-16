@@ -30,6 +30,6 @@ ENV/
 .coverage.*
 .coveragerc
 htmlcov/
-sitecustomize.py
+/sitecustomize.py
 .ruff_cache/
 coverage.xml

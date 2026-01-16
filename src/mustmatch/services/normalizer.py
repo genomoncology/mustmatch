@@ -20,7 +20,6 @@ class NormalizeOptions:
     strip_ansi: bool = True  # Always strip ANSI
     normalize_newlines: bool = True  # CRLF -> LF
     trim: bool = True  # Strip leading/trailing whitespace
-    ignore_case: bool = False  # Lowercase for comparison
 
 
 def normalize(text: str, options: NormalizeOptions | None = None) -> str:
@@ -48,10 +47,6 @@ def normalize(text: str, options: NormalizeOptions | None = None) -> str:
     if options.trim:
         text = text.strip()
 
-    # Case normalization
-    if options.ignore_case:
-        text = text.lower()
-
     return text
 
 
@@ -70,23 +65,3 @@ def strip_ansi(text: str) -> str:
         Text with ANSI sequences removed.
     """
     return ANSI_ESCAPE_PATTERN.sub("", text)
-
-
-
-
-
-
-def default_options() -> NormalizeOptions:
-    """Return default normalization options.
-
-    Always enabled:
-        - Strip ANSI escape sequences
-        - Normalize newlines (CRLF -> LF)
-        - Trim leading/trailing whitespace
-    """
-    return NormalizeOptions(
-        strip_ansi=True,
-        normalize_newlines=True,
-        trim=True,
-        ignore_case=False,
-    )

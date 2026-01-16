@@ -16,7 +16,6 @@ from .services.comparator import (
     CompareMode,
     compare,
     detect_mode,
-    extract_regex_pattern,
 )
 from .services.normalizer import NormalizeOptions, normalize
 from .version import __version__
@@ -68,19 +67,17 @@ def _run_match(
         strip_ansi=True,
         normalize_newlines=True,
         trim=True,
-        ignore_case=ignore_case,
     )
     actual = normalize(actual, norm_opts)
     expected = normalize(expected, norm_opts)
 
     mode = detect_mode(expected)
 
-    if mode == CompareMode.REGEX:
-        expected = extract_regex_pattern(expected)
-
     if like:
         if mode == CompareMode.JSON:
             subset = True
+            if detect_mode(actual) == CompareMode.JSONL:
+                mode = CompareMode.JSONL
         else:
             mode = CompareMode.CONTAINS
             subset = False
@@ -122,7 +119,10 @@ def _run_test(
     fail_fast: bool = False,
 ) -> int:
     """Run markdown tests. Returns exit code."""
-    from .services.parser import parse_markdown
+    import subprocess
+
+    from .services.fixture import create_md_fixture
+    from .services.parser import get_table_for_block, parse_markdown
     from .services.runner import create_python_namespace, run_bash, run_python
 
     files: list[Path] = []
@@ -178,21 +178,44 @@ def _run_test(
                     timeout=float(block_timeout),
                 )
             elif block.language == "python":
+                table = get_table_for_block(result, block)
+                table_data: list[dict[str, str]] | None = None
+                if table is not None:
+                    table_data = [
+                        dict(zip(table.headers, row))
+                        for row in table.rows
+                    ]
                 if memory and namespace is not None:
+                    if table_data is None:
+                        namespace.pop("table", None)
+                    else:
+                        namespace["table"] = table_data
+                    namespace["md"] = create_md_fixture(result, block)
                     run_result = run_python(
                         block.content,
                         globals_dict=namespace,
+                        timeout=float(block_timeout),
                     )
                 else:
                     ns = create_python_namespace(
+                        table=table_data,
                         parse_result=result,
                         current_block=block,
                     )
-                    run_result = run_python(block.content, globals_dict=ns)
+                    run_result = run_python(
+                        block.content,
+                        globals_dict=ns,
+                        timeout=float(block_timeout),
+                    )
             else:
                 continue
 
-            if run_result.exception is not None:
+            timed_out = isinstance(
+                run_result.exception,
+                (subprocess.TimeoutExpired, TimeoutError),
+            )
+
+            if timed_out:
                 failed += 1
                 if not quiet:
                     print(
@@ -202,6 +225,7 @@ def _run_test(
                     )
                 if fail_fast:
                     break
+
             elif run_result.exit_code != 0:
                 failed += 1
                 if not quiet:
@@ -272,41 +296,67 @@ def _main_match(args: list[str]) -> int:
     ignore_case = False
     quiet = False
     positional: list[str] = []
+    expected_separator: int | None = None
 
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("-i", "--ignore-case"):
+        if not positional and arg in ("-i", "--ignore-case"):
             ignore_case = True
-        elif arg in ("-q", "--quiet"):
+        elif not positional and arg in ("-q", "--quiet"):
             quiet = True
         elif arg in ("-h", "--help"):
             print(HELP)
             return 0
-        elif arg.startswith("-"):
+        elif arg == "--":
+            expected_separator = len(positional)
+            positional.extend(args[i + 1 :])
+            break
+        elif not positional and arg.startswith("-"):
             print(f"Error: unknown option: {arg}", file=sys.stderr)
             return 2
         else:
             positional.append(arg)
         i += 1
 
-    # Parse positional: [not] [like] EXPECTED
+    # Parse positional grammar:
+    #   mustmatch [not] [like] EXPECTED
+    #   mustmatch [not] [like] -- EXPECTED
     negate = False
     like = False
-    expected: str | None = None
 
-    for arg in positional:
-        if arg == "not" and not negate and expected is None:
-            negate = True
-        elif arg == "like" and not like and expected is None:
-            like = True
-        else:
-            expected = arg
-            break
+    if expected_separator is not None:
+        tokens = positional[:expected_separator]
+        expected_tokens = positional[expected_separator:]
+        if len(expected_tokens) != 1:
+            print("Error: expected value required", file=sys.stderr)
+            return 2
+        expected = expected_tokens[0]
+    else:
+        tokens = positional
+        expected = ""
 
-    if expected is None:
-        print("Error: expected value required", file=sys.stderr)
-        return 2
+    j = 0
+    if j < len(tokens) and tokens[j] == "not":
+        negate = True
+        j += 1
+    if j < len(tokens) and tokens[j] == "like":
+        like = True
+        j += 1
+
+    if expected_separator is not None:
+        if j != len(tokens):
+            print("Error: invalid arguments", file=sys.stderr)
+            return 2
+    else:
+        if j >= len(tokens):
+            print("Error: expected value required", file=sys.stderr)
+            return 2
+        expected = tokens[j]
+        j += 1
+        if j != len(tokens):
+            print("Error: too many arguments", file=sys.stderr)
+            return 2
 
     return _run_match(
         expected,

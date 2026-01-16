@@ -25,9 +25,9 @@ test:
 coverage:
 	@echo "Running coverage..."
 	@uv sync --extra dev
-	@rm -f .coverage .coverage.*
-	@COVERAGE_PROCESS_START=.coveragerc uv run coverage run -m pytest docs/ README.md -q
-	@uv run coverage combine --quiet
+	@rm -f .coverage .coverage.* docs/.coverage docs/.coverage.*
+	@COVERAGE_PROCESS_START="$(shell pwd)/.coveragerc" COVERAGE_FILE="$(shell pwd)/.coverage" uv run coverage run -m pytest docs/ README.md -q
+	@uv run coverage combine --quiet . docs
 	@uv run coverage report
 	@uv run coverage html
 	@uv run coverage xml
@@ -35,7 +35,7 @@ coverage:
 
 clean:
 	@rm -rf build dist *.egg-info
-	@rm -rf .coverage htmlcov coverage.xml
+	@rm -rf .coverage .coverage.* docs/.coverage docs/.coverage.* htmlcov coverage.xml
 	@rm -rf .pytest_cache .ruff_cache
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete

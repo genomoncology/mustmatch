@@ -6,7 +6,7 @@ Real-world examples using actual commands.
 
 ```bash
 # List current directory
-ls | mustmatch like "."
+ls -a | mustmatch like "."
 
 # Echo to file and read back
 echo "test content" > /tmp/test-mustmatch.txt
@@ -18,7 +18,7 @@ rm /tmp/test-mustmatch.txt
 
 ```bash
 # grep output
-echo "line 1\nline 2\nerror in line 3" | grep error | mustmatch like "error"
+printf "line 1\nline 2\nerror in line 3\n" | grep error | mustmatch like "error"
 
 # sed output
 echo "hello" | sed 's/hello/goodbye/' | mustmatch "goodbye"
@@ -67,7 +67,7 @@ echo '[1,2,3]' | mustmatch '[1,2,3]'
 
 ```bash
 # Check environment variable
-echo $HOME | mustmatch like "/Users/"
+echo "$HOME" | mustmatch '/.+/'
 
 # PWD
 echo $PWD | mustmatch like "mustmatch"
@@ -118,10 +118,10 @@ echo "operation successful" | mustmatch not like "fail"
 
 ```bash
 # First line
-echo "line1\nline2\nline3" | head -1 | mustmatch "line1"
+printf "line1\nline2\nline3\n" | head -1 | mustmatch "line1"
 
 # Last line
-echo "line1\nline2\nline3" | tail -1 | mustmatch "line3"
+printf "line1\nline2\nline3\n" | tail -1 | mustmatch "line3"
 
 # First N lines
 ls -la | head -5 | mustmatch like "total"

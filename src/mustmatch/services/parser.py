@@ -92,11 +92,6 @@ def _parse_info_string(info: str) -> tuple[str, dict[str, str]]:
     return language, directives
 
 
-def _count_newlines_before(content: str, pos: int) -> int:
-    """Count newlines before a position in content."""
-    return content[:pos].count("\n")
-
-
 def _parse_table_token(token: dict) -> tuple[list[str], list[list[str]]]:
     """Parse a table token into headers and rows."""
     headers = []
@@ -145,11 +140,6 @@ def parse_markdown(content: str) -> ParseResult:
 
     # Track position for line numbers
     lines = content.split("\n")
-    line_positions: list[int] = []
-    pos = 0
-    for line in lines:
-        line_positions.append(pos)
-        pos += len(line) + 1  # +1 for newline
 
     def find_line_number(search_text: str, start_line: int = 0) -> int:
         """Find the line number where search_text appears."""

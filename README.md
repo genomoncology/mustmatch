@@ -118,7 +118,7 @@ mustmatch automatically cleans output:
 
 ```bash
 # ANSI codes stripped
-ls --color=always | mustmatch like "README"
+printf "\033[31mREADME\033[0m\n" | mustmatch "README"
 
 # Whitespace trimmed
 echo "  hello  " | mustmatch "hello"

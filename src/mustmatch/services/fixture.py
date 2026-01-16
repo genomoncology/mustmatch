@@ -21,9 +21,6 @@ class Section:
     parent: Section | None = None
     children: list[Section] = field(default_factory=list)
 
-    def __repr__(self) -> str:
-        return f"Section({self.title!r}, level={self.level})"
-
 
 @dataclass
 class TableRow:
@@ -34,20 +31,18 @@ class TableRow:
     def __getattr__(self, name: str) -> str:
         if name.startswith("_"):
             raise AttributeError(name)
+        normalized_name = name.lower().replace(" ", "_").replace("-", "_")
         # Try exact match first
         if name in self._data:
             return self._data[name]
         # Try case-insensitive match
         for key, value in self._data.items():
-            if key.lower().replace(" ", "_") == name.lower():
+            if key.lower().replace(" ", "_").replace("-", "_") == normalized_name:
                 return value
         raise AttributeError(f"No column {name!r}")
 
     def __getitem__(self, key: str) -> str:
         return self._data[key]
-
-    def __repr__(self) -> str:
-        return f"TableRow({self._data})"
 
     def keys(self) -> list[str]:
         return list(self._data.keys())
@@ -78,9 +73,6 @@ class Table:
     def __getitem__(self, idx: int) -> TableRow:
         return self.rows[idx]
 
-    def __repr__(self) -> str:
-        return f"Table({self.name!r}, {len(self.rows)} rows)"
-
     def as_dicts(self) -> list[dict[str, str]]:
         """Return rows as plain dictionaries."""
         return [row._data for row in self.rows]
@@ -107,17 +99,14 @@ class Tables:
     def __getitem__(self, idx: int | str) -> Table:
         if isinstance(idx, int):
             return self._tables[idx]
-        return self._by_name[idx]
+        key = idx.lower().replace(" ", "_").replace("-", "_")
+        return self._by_name[key]
 
     def __iter__(self) -> Iterator[Table]:
         return iter(self._tables)
 
     def __len__(self) -> int:
         return len(self._tables)
-
-    def __repr__(self) -> str:
-        names = [t.name for t in self._tables]
-        return f"Tables({names})"
 
 
 class Sections:
@@ -140,16 +129,14 @@ class Sections:
     def __getitem__(self, idx: int | str) -> Section:
         if isinstance(idx, int):
             return self._sections[idx]
-        return self._by_title[idx]
+        key = idx.lower().replace(" ", "_").replace("-", "_")
+        return self._by_title[key]
 
     def __iter__(self) -> Iterator[Section]:
         return iter(self._sections)
 
     def __len__(self) -> int:
         return len(self._sections)
-
-    def __repr__(self) -> str:
-        return f"Sections({len(self._sections)} sections)"
 
 
 @dataclass
@@ -162,9 +149,6 @@ class MD:
     tables: Tables
     sections: Sections
     current_section: Section | None = None
-
-    def __repr__(self) -> str:
-        return f"MD(tables={self.tables}, sections={self.sections})"
 
 
 def create_md_fixture(
