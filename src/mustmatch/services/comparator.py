@@ -109,7 +109,6 @@ def json_match(
     expected: str,
     *,
     subset: bool = False,
-    ignore_paths: list[str] | None = None,
 ) -> CompareResult:
     """Semantic JSON comparison.
 
@@ -117,7 +116,6 @@ def json_match(
         actual: The actual JSON string.
         expected: The expected JSON string.
         subset: If True, actual only needs to contain expected fields.
-        ignore_paths: JSON paths to ignore (e.g., ["$.timestamp"]).
 
     Returns:
         CompareResult indicating if JSON values match semantically.
@@ -139,11 +137,6 @@ def json_match(
             message=f"Invalid JSON in expected: {e}",
             mode=CompareMode.JSON,
         )
-
-    # Apply ignore paths
-    if ignore_paths:
-        actual_obj = _apply_ignore_paths(actual_obj, ignore_paths)
-        expected_obj = _apply_ignore_paths(expected_obj, ignore_paths)
 
     if subset:
         if _is_subset(expected_obj, actual_obj):
@@ -250,7 +243,6 @@ def compare(
     *,
     mode: CompareMode = CompareMode.EXACT,
     subset: bool = False,
-    ignore_paths: list[str] | None = None,
     ignore_case: bool = False,
 ) -> CompareResult:
     """Unified comparison interface.
@@ -262,7 +254,6 @@ def compare(
         expected: The expected value.
         mode: Comparison mode.
         subset: For JSON/JSONL, check subset instead of exact match.
-        ignore_paths: For JSON, paths to ignore.
         ignore_case: Case-insensitive comparison.
 
     Returns:
@@ -279,11 +270,9 @@ def compare(
     elif mode == CompareMode.REGEX:
         return regex(actual, expected)
     elif mode == CompareMode.JSON:
-        return json_match(actual, expected, subset=subset, ignore_paths=ignore_paths)
-    elif mode == CompareMode.JSONL:
+        return json_match(actual, expected, subset=subset)
+    else:  # CompareMode.JSONL
         return jsonl_match(actual, expected, subset=subset)
-    else:
-        return exact(actual, expected)
 
 
 def detect_mode(expected: str) -> CompareMode:
@@ -378,50 +367,3 @@ def _is_subset(subset: Any, superset: Any) -> bool:
         return subset == superset
 
 
-def _apply_ignore_paths(obj: Any, paths: list[str]) -> Any:
-    """Remove specified JSON paths from object.
-
-    Supports simple paths like "$.timestamp" or "$.data.id".
-    """
-    if not paths or not isinstance(obj, (dict, list)):
-        return obj
-
-    import copy
-
-    obj = copy.deepcopy(obj)
-
-    for path in paths:
-        _remove_path(obj, path)
-
-    return obj
-
-
-def _remove_path(obj: Any, path: str) -> None:
-    """Remove a single JSON path from object."""
-    # Parse path like "$.foo.bar" or "foo.bar"
-    if path.startswith("$."):
-        path = path[2:]
-
-    parts = path.split(".")
-    _remove_path_parts(obj, parts)
-
-
-def _remove_path_parts(obj: Any, parts: list[str]) -> None:
-    """Recursively remove path parts from object."""
-    if not parts or obj is None:
-        return
-
-    key = parts[0]
-    remaining = parts[1:]
-
-    if isinstance(obj, dict):
-        if not remaining:
-            # Last part - remove the key
-            obj.pop(key, None)
-        elif key in obj:
-            # Recurse
-            _remove_path_parts(obj[key], remaining)
-    elif isinstance(obj, list):
-        # Apply to all list items
-        for item in obj:
-            _remove_path_parts(item, [key] + remaining)
