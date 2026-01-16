@@ -1,6 +1,6 @@
 # CLI Match Tests
 
-Tests for the main mustmatch CLI match functionality.
+Tests for mustmatch CLI matching.
 
 ## Exact match success
 
@@ -63,8 +63,6 @@ echo "version 1.2.3" | mustmatch "/version \d+\.\d+\.\d+/"
 ```
 
 ## Quiet mode suppresses output
-
-Test that -q suppresses error output:
 
 ```bash
 output=$(echo "hello" | mustmatch -q "world" 2>&1 || true)

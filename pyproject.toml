@@ -27,7 +27,6 @@ classifiers = [
     "Topic :: Documentation",
 ]
 dependencies = [
-    "typer>=0.9.0",
     "mistune>=3.0",
 ]
 

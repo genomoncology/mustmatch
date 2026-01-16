@@ -22,7 +22,7 @@ mustmatch/
 ├── src/mustmatch/         # Package source
 │   ├── __init__.py           # Public API exports
 │   ├── __main__.py           # python -m support
-│   ├── cli.py                # CLI interface (match, test, exec)
+│   ├── cli.py                # CLI interface (argparse)
 │   ├── pytest_plugin.py      # pytest integration
 │   ├── version.py            # Version info
 │   └── services/             # Core services layer
@@ -31,15 +31,13 @@ mustmatch/
 │       ├── normalizer.py        # Text preprocessing (ANSI strip, whitespace)
 │       ├── parser.py            # Markdown parsing (Mistune AST)
 │       └── runner.py            # Code execution (bash, python)
-├── docs/                  # Documentation
-│   ├── *.md                  # User guides
-│   └── tests/                # Test documentation (run via pytest)
-│       ├── api.md
-│       ├── cli/
-│       ├── comparator/
-│       ├── normalizer/
-│       ├── parser/
-│       └── runner/
+├── docs/                  # Test documentation (run via pytest)
+│   ├── api.md
+│   ├── cli/
+│   ├── comparator/
+│   ├── normalizer/
+│   ├── parser/
+│   └── runner/
 └── pyproject.toml         # Package config
 ```
 
@@ -73,9 +71,6 @@ mustmatch test docs/
 
 # Test with verbose output
 mustmatch test -v docs/
-
-# Execute and assert
-mustmatch exec --exit-code 0 --stdout "hello" -- echo hello
 ```
 
 ### Exit Codes

@@ -125,33 +125,24 @@ echo "hello" | mustmatch "world"
 ```
 ````
 
-## Execute and Assert
-
-Test commands with multiple assertions:
-
-```bash
-mustmatch exec --exit-code 0 -- mytool build
-mustmatch exec --stdout "ok" -- echo ok
-mustmatch exec --stdout-like "success" -- mytool run
-mustmatch exec --stderr-not-like "error" -- mytool build
-```
-
 ## CLI Reference
 
 ```
 mustmatch [OPTIONS] [not] [like] EXPECTED
+mustmatch test [OPTIONS] PATHS
 
 Options:
-  -i, --ignore-case    Case-insensitive comparison
-  -q, --quiet          Suppress error output
-  -f, --file PATH      Read expected from file
-  --ignore PATH        Ignore JSON path (e.g., $.timestamp)
-  --update             Update expected file on mismatch
-  --version            Show version
+    -i, --ignore-case    Case-insensitive comparison
+    -q, --quiet          Suppress output
+    --version            Show version
 
-Subcommands:
-  mustmatch test       Run code blocks in markdown as tests
-  mustmatch exec       Execute command and assert on output
+Test options:
+    -v, --verbose        Show each test result
+    -q, --quiet          Minimal output
+    -x, --fail-fast      Stop on first failure
+    --timeout N          Timeout per block (default: 30)
+    --lang LANG          Language: bash, python, all
+    --memory             Share Python state between blocks
 ```
 
 ## Exit Codes
