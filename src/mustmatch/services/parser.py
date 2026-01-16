@@ -7,8 +7,15 @@ Extracts code blocks and tables from markdown files with heading context.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 import mistune
+
+
+@lru_cache(maxsize=1)
+def _get_markdown_parser():
+    """Get cached mistune parser instance."""
+    return mistune.create_markdown(renderer="ast", plugins=["table"])
 
 
 @dataclass
@@ -129,7 +136,7 @@ def parse_markdown(content: str) -> ParseResult:
     Returns:
         ParseResult with blocks and tables, each with heading context.
     """
-    md = mistune.create_markdown(renderer="ast", plugins=["table"])
+    md = _get_markdown_parser()
     tokens = md(content)
 
     blocks: list[Block] = []

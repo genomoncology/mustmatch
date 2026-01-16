@@ -68,11 +68,11 @@ echo '{"a":1,"b":2}' | mustmatch like '{"a":1}'
 # Regex (auto-detected by /pattern/ syntax)
 echo "v1.2.3" | mustmatch "/v\d+\.\d+/"
 
-# Test markdown docs (bash blocks)
+# Test markdown docs
 mustmatch test docs/
 
-# Test Python blocks with memory
-mustmatch test --lang python --memory docs/
+# Test with verbose output
+mustmatch test -v docs/
 
 # Execute and assert
 mustmatch exec --exit-code 0 --stdout "hello" -- echo hello
@@ -90,7 +90,26 @@ mustmatch exec --exit-code 0 --stdout "hello" -- echo hello
 
 Tests live in `docs/tests/` as markdown files with code blocks. The pytest plugin collects and runs these blocks.
 
-To run: `uv run pytest -v`
+To run: `uv run pytest docs/tests/ -v`
+
+### Block Directives
+
+Code blocks support directives in the info string:
+
+```markdown
+\`\`\`bash skip
+# This block is skipped
+\`\`\`
+
+\`\`\`bash timeout=5
+# This block has a 5-second timeout
+\`\`\`
+
+\`\`\`bash expect-exit=1
+# This block is expected to fail with exit code 1
+echo "hello" | mustmatch "world"
+\`\`\`
+```
 
 ---
 

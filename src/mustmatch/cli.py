@@ -229,6 +229,144 @@ test_app = typer.Typer(
 )
 
 
+def _run_test(
+    paths: list[Path],
+    *,
+    lang: str = "all",
+    memory: bool = False,
+    timeout: int = 30,
+    verbose: bool = False,
+    quiet: bool = False,
+    fail_fast: bool = False,
+) -> int:
+    """Run markdown tests using services layer directly. Returns exit code."""
+    from .services.parser import parse_markdown
+    from .services.runner import create_python_namespace, run_bash, run_python
+
+    # Collect markdown files
+    files: list[Path] = []
+    for path in paths:
+        if path.is_file() and path.suffix == ".md":
+            files.append(path)
+        elif path.is_dir():
+            files.extend(path.rglob("*.md"))
+
+    if not files:
+        if not quiet:
+            print("No markdown files found", file=sys.stderr)
+        return 0
+
+    total = 0
+    passed = 0
+    failed = 0
+    skipped = 0
+
+    for file in sorted(files):
+        content = file.read_text()
+        result = parse_markdown(content)
+
+        # Filter blocks by language
+        blocks = [
+            b for b in result.blocks
+            if lang == "all" or b.language == lang
+        ]
+
+        if not blocks:
+            continue
+
+        # Create shared namespace for memory mode
+        namespace = create_python_namespace() if memory else None
+
+        for block in blocks:
+            # Check skip directive
+            if "skip" in block.directives:
+                skipped += 1
+                if verbose:
+                    print(f"SKIP {file}:{block.line_start} [{block.language}]")
+                continue
+
+            total += 1
+            name = block.name or "unnamed"
+
+            # Get timeout from directive
+            block_timeout = timeout
+            if "timeout" in block.directives:
+                try:
+                    block_timeout = int(block.directives["timeout"])
+                except ValueError:
+                    pass
+
+            # Get expected exit code
+            expected_exit = 0
+            if "expect-exit" in block.directives:
+                try:
+                    expected_exit = int(block.directives["expect-exit"])
+                except ValueError:
+                    pass
+
+            # Run block
+            if block.language == "bash":
+                run_result = run_bash(
+                    block.content,
+                    cwd=file.parent,
+                    timeout=float(block_timeout),
+                )
+            elif block.language == "python":
+                if memory and namespace is not None:
+                    run_result = run_python(
+                        block.content,
+                        globals_dict=namespace,
+                    )
+                else:
+                    run_result = run_python(block.content)
+            else:
+                continue
+
+            # Check result
+            if run_result.exception is not None:
+                failed += 1
+                if not quiet:
+                    print(
+                        f"FAIL {file}:{block.line_start} {name} - "
+                        f"timeout after {block_timeout}s",
+                        file=sys.stderr,
+                    )
+                if fail_fast:
+                    break
+            elif run_result.exit_code != expected_exit:
+                failed += 1
+                if not quiet:
+                    msg = (
+                        f"FAIL {file}:{block.line_start} {name} - "
+                        f"exit {run_result.exit_code}, expected {expected_exit}"
+                    )
+                    print(msg, file=sys.stderr)
+                    if verbose and run_result.stderr:
+                        print(f"  {run_result.stderr}", file=sys.stderr)
+                if fail_fast:
+                    break
+            else:
+                passed += 1
+                if verbose:
+                    print(f"PASS {file}:{block.line_start} {name}")
+
+        if fail_fast and failed > 0:
+            break
+
+    # Summary
+    if not quiet:
+        parts = []
+        if passed:
+            parts.append(f"{passed} passed")
+        if failed:
+            parts.append(f"{failed} failed")
+        if skipped:
+            parts.append(f"{skipped} skipped")
+        print(", ".join(parts) or "no tests")
+
+    return 1 if failed > 0 else 0
+
+
 @test_app.callback(invoke_without_command=True)
 def test_callback(
     paths: Annotated[
@@ -261,29 +399,17 @@ def test_callback(
     ] = False,
 ) -> None:
     """Run code blocks in markdown files as tests."""
-    import subprocess
-
-    cmd = ["python", "-m", "pytest"]
-
-    if quiet:
-        cmd.append("-q")
-    if verbose:
-        cmd.append("-v")
-    if fail_fast:
-        cmd.append("-x")
-
-    cmd.extend([f"--mustmatch-lang={lang}"])
-    cmd.extend([f"--mustmatch-timeout={timeout}"])
-    if memory:
-        cmd.append("--mustmatch-memory")
-
-    if paths:
-        cmd.extend(str(p) for p in paths)
-    else:
-        cmd.append(".")
-
-    result = subprocess.run(cmd)
-    raise typer.Exit(result.returncode)
+    test_paths = list(paths) if paths else [Path(".")]
+    exit_code = _run_test(
+        test_paths,
+        lang=lang,
+        memory=memory,
+        timeout=timeout,
+        verbose=verbose,
+        quiet=quiet,
+        fail_fast=fail_fast,
+    )
+    raise typer.Exit(exit_code)
 
 
 # ============================================================================

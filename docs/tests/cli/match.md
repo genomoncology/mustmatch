@@ -10,13 +10,8 @@ echo "hello" | mustmatch "hello"
 
 ## Exact match failure exits with code 1
 
-```python
-import subprocess
-result = subprocess.run(
-    ['bash', '-c', 'echo "hello" | mustmatch "world"'],
-    capture_output=True
-)
-assert result.returncode == 1
+```bash expect-exit=1
+echo "hello" | mustmatch "world"
 ```
 
 ## Contains match with like
@@ -27,13 +22,8 @@ echo "hello world" | mustmatch like "hello"
 
 ## Contains match with like failure
 
-```python
-import subprocess
-result = subprocess.run(
-    ['bash', '-c', 'echo "hello world" | mustmatch like "foo"'],
-    capture_output=True
-)
-assert result.returncode == 1
+```bash expect-exit=1
+echo "hello world" | mustmatch like "foo"
 ```
 
 ## Negation with not
@@ -44,13 +34,8 @@ echo "success" | mustmatch not like "error"
 
 ## Negation failure
 
-```python
-import subprocess
-result = subprocess.run(
-    ['bash', '-c', 'echo "error occurred" | mustmatch not like "error"'],
-    capture_output=True
-)
-assert result.returncode == 1
+```bash expect-exit=1
+echo "error occurred" | mustmatch not like "error"
 ```
 
 ## Case insensitive with -i
@@ -79,15 +64,11 @@ echo "version 1.2.3" | mustmatch "/version \d+\.\d+\.\d+/"
 
 ## Quiet mode suppresses output
 
-```python
-import subprocess
-result = subprocess.run(
-    ['bash', '-c', 'echo "hello" | mustmatch -q "world"'],
-    capture_output=True,
-    text=True
-)
-assert result.returncode == 1
-assert result.stderr == ""
+Test that -q suppresses error output:
+
+```bash
+output=$(echo "hello" | mustmatch -q "world" 2>&1 || true)
+test -z "$output"
 ```
 
 ## Version flag
@@ -98,11 +79,6 @@ mustmatch --version | mustmatch like "mustmatch"
 
 ## Missing expected value exits with code 2
 
-```python
-import subprocess
-result = subprocess.run(
-    ['bash', '-c', 'echo "hello" | mustmatch'],
-    capture_output=True
-)
-assert result.returncode == 2
+```bash expect-exit=2
+echo "hello" | mustmatch
 ```

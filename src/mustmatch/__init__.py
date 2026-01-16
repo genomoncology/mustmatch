@@ -7,12 +7,19 @@ Test bash and Python code blocks in markdown documentation.
 
 from pathlib import Path
 
-from .cli import main
 from .services.comparator import CompareMode, CompareResult, compare
 from .services.normalizer import NormalizeOptions, normalize
 from .services.parser import Block, ParseResult, Table, parse_markdown
 from .services.runner import RunResult, run_bash, run_python
 from .version import __version__
+
+
+def __getattr__(name: str):
+    """Lazy import for CLI to avoid loading typer unnecessarily."""
+    if name == "main":
+        from .cli import main
+        return main
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def check_md_file(

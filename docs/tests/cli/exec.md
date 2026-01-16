@@ -10,13 +10,8 @@ mustmatch exec --exit-code 0 -- echo hello
 
 ## Exit code check failure
 
-```python
-import subprocess
-result = subprocess.run(
-    ['mustmatch', 'exec', '--exit-code', '0', '--', 'false'],
-    capture_output=True
-)
-assert result.returncode == 1, f"Expected 1, got {result.returncode}"
+```bash expect-exit=1
+mustmatch exec --exit-code 0 -- false
 ```
 
 ## Stdout exact match
@@ -39,23 +34,14 @@ mustmatch exec --stdout-not-like "error" -- echo "success"
 
 ## Missing assertion exits with code 2
 
-```python
-import subprocess
-result = subprocess.run(
-    ['mustmatch', 'exec', '--', 'echo', 'hello'],
-    capture_output=True
-)
-assert result.returncode == 2, f"Expected 2, got {result.returncode}"
+```bash expect-exit=2
+mustmatch exec -- echo hello
 ```
 
 ## Missing command exits with error
 
-```python
-import subprocess
-result = subprocess.run(
-    ['mustmatch', 'exec', '--exit-code', '0'],
-    capture_output=True
-)
-# Typer returns 1 for missing required arguments
-assert result.returncode != 0, f"Expected non-zero, got {result.returncode}"
+Typer returns exit code 1 for missing required arguments.
+
+```bash expect-exit=1
+mustmatch exec --exit-code 0
 ```
