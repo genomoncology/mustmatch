@@ -27,10 +27,10 @@ Start from scratch. Throw away complexity. Build the simplest thing that works.
 │                       Services Layer                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │  Comparator │  │ Normalizer  │  │   MarkdownParser        │  │
-│  │             │  │             │  │                         │  │
+│  │             │  │             │  │   (Mistune AST)         │  │
 │  │ exact()     │  │ strip_ansi()│  │ parse_blocks()          │  │
-│  │ contains()  │  │ trim()      │  │ extract_bash()          │  │
-│  │ regex()     │  │ collapse()  │  │ extract_python()        │  │
+│  │ contains()  │  │ trim()      │  │ parse_tables()          │  │
+│  │ regex()     │  │ collapse()  │  │ heading_context()       │  │
 │  │ json()      │  │             │  │                         │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 │                                                                  │
@@ -47,7 +47,8 @@ Start from scratch. Throw away complexity. Build the simplest thing that works.
 │                      Pytest Plugin                               │
 │                                                                  │
 │  - Discovers markdown files                                     │
-│  - Parses bash and python blocks                                │
+│  - Parses bash/python blocks and tables via Mistune AST         │
+│  - Injects table data into Python blocks as fixtures            │
 │  - Runs blocks using BlockRunner (NOT subprocess)               │
 │  - Asserts output using Comparator (NOT CLI)                    │
 │  - Reports results with progressive disclosure                  │
@@ -63,6 +64,36 @@ Start from scratch. Throw away complexity. Build the simplest thing that works.
 3. **Bash blocks run via subprocess.** Only bash execution needs subprocess.
 4. **Python blocks run via exec().** Direct in-process execution.
 5. **One responsibility per module.** No god objects.
+6. **Proper parsing, not regex.** Use Mistune for AST-based markdown parsing.
+
+---
+
+## Why Mistune?
+
+Rolling your own markdown parser with regex breaks on edge cases:
+- Code blocks inside blockquotes
+- Escaped backticks in code
+- Indented code blocks (4 spaces)
+- Code blocks with info strings like ```bash{.copy}
+
+**Mistune** gives us a proper AST:
+
+```python
+import mistune
+
+md = mistune.create_markdown(renderer='ast')
+tokens = md('# Hello\n\n```bash\necho hi\n```')
+# [
+#   {'type': 'heading', 'attrs': {'level': 1}, 'children': [...]},
+#   {'type': 'code_block', 'raw': 'echo hi\n', 'attrs': {'info': 'bash'}}
+# ]
+```
+
+**Benefits:**
+- **Tables as test fixtures** — Define test data in markdown tables
+- **Heading hierarchy** — Build qualified names like `"Cart > Adding items > increases total"`
+- **Future extensibility** — Support `<details>`, custom directives, etc.
+- **Pure Python, ~3k lines, no transitive deps**
 
 ---
 
@@ -90,10 +121,12 @@ src/mustmatch/
 
 **Use case:** Run bash blocks from markdown and assert exit code is 0.
 
-### Step 1: Markdown Parser
+### Step 1: Markdown Parser (Mistune-based)
 
 ```python
 # src/mustmatch/services/parser.py
+import mistune
+from dataclasses import dataclass
 
 @dataclass
 class Block:
@@ -101,10 +134,53 @@ class Block:
     content: str           # The code
     line_start: int        # Source location
     name: str | None       # From preceding heading
+    context: list[str]     # Heading hierarchy ["Cart", "Adding items"]
 
-def parse_markdown(content: str) -> list[Block]:
-    """Extract fenced code blocks from markdown."""
-    ...
+@dataclass
+class Table:
+    headers: list[str]     # Column names
+    rows: list[list[str]]  # Row data
+    line_start: int        # Source location
+    context: list[str]     # Heading hierarchy
+
+@dataclass
+class ParseResult:
+    blocks: list[Block]
+    tables: list[Table]
+
+def parse_markdown(content: str) -> ParseResult:
+    """Extract code blocks and tables from markdown using Mistune AST."""
+    md = mistune.create_markdown(renderer='ast')
+    tokens = md(content)
+
+    blocks = []
+    tables = []
+    heading_stack = []  # Track heading hierarchy
+
+    for token in _walk_tokens(tokens):
+        if token['type'] == 'heading':
+            level = token['attrs']['level']
+            text = _extract_text(token['children'])
+            # Pop headings at same or higher level
+            while heading_stack and heading_stack[-1][0] >= level:
+                heading_stack.pop()
+            heading_stack.append((level, text))
+
+        elif token['type'] == 'code_block':
+            info = token['attrs'].get('info', '')
+            if info in ('bash', 'python'):
+                blocks.append(Block(
+                    language=info,
+                    content=token['raw'],
+                    line_start=token.get('line', 0),
+                    name=heading_stack[-1][1] if heading_stack else None,
+                    context=[h[1] for h in heading_stack]
+                ))
+
+        elif token['type'] == 'table':
+            tables.append(_parse_table(token, heading_stack))
+
+    return ParseResult(blocks=blocks, tables=tables)
 ```
 
 ### Step 2: Block Runner
@@ -296,6 +372,64 @@ def apply(text: str, options: NormalizeOptions) -> str:
 
 ---
 
+## Phase 5: Tables as Test Fixtures
+
+**Use case:** Parameterized tests from markdown tables.
+
+### Table-Driven Tests
+
+````markdown
+# String Normalization
+
+## Case conversion
+
+| input   | expected |
+|---------|----------|
+| "Hello" | "hello"  |
+| "WORLD" | "world"  |
+| "MiXeD" | "mixed"  |
+
+```python
+from mustmatch.services import normalizer
+
+for row in table:  # `table` is injected from preceding table
+    result = normalizer.apply(row["input"], ignore_case=True)
+    assert result == row["expected"], f'{row["input"]} -> {result}'
+```
+````
+
+### Implementation
+
+```python
+# src/mustmatch/pytest_plugin.py
+
+class PythonItem(pytest.Item):
+    def __init__(self, name, parent, block, table=None):
+        super().__init__(name, parent)
+        self.block = block
+        self.table = table  # Optional: preceding table data
+
+    def runtest(self):
+        globals = {}
+        if self.table:
+            # Inject table as list of dicts
+            globals['table'] = [
+                dict(zip(self.table.headers, row))
+                for row in self.table.rows
+            ]
+        result = run_python(self.block.content, globals=globals)
+        if result.exit_code != 0:
+            raise PythonAssertionError(result)
+```
+
+### Table Proximity Rules
+
+1. A table immediately preceding a code block is available as `table`
+2. Tables under the same heading are available by heading name
+3. Tables can be referenced by `<!-- table: name -->` comments
+
+---
+
 ## Test Output Modes
 
 Output follows progressive disclosure: quiet shows summary, default shows failures, verbose shows all.
@@ -362,7 +496,8 @@ docs/
     │   ├── trim.md
     │   └── collapse.md
     ├── parser/
-    │   └── blocks.md        # Block extraction tests
+    │   ├── blocks.md        # Block extraction tests
+    │   └── tables.md        # Table extraction tests
     └── runner/
         ├── bash.md          # Bash execution tests
         └── python.md        # Python execution tests
@@ -416,7 +551,7 @@ printf "hello\n" | mustmatch "hello"
 ## Implementation Order
 
 1. **Phase 1: Skeleton**
-   - Create `services/parser.py` — parse markdown blocks
+   - Create `services/parser.py` — Mistune-based AST parsing
    - Create `services/runner.py` — run bash blocks
    - Create `pytest_plugin.py` — collect and run tests
    - Test: `uv run pytest docs/tests/smoke.md`
@@ -436,7 +571,12 @@ printf "hello\n" | mustmatch "hello"
    - Wire into CLI and comparator
    - Test: strip-ansi, trim, collapse
 
-5. **Phase 5: Polish**
+5. **Phase 5: Tables**
+   - Add table extraction to parser
+   - Inject table data into Python blocks
+   - Test: Parameterized tests from markdown tables
+
+6. **Phase 6: Polish**
    - Progressive disclosure output
    - Error messages
    - Documentation
@@ -480,7 +620,7 @@ printf "hello\n" | mustmatch "hello"
 name = "mustmatch"  # Renamed from outmatch
 version = "1.0.0"   # Major version bump for breaking changes
 requires-python = ">=3.10"
-dependencies = []   # No runtime dependencies!
+dependencies = ["mistune>=3.0"]  # AST-based markdown parsing
 
 [project.scripts]
 mustmatch = "mustmatch.cli:main"
