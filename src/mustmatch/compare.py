@@ -7,18 +7,35 @@ import re
 from typing import Any
 
 from .config import CompareMode, CompareResult, ExpectConfig
-from .json_utils import normalize_json, parse_jsonl, remove_json_paths
-from .output import unified_diff
+from .json_utils import (
+    find_wildcard_mismatches,
+    json_matches_with_wildcards,
+    normalize_json,
+    parse_jsonl,
+    remove_json_paths,
+)
+from .output import format_diff, unified_diff
 
 
-def compare_exact(actual: str, expected: str, context: int = 3) -> CompareResult:
+def compare_exact(
+    actual: str, expected: str, config: ExpectConfig | None = None
+) -> CompareResult:
     """Exact string comparison with trailing newline normalization."""
     actual = actual.rstrip("\n")
     expected = expected.rstrip("\n")
     if actual == expected:
         return CompareResult(success=True)
-    diff = unified_diff(actual, expected, context=context)
-    return CompareResult(success=False, message=f"Exact match failed.\n\n{diff}")
+
+    # Generate diff based on format
+    if config is not None:
+        diff = format_diff(actual, expected, config)
+    else:
+        diff = unified_diff(actual, expected, context=3)
+
+    if diff:
+        return CompareResult(success=False, message=f"Exact match failed.\n\n{diff}")
+    else:
+        return CompareResult(success=False, message="Exact match failed.")
 
 
 def compare_contains(actual: str, expected: str) -> CompareResult:
@@ -48,12 +65,68 @@ def compare_regex(actual: str, expected: str) -> CompareResult:
     )
 
 
+def compare_not_contains(actual: str, expected: str) -> CompareResult:
+    """Check that actual does NOT contain expected substring."""
+    expected_stripped = expected.strip()
+    if expected_stripped not in actual:
+        return CompareResult(success=True)
+    # Find the position for better error message
+    pos = actual.find(expected_stripped)
+    context_start = max(0, pos - 30)
+    context_end = min(len(actual), pos + len(expected_stripped) + 30)
+    context = actual[context_start:context_end]
+    if context_start > 0:
+        context = "..." + context
+    if context_end < len(actual):
+        context = context + "..."
+    return CompareResult(
+        success=False,
+        message=(
+            f"Expected NOT to contain:\n{expected_stripped}\n\n"
+            f"But found at position {pos}:\n{context}"
+        ),
+    )
+
+
+def compare_not_regex(actual: str, expected: str) -> CompareResult:
+    """Check that actual does NOT match regex pattern."""
+    try:
+        pattern = re.compile(expected, re.MULTILINE | re.DOTALL)
+    except re.error as e:
+        return CompareResult(success=False, message=f"Invalid regex pattern: {e}")
+
+    match = pattern.search(actual)
+    if not match:
+        return CompareResult(success=True)
+    # Show the match for context
+    start, end = match.span()
+    context_start = max(0, start - 30)
+    context_end = min(len(actual), end + 30)
+    context = actual[context_start:context_end]
+    if context_start > 0:
+        context = "..." + context
+    if context_end < len(actual):
+        context = context + "..."
+    return CompareResult(
+        success=False,
+        message=(
+            f"Expected NOT to match regex:\n{expected}\n\n"
+            f"But matched at position {start}:\n{context}"
+        ),
+    )
+
+
 def compare_json(
     actual: str,
     expected: str,
     ignore_paths: tuple[str, ...] = (),
 ) -> CompareResult:
-    """Compare single JSON values semantically."""
+    """Compare single JSON values semantically.
+
+    Supports wildcard matching: use "*" as a value to match any value.
+    Example: {"id": "*", "status": "ok"} matches any object with status "ok"
+    regardless of the id value.
+    """
     try:
         actual_obj = json.loads(actual.strip())
     except json.JSONDecodeError as e:
@@ -71,8 +144,20 @@ def compare_json(
         actual_obj = remove_json_paths(actual_obj, ignore_paths)
         expected_obj = remove_json_paths(expected_obj, ignore_paths)
 
-    if normalize_json(actual_obj) == normalize_json(expected_obj):
+    # Use wildcard matching
+    if json_matches_with_wildcards(actual_obj, expected_obj):
         return CompareResult(success=True)
+
+    # Generate detailed mismatch report
+    mismatches = find_wildcard_mismatches(actual_obj, expected_obj)
+    if mismatches:
+        mismatch_details = "\n".join(f"  {m}" for m in mismatches[:10])
+        if len(mismatches) > 10:
+            mismatch_details += f"\n  ... and {len(mismatches) - 10} more"
+        return CompareResult(
+            success=False,
+            message=f"JSON mismatch:\n{mismatch_details}",
+        )
 
     return CompareResult(
         success=False,
@@ -321,7 +406,7 @@ def compare(
 
     match config.mode:
         case CompareMode.EXACT:
-            return compare_exact(actual, expected, context=config.diff_context)
+            return compare_exact(actual, expected, config=config)
         case CompareMode.CONTAINS:
             return compare_contains(actual, expected)
         case CompareMode.REGEX:
@@ -338,3 +423,7 @@ def compare(
             )
         case CompareMode.JSONL_CONTAINS:
             return compare_jsonl_contains(actual, expected, ignore)
+        case CompareMode.NOT_CONTAINS:
+            return compare_not_contains(actual, expected)
+        case CompareMode.NOT_REGEX:
+            return compare_not_regex(actual, expected)

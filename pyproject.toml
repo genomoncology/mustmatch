@@ -3,8 +3,8 @@ requires = ["setuptools>=68.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "outmatch"
-version = "0.2.0"
+name = "mustmatch"
+version = "0.0.0.dev0"
 description = "CLI output assertion tool for documentation testing"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,14 +31,14 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/botassembly/outmatch"
-Repository = "https://github.com/botassembly/outmatch"
+Homepage = "https://github.com/botassembly/mustmatch"
+Repository = "https://github.com/botassembly/mustmatch"
 
 [project.scripts]
-outmatch = "outmatch.cli:cli"
+mustmatch = "mustmatch.cli:cli"
 
 [project.entry-points."pytest11"]
-outmatch = "outmatch.pytest_plugin"
+mustmatch = "mustmatch.pytest_plugin"
 
 [project.optional-dependencies]
 dev = [
@@ -62,10 +62,10 @@ target-version = "py310"
 select = ["E", "F", "I", "W"]
 
 [tool.coverage.run]
-source = ["src/outmatch"]
+source = ["src/mustmatch"]
 branch = true
 parallel = true
-omit = ["src/outmatch/__main__.py", "src/outmatch/config.py", "src/outmatch/version.py"]
+omit = ["src/mustmatch/__main__.py", "src/mustmatch/config.py", "src/mustmatch/version.py", "src/mustmatch/pytest_plugin.py"]
 
 [tool.coverage.report]
 fail_under = 95

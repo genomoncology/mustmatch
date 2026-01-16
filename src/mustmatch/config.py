@@ -1,4 +1,4 @@
-"""Configuration dataclasses for outmatch."""
+"""Configuration dataclasses for mustmatch."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from enum import Enum, auto
 
 
 class CompareMode(Enum):
-    """Comparison mode for outmatch."""
+    """Comparison mode for mustmatch."""
 
     EXACT = auto()
     CONTAINS = auto()
@@ -18,6 +18,8 @@ class CompareMode(Enum):
     JSONL_SET = auto()
     JSONL_KEY = auto()
     JSONL_CONTAINS = auto()
+    NOT_CONTAINS = auto()
+    NOT_REGEX = auto()
 
 
 class ColorMode(Enum):
@@ -28,6 +30,15 @@ class ColorMode(Enum):
     NEVER = "never"
 
 
+class DiffFormat(Enum):
+    """Diff output format."""
+
+    UNIFIED = "unified"  # Default unified diff
+    SIDE_BY_SIDE = "side-by-side"  # Side-by-side comparison
+    INLINE = "inline"  # Word-level inline diff
+    NONE = "none"  # No diff output
+
+
 class RegexError(Exception):
     """Error raised when a regex pattern is invalid or potentially unsafe."""
 
@@ -35,7 +46,16 @@ class RegexError(Exception):
 
 
 # Patterns that are known to cause catastrophic backtracking (ReDoS)
-# These are simplified heuristics - not exhaustive but catch common cases
+#
+# NOTE: This is a best-effort heuristic, NOT a comprehensive ReDoS detector.
+# It catches common dangerous patterns but cannot detect all problematic regexes.
+# More sophisticated patterns like overlapping greedy quantifiers (.*.*), nested
+# alternations ((a|b)*)*), or backreference loops may still cause issues.
+#
+# For untrusted input, consider:
+# - Using the `regex` library with timeout support
+# - Adding execution timeouts to regex operations
+# - Restricting allowed regex syntax
 _REDOS_PATTERNS = [
     # Nested quantifiers on overlapping groups: (a+)+, (a*)*+, (a+)*
     re.compile(r"\([^)]*[+*][^)]*\)[+*]"),
@@ -153,4 +173,5 @@ class ExpectConfig:
     quiet: bool = False
     color: ColorMode = ColorMode.AUTO
     diff_context: int = 3
+    diff_format: DiffFormat = DiffFormat.UNIFIED
     update_file: bool = False

@@ -1,4 +1,4 @@
-# outmatch
+# mustmatch
 
 **CLI output assertion tool for documentation testing**
 
@@ -18,14 +18,18 @@ uv run ruff check src tests  # Lint
 ## Project Structure
 
 ```
-outmatch/
-├── src/outmatch/       # Package source
-│   ├── __init__.py        # Main module (all logic here)
-│   └── __main__.py        # python -m support
+mustmatch/
+├── src/mustmatch/      # Package source
+│   ├── __init__.py        # Main module exports
+│   ├── __main__.py        # python -m support
+│   ├── cli.py             # CLI interface
+│   ├── mdtest.py          # Markdown test runner
+│   ├── python_exec.py     # Python execution
+│   └── pytest_plugin.py   # pytest integration
 ├── tests/                 # Test suite
-│   └── test_coverage.py   # Unit tests
+│   └── test_uncoverables.py   # Unit tests
 ├── docs/                  # Documentation
-│   └── usage.md           # Usage guide
+│   └── *.md               # Usage guides
 └── pyproject.toml         # Package config
 ```
 
@@ -37,16 +41,19 @@ outmatch/
 
 ```bash
 # Exact match
-echo "hello" | outmatch "hello"
+echo "hello" | mustmatch "hello"
 
 # Contains substring
-cmd --help | outmatch --contains "Usage:"
+cmd --help | mustmatch --contains "Usage:"
 
-# JSONL semantic (field order independent)
-echo '{"b": 2, "a": 1}' | outmatch --jsonl '{"a": 1, "b": 2}'
+# JSON semantic (field order independent)
+echo '{"b": 2, "a": 1}' | mustmatch --json '{"a": 1, "b": 2}'
 
-# JSONL contains (subset match)
-cat data.jsonl | outmatch --jsonl-contains '{"id": 1}'
+# Test markdown docs (bash blocks)
+mustmatch test docs/
+
+# Test Python blocks with memory
+mustmatch test --lang python --memory docs/
 ```
 
 ### Exit Codes
@@ -59,7 +66,7 @@ cat data.jsonl | outmatch --jsonl-contains '{"id": 1}'
 
 ## Documentation Testing
 
-Uses pytest to test itself. Tests are in `tests/test_coverage.py`.
+Uses pytest to test itself. Tests are in `tests/test_uncoverables.py`.
 
 To run: `uv run pytest -v`
 
@@ -75,4 +82,4 @@ To run: `uv run pytest -v`
 
 ## Version
 
-Current: **0.2.0**
+Current: **0.0.0.dev0**

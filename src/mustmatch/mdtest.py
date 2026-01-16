@@ -1,4 +1,4 @@
-"""Test command: run bash blocks in markdown files."""
+"""Test command: run bash and Python blocks in markdown files."""
 
 from __future__ import annotations
 
@@ -9,18 +9,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
+from typing import Any
 
-# Regex patterns for markdown parsing
-FENCE_PATTERN = re.compile(
-    r'^```(bash|sh|shell)\s*$\n(.*?)^```\s*$',
-    re.MULTILINE | re.DOTALL
-)
+# Regex pattern for metadata comments
 METADATA_PATTERN = re.compile(
-    r'<!--\s*outmatch:\s*(.*?)\s*-->',
+    r'<!--\s*mustmatch:\s*(.*?)\s*-->',
     re.IGNORECASE
 )
-OUTMATCH_PATTERN = re.compile(r'\|\s*outmatch\b')
-
 # Default exclusion patterns
 DEFAULT_EXCLUDE_DIRS = frozenset({
     'node_modules', '.git', '_site', 'build', 'dist',
@@ -69,12 +64,13 @@ class BlockMetadata:
 
 @dataclass
 class Block:
-    """A bash code block from markdown."""
+    """A code block from markdown."""
     content: str
     line_start: int
     line_end: int
     name: str | None = None
     metadata: BlockMetadata = field(default_factory=BlockMetadata)
+    lang: str = "bash"  # "bash" or "python"
 
 
 @dataclass
@@ -94,6 +90,7 @@ class FileResult:
     path: Path
     blocks: list[BlockResult] = field(default_factory=list)
     duration: float = 0.0
+    error: str | None = None  # File-level error (e.g., read failure)
 
     @property
     def passed(self) -> int:
@@ -138,6 +135,11 @@ class RunResult:
     def timeout(self) -> int:
         return sum(f.timeout for f in self.files)
 
+    @property
+    def errors(self) -> int:
+        """Count of files with read/execution errors."""
+        return sum(1 for f in self.files if f.error is not None)
+
 
 # Alias for backward compatibility
 TestResult = RunResult
@@ -160,14 +162,57 @@ class RunConfig:
     junit_xml: Path | None = None
     json_output: Path | None = None
     tap_output: bool = False
+    # Language options
+    lang: str = "bash"  # "bash", "python", or "all"
+    memory: bool = False  # For Python: share state between blocks
+    # Pre-compiled patterns (computed in __post_init__)
+    _include_re: re.Pattern[str] | None = field(default=None, repr=False)
+    _exclude_re: re.Pattern[str] | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Pre-compile regex patterns for efficient reuse."""
+        if self.include_pattern and self._include_re is None:
+            object.__setattr__(
+                self, '_include_re',
+                re.compile(self.include_pattern, re.IGNORECASE)
+            )
+        if self.exclude_pattern and self._exclude_re is None:
+            object.__setattr__(
+                self, '_exclude_re',
+                re.compile(self.exclude_pattern, re.IGNORECASE)
+            )
 
 
 # Alias for backward compatibility
 TestConfig = RunConfig
 
 
-def parse_markdown(content: str, heading_context: bool = True) -> list[Block]:
-    """Parse markdown content and extract bash blocks."""
+def parse_markdown(
+    content: str,
+    heading_context: bool = True,
+    lang: str = "bash",
+) -> list[Block]:
+    """Parse markdown content and extract code blocks.
+
+    Args:
+        content: Markdown content.
+        heading_context: If True, use headings as block names.
+        lang: Language to parse: "bash", "python", or "all".
+
+    Returns:
+        List of Block instances.
+    """
+    # Define fence patterns
+    bash_fences = {"bash", "sh", "shell"}
+    python_fences = {"python", "py"}
+
+    if lang == "bash":
+        target_fences = bash_fences
+    elif lang == "python":
+        target_fences = python_fences
+    else:  # "all"
+        target_fences = bash_fences | python_fences
+
     blocks: list[Block] = []
     lines = content.split('\n')
 
@@ -192,38 +237,55 @@ def parse_markdown(content: str, heading_context: bool = True) -> list[Block]:
             i += 1
             continue
 
-        # Check for bash fence
-        fence_match = re.match(r'^```(bash|sh|shell)\s*$', line)
+        # Check for code fence
+        fence_match = re.match(r'^```(\w+)\s*$', line)
         if fence_match:
-            block_start = i + 1  # Line number (1-indexed)
-            block_lines: list[str] = []
-            i += 1
+            fence_lang = fence_match.group(1).lower()
+            # Determine if this fence matches our target
+            detected_lang = None
+            if fence_lang in bash_fences and fence_lang in target_fences:
+                detected_lang = "bash"
+            elif fence_lang in python_fences and fence_lang in target_fences:
+                detected_lang = "python"
 
-            # Collect block content until closing fence
-            while i < len(lines) and not lines[i].startswith('```'):
-                block_lines.append(lines[i])
+            if detected_lang:
+                block_start = i + 2  # Line number (1-indexed, first line of content)
+                block_lines: list[str] = []
                 i += 1
 
-            block_end = i + 1  # Line number (1-indexed)
-            block_content = '\n'.join(block_lines)
+                # Collect block content until closing fence
+                while i < len(lines) and not lines[i].startswith('```'):
+                    block_lines.append(lines[i])
+                    i += 1
 
-            # Extract name from first comment or heading
-            block_name = current_heading
-            if block_lines:
-                first_line = block_lines[0].strip()
-                if first_line.startswith('#'):
-                    comment_match = re.match(r'^#\s*(.+)$', first_line)
-                    if comment_match:
-                        block_name = comment_match.group(1).strip()
+                block_end = i + 1  # Line number (1-indexed)
+                block_content = '\n'.join(block_lines)
 
-            block = Block(
-                content=block_content,
-                line_start=block_start,
-                line_end=block_end,
-                name=block_name,
-                metadata=pending_metadata or BlockMetadata(),
-            )
-            blocks.append(block)
+                # Extract name from first comment or heading
+                block_name = current_heading
+                if block_lines:
+                    first_line = block_lines[0].strip()
+                    if first_line.startswith('#'):
+                        comment_match = re.match(r'^#\s*(.+)$', first_line)
+                        if comment_match:
+                            block_name = comment_match.group(1).strip()
+
+                block = Block(
+                    content=block_content,
+                    line_start=block_start,
+                    line_end=block_end,
+                    name=block_name,
+                    metadata=pending_metadata or BlockMetadata(),
+                    lang=detected_lang,
+                )
+                blocks.append(block)
+            else:
+                # Non-target fence: skip content until closing fence
+                i += 1
+                while i < len(lines) and not lines[i].startswith('```'):
+                    i += 1
+
+            # Clear metadata after any fence (prevents bleed to later blocks)
             pending_metadata = None
 
         i += 1
@@ -248,21 +310,19 @@ def should_skip_block(block: Block, config: TestConfig) -> bool:
         if not (block.line_start <= config.line_filter <= block.line_end):
             return True
 
-    # Include pattern
-    if config.include_pattern:
-        pattern = re.compile(config.include_pattern, re.IGNORECASE)
-        if not pattern.search(block.content):
-            if block.name and not pattern.search(block.name):
+    # Include pattern (use pre-compiled regex)
+    if config._include_re:
+        if not config._include_re.search(block.content):
+            if block.name and not config._include_re.search(block.name):
                 return True
             elif not block.name:
                 return True
 
-    # Exclude pattern
-    if config.exclude_pattern:
-        pattern = re.compile(config.exclude_pattern, re.IGNORECASE)
-        if pattern.search(block.content):
+    # Exclude pattern (use pre-compiled regex)
+    if config._exclude_re:
+        if config._exclude_re.search(block.content):
             return True
-        if block.name and pattern.search(block.name):
+        if block.name and config._exclude_re.search(block.name):
             return True
 
     return False
@@ -352,6 +412,47 @@ def execute_block(
         )
 
 
+def execute_python_block(
+    block: Block,
+    namespace: dict[str, Any] | None = None,
+    filename: str = "<markdown>",
+) -> tuple[BlockResult, dict[str, Any]]:
+    """Execute a single Python block.
+
+    Args:
+        block: The Python block to execute.
+        namespace: Optional namespace for state sharing.
+        filename: Filename for error reporting.
+
+    Returns:
+        Tuple of (BlockResult, namespace) for memory mode.
+    """
+    import time
+
+    from .python_exec import execute_python
+
+    start_time = time.time()
+    block_filename = f"{filename}:{block.line_start}"
+
+    result, namespace = execute_python(block.content, namespace, block_filename)
+    duration = time.time() - start_time
+
+    if result.success:
+        return BlockResult(
+            block=block,
+            status=BlockStatus.PASSED,
+            duration=duration,
+        ), namespace
+    else:
+        return BlockResult(
+            block=block,
+            status=BlockStatus.FAILED,
+            duration=duration,
+            error=result.error,
+            actual=result.output if result.output else None,
+        ), namespace
+
+
 def run_file(path: Path, config: TestConfig) -> FileResult:
     """Test all blocks in a markdown file."""
     import time
@@ -361,12 +462,16 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
 
     try:
         content = path.read_text()
-    except OSError:
-        # Return empty result with error
+    except OSError as e:
         result.duration = time.time() - start_time
+        result = FileResult(
+            path=path,
+            duration=result.duration,
+            error=f"Failed to read file: {e}",
+        )
         return result
 
-    blocks = parse_markdown(content)
+    blocks = parse_markdown(content, lang=config.lang)
 
     # Set working directory to file's directory if not specified
     file_config = TestConfig(
@@ -384,12 +489,17 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
         junit_xml=config.junit_xml,
         json_output=config.json_output,
         tap_output=config.tap_output,
+        lang=config.lang,
+        memory=config.memory,
     )
 
-    # Execute blocks sequentially in isolated subprocesses
-    # Note: Each block runs in a fresh shell, so environment changes
-    # (like `export FOO=bar`) don't persist between blocks.
-    # Put dependent commands in a single block if state sharing is needed.
+    # For Python memory mode, we need to share namespace across blocks
+    python_namespace: dict[str, Any] | None = None
+    if config.memory and config.lang in ("python", "all"):
+        from .python_exec import create_namespace
+        python_namespace = create_namespace()
+
+    # Execute blocks sequentially
     for block in blocks:
         if should_skip_block(block, file_config):
             result.blocks.append(BlockResult(
@@ -398,7 +508,16 @@ def run_file(path: Path, config: TestConfig) -> FileResult:
             ))
             continue
 
-        block_result = execute_block(block, file_config)
+        # Execute based on block language
+        if block.lang == "python":
+            block_result, python_namespace = execute_python_block(
+                block,
+                namespace=python_namespace if config.memory else None,
+                filename=str(path),
+            )
+        else:  # bash
+            block_result = execute_block(block, file_config)
+
         result.blocks.append(block_result)
 
         # Stop on first failure if fail-fast
@@ -456,13 +575,16 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
                 try:
                     file_result = future.result()
                     result.files.append(file_result)
-                except Exception:
-                    # Handle execution errors
+                except Exception as e:
+                    # Preserve error information for debugging
                     path = futures[future]
-                    result.files.append(FileResult(path=path))
+                    result.files.append(FileResult(
+                        path=path,
+                        error=f"Execution error: {type(e).__name__}: {e}",
+                    ))
 
-                # Check fail-fast
-                if config.fail_fast and result.failed > 0:
+                # Check fail-fast (include errors as failures)
+                if config.fail_fast and (result.failed > 0 or result.errors > 0):
                     # Cancel remaining futures
                     for f in futures:
                         f.cancel()
@@ -473,7 +595,7 @@ def run_tests(paths: list[Path], config: TestConfig) -> TestResult:
             file_result = run_file(path, config)
             result.files.append(file_result)
 
-            if config.fail_fast and result.failed > 0:
+            if config.fail_fast and (result.failed > 0 or result.errors > 0):
                 break
 
     result.duration = time.time() - start_time
@@ -495,11 +617,14 @@ def format_result_quiet(result: TestResult) -> str:
     passed = result.passed
     failed = result.failed
     skipped = result.skipped
+    errors = result.errors
 
-    status = "✓" if failed == 0 else "✗"
+    status = "✓" if (failed == 0 and errors == 0) else "✗"
     parts = [f"{status} {passed} passed"]
     if failed > 0:
         parts.append(f"✗ {failed} failed")
+    if errors > 0:
+        parts.append(f"⚠ {errors} errors")
     if skipped > 0:
         parts.append(f"⊘ {skipped} skipped")
     parts.append(f"{total} total")
@@ -514,6 +639,11 @@ def format_result_default(result: TestResult) -> str:
     for file_result in result.files:
         lines.append(f"\nRunning tests in {file_result.path}...")
         lines.append("")
+
+        # Show file-level errors
+        if file_result.error:
+            lines.append(f"  ✗ {file_result.error}")
+            continue
 
         for block_result in file_result.blocks:
             name = format_block_name(block_result.block)
@@ -539,6 +669,12 @@ def format_result_verbose(result: TestResult) -> str:
     for file_result in result.files:
         lines.append(f"\nRunning tests in {file_result.path}...")
         lines.append("")
+
+        # Show file-level errors
+        if file_result.error:
+            lines.append(f"  ✗ {file_result.error}")
+            lines.append("")
+            continue
 
         for block_result in file_result.blocks:
             name = format_block_name(block_result.block)
@@ -591,7 +727,7 @@ def format_result(result: TestResult, config: TestConfig) -> str:
 def write_junit_xml(result: TestResult, path: Path) -> None:
     """Write JUnit XML report."""
     testsuite = ET.Element("testsuite")
-    testsuite.set("name", "outmatch")
+    testsuite.set("name", "mustmatch")
     testsuite.set("tests", str(result.total))
     testsuite.set("failures", str(result.failed))
     testsuite.set("errors", str(result.timeout))
@@ -716,7 +852,7 @@ def run_command(
         print(format_result(result, config))
 
     # Exit code
-    if result.failed > 0 or result.timeout > 0:
+    if result.failed > 0 or result.timeout > 0 or result.errors > 0:
         return 1
     return 0
 
