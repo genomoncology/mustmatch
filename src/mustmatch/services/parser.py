@@ -6,6 +6,7 @@ Extracts code blocks and tables from markdown files with heading context.
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -27,6 +28,7 @@ class Block:
     line_start: int  # Source location (1-indexed)
     name: str | None  # From nearest preceding heading
     context: list[str] = field(default_factory=list)  # Heading hierarchy
+    context_lines: list[int] = field(default_factory=list)  # Heading line numbers
     directives: dict[str, str] = field(default_factory=dict)  # e.g., skip, timeout
 
 
@@ -38,6 +40,7 @@ class Table:
     rows: list[list[str]]  # Row data
     line_start: int  # Source location (1-indexed)
     context: list[str] = field(default_factory=list)  # Heading hierarchy
+    context_lines: list[int] = field(default_factory=list)  # Heading line numbers
 
 
 @dataclass
@@ -71,11 +74,17 @@ def _parse_info_string(info: str) -> tuple[str, dict[str, str]]:
         "python skip" -> ("python", {"skip": ""})
         "bash timeout=5" -> ("bash", {"timeout": "5"})
         "python skip=ci" -> ("python", {"skip": "ci"})
+        'python expect_error="file not found"' ->
+            ("python", {"expect_error": "file not found"})
     """
     if not info:
         return "", {}
 
-    parts = info.split()
+    try:
+        parts = shlex.split(info)
+    except ValueError:
+        parts = info.split()
+
     if not parts:
         return "", {}
 
@@ -97,27 +106,24 @@ def _parse_table_token(token: dict) -> tuple[list[str], list[list[str]]]:
     headers = []
     rows = []
 
-    # Extract headers and rows from table
     if "children" in token:
         for child in token["children"]:
             if child["type"] == "table_head":
-                # Headers are directly under table_head as table_cell elements
                 if "children" in child:
                     for cell in child["children"]:
                         if cell["type"] == "table_cell":
                             text = _extract_text(cell.get("children", []))
                             headers.append(text.strip())
-            elif child["type"] == "table_body":
-                if "children" in child:
-                    for row in child["children"]:
-                        if row["type"] == "table_row" and "children" in row:
-                            row_data = []
-                            for cell in row["children"]:
-                                if cell["type"] == "table_cell":
-                                    text = _extract_text(cell.get("children", []))
-                                    row_data.append(text.strip())
-                            if row_data:
-                                rows.append(row_data)
+            elif child["type"] == "table_body" and "children" in child:
+                for row in child["children"]:
+                    if row["type"] == "table_row" and "children" in row:
+                        row_data = []
+                        for cell in row["children"]:
+                            if cell["type"] == "table_cell":
+                                text = _extract_text(cell.get("children", []))
+                                row_data.append(text.strip())
+                        if row_data:
+                            rows.append(row_data)
 
     return headers, rows
 
@@ -136,16 +142,15 @@ def parse_markdown(content: str) -> ParseResult:
 
     blocks: list[Block] = []
     tables: list[Table] = []
-    heading_stack: list[tuple[int, str]] = []  # (level, text)
+    heading_stack: list[tuple[int, str, int]] = []  # (level, title, line)
 
-    # Track position for line numbers
     lines = content.split("\n")
 
     def find_line_number(search_text: str, start_line: int = 0) -> int:
         """Find the line number where search_text appears."""
-        for i, line in enumerate(lines[start_line:], start=start_line):
+        for idx, line in enumerate(lines[start_line:], start=start_line):
             if search_text in line:
-                return i + 1  # 1-indexed
+                return idx + 1  # 1-indexed
         return 1
 
     current_search_line = 0
@@ -160,27 +165,29 @@ def parse_markdown(content: str) -> ParseResult:
                 level = token.get("attrs", {}).get("level", 1)
                 text = _extract_text(token.get("children", []))
 
-                # Pop headings at same or higher level
+                heading_marker = f"{'#' * level} {text}".strip()
+                line_num = find_line_number(heading_marker, current_search_line)
+                if line_num == 1:
+                    line_num = find_line_number(text, current_search_line)
+                current_search_line = max(current_search_line, line_num)
+
                 while heading_stack and heading_stack[-1][0] >= level:
                     heading_stack.pop()
-                heading_stack.append((level, text))
+                heading_stack.append((level, text, line_num))
 
             elif token_type == "block_code":
                 info = token.get("attrs", {}).get("info", "") or ""
                 raw = token.get("raw", "")
-                marker = token.get("marker", "```")  # Handle 4-backtick fences
+                marker = token.get("marker", "```")
 
                 language, directives = _parse_info_string(info)
 
                 if language in ("bash", "python", "sh"):
-                    # Normalize sh to bash
                     if language == "sh":
                         language = "bash"
 
-                    # Find line number using the actual marker (``` or ````)
                     code_marker = f"{marker}{info}" if info else marker
                     line_num = find_line_number(code_marker, current_search_line)
-                    # Advance search past this line to avoid matching same fence again
                     current_search_line = line_num + 1
 
                     blocks.append(
@@ -189,7 +196,8 @@ def parse_markdown(content: str) -> ParseResult:
                             content=raw,
                             line_start=line_num,
                             name=heading_stack[-1][1] if heading_stack else None,
-                            context=[h[1] for h in heading_stack],
+                            context=[item[1] for item in heading_stack],
+                            context_lines=[item[2] for item in heading_stack],
                             directives=directives,
                         )
                     )
@@ -197,11 +205,9 @@ def parse_markdown(content: str) -> ParseResult:
             elif token_type == "table":
                 headers, rows = _parse_table_token(token)
                 if headers:
-                    # Find line number by looking for table header separator
                     line_num = find_line_number("|---", current_search_line)
                     if line_num > 1:
-                        line_num -= 1  # Go to header row
-                    # Advance search past this table to avoid matching same table again
+                        line_num -= 1
                     current_search_line = line_num + 1
 
                     tables.append(
@@ -209,11 +215,11 @@ def parse_markdown(content: str) -> ParseResult:
                             headers=headers,
                             rows=rows,
                             line_start=line_num,
-                            context=[h[1] for h in heading_stack],
+                            context=[item[1] for item in heading_stack],
+                            context_lines=[item[2] for item in heading_stack],
                         )
                     )
 
-            # Recurse into children
             if "children" in token:
                 process_tokens(token["children"])
 
@@ -223,7 +229,8 @@ def parse_markdown(content: str) -> ParseResult:
 
 
 def get_table_for_block(
-    result: ParseResult, block: Block
+    result: ParseResult,
+    block: Block,
 ) -> Table | None:
     """Get the table immediately preceding a block (for test fixtures).
 
@@ -233,16 +240,13 @@ def get_table_for_block(
     preceding_table = None
 
     for table in result.tables:
-        # Table must be before the block
         if table.line_start >= block.line_start:
             continue
 
-        # Table should share context with the block
         if table.context == block.context or (
             len(table.context) <= len(block.context)
             and table.context == block.context[: len(table.context)]
         ):
-            # Keep the closest preceding table
             if preceding_table is None or table.line_start > preceding_table.line_start:
                 preceding_table = table
 

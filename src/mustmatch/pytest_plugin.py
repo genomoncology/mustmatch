@@ -7,12 +7,16 @@ Bash blocks run via subprocess, Python blocks via exec().
 
 from __future__ import annotations
 
+import importlib
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+import tomllib
 
+from .services.fixture import TableRow, build_table_rows, create_md_fixture
 from .services.parser import (
     Block,
     ParseResult,
@@ -40,6 +44,19 @@ class BlockAssertionError(AssertionError):
         self.stdout = stdout
         self.stderr = stderr
         self.exit_code = exit_code
+
+
+class MustmatchHookSpec:
+    """Hook specifications for mustmatch plugin integration."""
+
+    @pytest.hookspec
+    def pytest_mustmatch_namespace(self) -> dict[str, Any] | None:
+        """Return namespace values injected into every Python block."""
+
+
+def pytest_addhooks(pluginmanager: pytest.PytestPluginManager) -> None:
+    """Register mustmatch hook specifications."""
+    pluginmanager.add_hookspecs(MustmatchHookSpec)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -77,6 +94,73 @@ def pytest_collect_file(
     return None
 
 
+@lru_cache(maxsize=8)
+def _read_tool_mustmatch(pyproject_path: str) -> dict[str, Any]:
+    path = Path(pyproject_path)
+    if not path.exists():
+        return {}
+
+    data = tomllib.loads(path.read_text())
+    return data.get("tool", {}).get("mustmatch", {})
+
+
+def _tool_mustmatch(config: pytest.Config) -> dict[str, Any]:
+    pyproject = config.rootpath / "pyproject.toml"
+    return _read_tool_mustmatch(str(pyproject))
+
+
+@lru_cache(maxsize=16)
+def _import_auto_modules(module_names: tuple[str, ...]) -> dict[str, Any]:
+    modules: dict[str, Any] = {}
+    for module_name in module_names:
+        modules[module_name] = importlib.import_module(module_name)
+    return modules
+
+
+def _get_auto_import_namespace(config: pytest.Config) -> dict[str, Any]:
+    raw_value = _tool_mustmatch(config).get("auto_imports", [])
+    if not isinstance(raw_value, list):
+        return {}
+
+    names = tuple(
+        value
+        for value in raw_value
+        if isinstance(value, str) and value.strip()
+    )
+    if not names:
+        return {}
+
+    return dict(_import_auto_modules(names))
+
+
+def _get_timeout(default_timeout: int, directives: dict[str, str]) -> float:
+    value = directives.get("timeout")
+    if value in (None, ""):
+        return float(default_timeout)
+
+    try:
+        return float(value)
+    except ValueError:
+        return float(default_timeout)
+
+
+def _context_applies(setup_context: list[str], target_context: list[str]) -> bool:
+    return (
+        len(setup_context) <= len(target_context)
+        and setup_context == target_context[: len(setup_context)]
+    )
+
+
+def _values_equivalent(actual: Any, expected: Any) -> bool:
+    if actual == expected:
+        return True
+    if expected is None and actual == "":
+        return True
+    if actual is None and expected == "":
+        return True
+    return False
+
+
 class MarkdownFile(pytest.File):
     """Collector for markdown files containing code blocks."""
 
@@ -86,17 +170,13 @@ class MarkdownFile(pytest.File):
         memory = self.config.getoption("--mustmatch-memory", default=False)
         timeout = self.config.getoption("--mustmatch-timeout", default=30)
 
-        # Parse markdown using services layer
         content = self.path.read_text()
         result = parse_markdown(content)
 
-        # Filter blocks by language
-        blocks = []
+        blocks: list[Block] = []
         for block in result.blocks:
-            # Check skip directive
             if "skip" in block.directives:
                 continue
-
             if lang == "all" or block.language == lang:
                 blocks.append(block)
 
@@ -107,10 +187,27 @@ class MarkdownFile(pytest.File):
         if memory:
             shared_namespace = create_python_namespace(parse_result=result)
 
-        # Yield test items in the order they appear in the file.
+        setup_blocks: list[Block] = []
+
         for block in blocks:
+            if block.language == "python" and "setup" in block.directives:
+                setup_blocks.append(block)
+                continue
+
             name = self._make_name(block)
+            setup_for_block = [
+                setup_block
+                for setup_block in setup_blocks
+                if setup_block.line_start < block.line_start
+                and _context_applies(setup_block.context, block.context)
+            ]
+
             table = get_table_for_block(result, block)
+            table_data: list[dict[str, str]] | None = None
+            table_rows: list[TableRow] = []
+            if table is not None:
+                _, table_rows = build_table_rows(table.headers, table.rows)
+                table_data = [dict(row._data) for row in table_rows]
 
             if block.language == "bash":
                 yield BashItem.from_parent(
@@ -119,16 +216,57 @@ class MarkdownFile(pytest.File):
                     block=block,
                     timeout=timeout,
                 )
-            elif block.language == "python":
-                yield PythonItem.from_parent(
-                    self,
-                    name=name,
-                    block=block,
-                    table=table,
-                    parse_result=result,
-                    timeout=timeout,
-                    shared_namespace=shared_namespace,
-                )
+                continue
+
+            if "each_row" in block.directives:
+                if not table_rows:
+                    yield PythonItem.from_parent(
+                        self,
+                        name=f"{name} [row missing]",
+                        block=block,
+                        table=table,
+                        table_data=table_data,
+                        parse_result=result,
+                        timeout=timeout,
+                        shared_namespace=shared_namespace,
+                        setup_blocks=setup_for_block,
+                        each_row=True,
+                        row=None,
+                        row_index=None,
+                    )
+                    continue
+
+                for row_index, row in enumerate(table_rows):
+                    yield PythonItem.from_parent(
+                        self,
+                        name=f"{name} [row {row_index}]",
+                        block=block,
+                        table=table,
+                        table_data=table_data,
+                        parse_result=result,
+                        timeout=timeout,
+                        shared_namespace=shared_namespace,
+                        setup_blocks=setup_for_block,
+                        each_row=True,
+                        row=row,
+                        row_index=row_index,
+                    )
+                continue
+
+            yield PythonItem.from_parent(
+                self,
+                name=name,
+                block=block,
+                table=table,
+                table_data=table_data,
+                parse_result=result,
+                timeout=timeout,
+                shared_namespace=shared_namespace,
+                setup_blocks=setup_for_block,
+                each_row=False,
+                row=None,
+                row_index=None,
+            )
 
     def _make_name(self, block: Block) -> str:
         """Generate a test name from a block."""
@@ -152,18 +290,12 @@ class BashItem(pytest.Item):
 
     def runtest(self) -> None:
         """Execute the bash block."""
-        # Get timeout from directives if specified
-        timeout = self.timeout
-        if "timeout" in self.block.directives:
-            try:
-                timeout = int(self.block.directives["timeout"])
-            except ValueError:
-                pass
+        timeout = _get_timeout(self.timeout, self.block.directives)
 
         result = run_bash(
             self.block.content,
             cwd=self.path.parent,
-            timeout=float(timeout),
+            timeout=timeout,
         )
 
         if isinstance(result.exception, subprocess.TimeoutExpired):
@@ -218,62 +350,211 @@ class PythonItem(pytest.Item):
         parent: MarkdownFile,
         block: Block,
         table: Table | None = None,
+        table_data: list[dict[str, str]] | None = None,
         parse_result: ParseResult | None = None,
         timeout: int = 30,
         shared_namespace: dict[str, Any] | None = None,
+        setup_blocks: list[Block] | None = None,
+        each_row: bool = False,
+        row: TableRow | None = None,
+        row_index: int | None = None,
     ) -> None:
         super().__init__(name, parent)
         self.block = block
         self.table = table
+        self.table_data = table_data
         self.parse_result = parse_result
         self.timeout = timeout
         self.shared_namespace = shared_namespace
+        self.setup_blocks = setup_blocks or []
+        self.each_row = each_row
+        self.row = row
+        self.row_index = row_index
 
-    def runtest(self) -> None:
-        """Execute the Python block."""
-        # Prepare table data if present
-        table_data: list[dict[str, str]] | None = None
-        if self.table:
-            table_data = [
-                dict(zip(self.table.headers, row))
-                for row in self.table.rows
-            ]
+    def _hook_namespace(self) -> dict[str, Any]:
+        values: dict[str, Any] = {}
+        for item in self.config.hook.pytest_mustmatch_namespace():
+            if item is None:
+                continue
+            if not isinstance(item, dict):
+                raise BlockAssertionError(
+                    "pytest_mustmatch_namespace() must return dict[str, Any]"
+                )
+            values.update(item)
+        return values
 
-        timeout = self.timeout
-        if "timeout" in self.block.directives:
-            try:
-                timeout = int(self.block.directives["timeout"])
-            except ValueError:
-                pass
+    def _extra_namespace(self) -> dict[str, Any]:
+        values: dict[str, Any] = {}
+        values.update(_get_auto_import_namespace(self.config))
+        values.update(self._hook_namespace())
+        return values
+
+    def _setup_namespace(self) -> dict[str, Any]:
+        extra_namespace = self._extra_namespace()
 
         if self.shared_namespace is not None:
             namespace = self.shared_namespace
-            if table_data is None:
+            namespace.update(extra_namespace)
+
+            if self.table_data is None:
                 namespace.pop("table", None)
             else:
-                namespace["table"] = table_data
+                namespace["table"] = self.table_data
 
             if self.parse_result is not None:
-                from .services.fixture import create_md_fixture
-
                 namespace["md"] = create_md_fixture(self.parse_result, self.block)
-
-            result = run_python(
-                self.block.content,
-                globals_dict=namespace,
-                timeout=float(timeout),
-            )
         else:
             namespace = create_python_namespace(
-                table=table_data,
+                table=self.table_data,
                 parse_result=self.parse_result,
                 current_block=self.block,
+                extra=extra_namespace,
             )
+
+        if self.each_row:
+            namespace["row"] = self.row
+            namespace["row_index"] = self.row_index
+        else:
+            namespace.pop("row", None)
+            namespace.pop("row_index", None)
+
+        return namespace
+
+    def _run_setup_blocks(self, namespace: dict[str, Any], timeout: float) -> None:
+        for setup_block in self.setup_blocks:
             result = run_python(
-                self.block.content,
+                setup_block.content,
                 globals_dict=namespace,
-                timeout=float(timeout),
+                timeout=timeout,
             )
+            if result.exit_code != 0:
+                raise BlockAssertionError(
+                    (
+                        "Setup block failed "
+                        f"(line {setup_block.line_start}) before "
+                        f"{self.name}"
+                    ),
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    exit_code=result.exit_code,
+                )
+
+    def _apply_expect_error(self, result: Any) -> bool:
+        if "expect_error" not in self.block.directives:
+            return False
+
+        expected = self.block.directives.get("expect_error", "")
+        if result.exit_code == 0:
+            raise BlockAssertionError(
+                f"Expected error containing {expected!r}, but block succeeded",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+
+        details = result.stderr or str(result.exception)
+        if expected and expected not in details:
+            raise BlockAssertionError(
+                f"Expected error containing {expected!r}, got:\n{details}",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+
+        return True
+
+    def _perf_limit_seconds(self) -> float | None:
+        raw_limit = self.block.directives.get("perf")
+        if raw_limit is None:
+            return None
+
+        try:
+            return float(raw_limit)
+        except ValueError:
+            pass
+
+        if self.row is None:
+            raise BlockAssertionError(
+                f"perf={raw_limit!r} requires each_row context or numeric literal"
+            )
+
+        try:
+            value = self.row[raw_limit]
+        except Exception as err:  # noqa: BLE001
+            raise BlockAssertionError(
+                f"perf column {raw_limit!r} not found on row"
+            ) from err
+
+        try:
+            return float(value)
+        except (TypeError, ValueError) as err:
+            raise BlockAssertionError(
+                f"perf column {raw_limit!r} must be numeric, got {value!r}"
+            ) from err
+
+    def _run_auto_asserts(self, namespace: dict[str, Any]) -> None:
+        if not self.each_row:
+            return
+        if self.row is None or self.row_index is None:
+            raise BlockAssertionError(
+                "each_row directive requires a preceding table with at least one row"
+            )
+        if "assert" in self.block.content:
+            return
+        if "result" not in namespace:
+            raise BlockAssertionError(
+                "each_row auto-assert requires a `result` variable "
+                "or explicit asserts in the block"
+            )
+
+        result = namespace["result"]
+        matched_columns = 0
+
+        for column in self.row.keys():
+            actual_found = False
+            actual_value: Any
+
+            if isinstance(result, dict) and column in result:
+                actual_value = result[column]
+                actual_found = True
+            elif hasattr(result, column):
+                actual_value = getattr(result, column)
+                actual_found = True
+
+            if not actual_found:
+                continue
+
+            matched_columns += 1
+            expected_value = self.row[column]
+            if not _values_equivalent(actual_value, expected_value):
+                raise BlockAssertionError(
+                    (
+                        f"Row {self.row_index}: {column} expected "
+                        f"{expected_value!r}, got {actual_value!r}"
+                    )
+                )
+
+        if matched_columns == 0:
+            raise BlockAssertionError(
+                "each_row auto-assert found no overlapping columns "
+                "between row and result"
+            )
+
+    def runtest(self) -> None:
+        """Execute the Python block."""
+        timeout = _get_timeout(self.timeout, self.block.directives)
+        namespace = self._setup_namespace()
+
+        self._run_setup_blocks(namespace, timeout)
+
+        result = run_python(
+            self.block.content,
+            globals_dict=namespace,
+            timeout=timeout,
+        )
+
+        if self._apply_expect_error(result):
+            return
 
         if result.exit_code != 0:
             raise BlockAssertionError(
@@ -283,10 +564,30 @@ class PythonItem(pytest.Item):
                 exit_code=result.exit_code,
             )
 
+        perf_limit = self._perf_limit_seconds()
+        if perf_limit is not None and result.duration >= perf_limit:
+            raise BlockAssertionError(
+                (
+                    f"Performance check failed: took {result.duration:.3f}s, "
+                    f"max was {perf_limit:.3f}s"
+                ),
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+
+        self._run_auto_asserts(namespace)
+
     def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
         """Format failure message."""
         if isinstance(excinfo.value, BlockAssertionError):
-            return str(excinfo.value)
+            err = excinfo.value
+            parts = [str(err)]
+            if err.stdout:
+                parts.append(f"stdout:\n{err.stdout}")
+            if err.stderr:
+                parts.append(f"stderr:\n{err.stderr}")
+            return "\n".join(parts)
         return str(excinfo.value)
 
     def reportinfo(self) -> tuple[Path, int, str]:

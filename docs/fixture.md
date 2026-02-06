@@ -1,118 +1,88 @@
 # Document Fixture
 
-Python code blocks have access to an `md` object that provides the document's structure.
+The `md` fixture lets Python code blocks read the same Markdown structure that humans read: sections, tables, and row data. This keeps specs readable while still being executable.
+
+You can use `md.sections` to inspect heading hierarchy and `md.tables` to consume table-driven examples.
 
 ## Sections
 
-This document has the following sections:
+This section verifies that heading metadata is available from Python.
 
-| Title | Level |
+| Expected Section |
+|------------------|
+| Sections |
+| Table Access |
+
+```python
+titles = [section.title for section in md.sections]
+for row in md.tables.sections:
+    assert row.expected_section in titles
+
+assert md.current_section is not None
+assert md.current_section.title == "Sections"
+```
+
+## Table Access
+
+Tables are exposed by heading name and support iteration.
+
+| Name  | Role  |
 |-------|-------|
-| Document Fixture | 1 |
-| Sections | 2 |
-| Tables | 2 |
-| Accessing Tables | 2 |
-| Row Methods | 2 |
-| Dot Notation | 2 |
-
-```python
-# md.sections gives access to all headings
-assert len(md.sections) == 6
-
-# Access by index
-first = md.sections[0]
-assert first.title == "Document Fixture"
-assert first.level == 1
-
-# Access by name (normalized: lowercase, underscores)
-assert md.sections.sections.title == "Sections"
-assert md.sections.tables.title == "Tables"
-```
-
-## Tables
-
-Tables are accessible via `md.tables`:
-
-| Name | Type |
-|------|------|
 | Alice | admin |
-| Bob | user |
+| Bob   | user  |
 
 ```python
-# md.tables gives access to all tables
-assert len(md.tables) == 4  # sections, users, features, methods tables
-
-# Tables are iterable
-users = md.tables[1]  # second table (under "Tables" heading)
+users = md.tables.table_access
 assert len(users) == 2
-assert users.headers == ["Name", "Type"]
+assert users[0].name == "Alice"
+assert users[0]["Role"] == "admin"
+assert users.as_dicts()[1]["Name"] == "Bob"
 ```
 
-## Accessing Tables
+## Type Coercion
 
-Tables can be accessed by their section name:
+Cells are auto-coerced for common scalar types. Use `str:` in headers to opt out when a value should stay a string.
 
-| Feature | Enabled |
-|---------|---------|
-| auth | yes |
-| logging | no |
+| count | ratio | enabled | optional | str:zip_code |
+|-------|-------|---------|----------|--------------|
+| 1     | 1.5   | true    | None     | 00123        |
+| 2     | 2.0   | false   |          | 02108        |
 
 ```python
-# Access table by section name
-features = md.tables.accessing_tables
-assert len(features) == 2
-
-# Iterate over rows
-for row in features:
-    assert row.Feature in ("auth", "logging")
-    assert row.Enabled in ("yes", "no")
+rows = md.tables.type_coercion
+assert rows[0].count == 1 and isinstance(rows[0].count, int)
+assert rows[0].ratio == 1.5 and isinstance(rows[0].ratio, float)
+assert rows[0].enabled is True
+assert rows[0].optional is None
+assert rows[0].zip_code == "00123" and isinstance(rows[0].zip_code, str)
+assert rows[1].optional is None
 ```
 
-## Row Methods
+## Row Helpers
 
-Rows have helper methods for introspection:
+`TableRow` also provides helper methods when you need generic iteration or dynamic assertions.
 
-| Method | Returns |
-|--------|---------|
-| keys | column names |
-| values | column values |
-| items | name-value pairs |
+| key_name | value_name |
+|----------|------------|
+| alpha    | one        |
 
 ```python
-# Get a row
-users = md.tables.tables
-row = users[0]
-
-# keys() returns column names
-assert row.keys() == ["Name", "Type"]
-
-# values() returns column values
-assert row.values() == ["Alice", "admin"]
-
-# items() returns name-value pairs
-assert row.items() == [("Name", "Alice"), ("Type", "admin")]
+row = md.tables.row_helpers[0]
+assert row.keys() == ["key_name", "value_name"]
+assert row.values() == ["alpha", "one"]
+assert row.items() == [("key_name", "alpha"), ("value_name", "one")]
 ```
 
-## Dot Notation
+## Namespace Hook
 
-Rows support dot notation for column access:
+Projects can inject domain-specific objects into each Python block with `pytest_mustmatch_namespace`. This example is shown as documentation only:
 
-```python
-# Get the users table
-users = md.tables.tables
+```python skip
+# conftest.py
 
-# Access columns with dot notation
-first_user = users[0]
-assert first_user.Name == "Alice"
-assert first_user.Type == "admin"
-
-# Also works with dictionary syntax
-assert first_user["Name"] == "Alice"
-
-# Get all data as plain dicts
-dicts = users.as_dicts()
-assert dicts == [
-    {"Name": "Alice", "Type": "admin"},
-    {"Name": "Bob", "Type": "user"},
-]
+def pytest_mustmatch_namespace():
+    return {
+        "db": db_client,
+        "http": http_client,
+    }
 ```

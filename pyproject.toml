@@ -53,6 +53,10 @@ where = ["src"]
 [tool.setuptools]
 py-modules = ["sitecustomize"]
 
+[tool.mustmatch]
+# Optional modules injected into every Python markdown block.
+auto_imports = []
+
 [tool.pytest.ini_options]
 testpaths = ["docs"]
 pythonpath = ["src"]

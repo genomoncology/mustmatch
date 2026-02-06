@@ -1,116 +1,56 @@
 # mustmatch
 
-**CLI output assertion tool for documentation testing**
+CLI assertion utility and pytest plugin for executable Markdown.
 
----
-
-## Build & Test
+## Build And Test
 
 ```bash
-uv sync --extra dev    # Install dependencies
-uv run pytest          # Run tests
-uv run pytest --cov    # With coverage
-uv run ruff check src  # Lint
+uv sync --extra dev
+uv run pytest
+uv run pytest --cov
+uv run ruff check src
 ```
-
----
 
 ## Project Structure
 
-```
+```text
 mustmatch/
-├── src/mustmatch/         # Package source
-│   ├── __init__.py           # Public API exports
-│   ├── __main__.py           # python -m support
-│   ├── cli.py                # CLI interface (argparse)
-│   ├── pytest_plugin.py      # pytest integration
-│   ├── version.py            # Version info
-│   └── services/             # Core services layer
-│       ├── __init__.py          # Service exports
-│       ├── comparator.py        # Comparison logic (exact, contains, regex, json, jsonl)
-│       ├── normalizer.py        # Text preprocessing (ANSI strip, whitespace)
-│       ├── parser.py            # Markdown parsing (Mistune AST)
-│       └── runner.py            # Code execution (bash, python)
-├── docs/                  # Test documentation (run via pytest)
-│   ├── api.md
-│   ├── cli/
-│   ├── comparator/
-│   ├── normalizer/
-│   ├── parser/
-│   └── runner/
-└── pyproject.toml         # Package config
+├── src/mustmatch/
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── cli.py
+│   ├── pytest_plugin.py
+│   ├── version.py
+│   └── services/
+│       ├── comparator.py
+│       ├── fixture.py
+│       ├── normalizer.py
+│       ├── parser.py
+│       └── runner.py
+├── docs/
+│   ├── index.md
+│   ├── quick-start.md
+│   ├── comparison-modes.md
+│   ├── normalization.md
+│   ├── examples.md
+│   ├── writing-test-documents.md
+│   ├── fixture.md
+│   ├── each-row.md
+│   ├── conventions.md
+│   ├── error-handling.md
+│   ├── json-subset.md
+│   └── jsonl.md
+└── pyproject.toml
 ```
 
----
+## Plugin Features
 
-## API
-
-### CLI Usage
-
-```bash
-# Exact match
-echo "hello" | mustmatch "hello"
-
-# Contains substring (like)
-cmd --help | mustmatch like "Usage:"
-
-# Negation
-echo "ok" | mustmatch not like "error"
-
-# JSON semantic (auto-detected, field order independent)
-echo '{"b": 2, "a": 1}' | mustmatch '{"a": 1, "b": 2}'
-
-# JSON subset match
-echo '{"a":1,"b":2}' | mustmatch like '{"a":1}'
-
-# Regex (auto-detected by /pattern/ syntax)
-echo "v1.2.3" | mustmatch "/v\d+\.\d+/"
-
-# Test markdown docs
-mustmatch test docs/
-
-# Test with verbose output
-mustmatch test -v docs/
-```
-
-### Exit Codes
-
-- `0` - Match
-- `1` - Mismatch
-- `2` - Invalid arguments
-
----
-
-## Documentation Testing
-
-Tests live in `docs/` as markdown files with code blocks. The pytest plugin collects and runs these blocks.
-
-To run: `uv run pytest docs/ -v`
-
-### Block Directives
-
-Code blocks support directives in the info string:
-
-```markdown
-\`\`\`bash skip
-# This block is skipped
-\`\`\`
-
-\`\`\`bash timeout=5
-# This block has a 5-second timeout
-\`\`\`
-```
-
----
-
-## Code Quality
-
-- **Linting**: ruff
-- **Testing**: pytest with coverage (target: 45%+)
-- **CI**: GitHub Actions (test on Python 3.10-3.13)
-
----
+- Collects `.md` files as pytest tests
+- Executes `bash`, `sh`, and `python` code blocks
+- Supports directives: `skip`, `timeout`, `each_row`, `setup`, `expect_error`, `perf`
+- Provides `md` fixture for section/table access
+- Supports optional namespace injection via `pytest_mustmatch_namespace`
 
 ## Version
 
-Current: **0.0.0.dev0**
+Current: **0.0.2**
