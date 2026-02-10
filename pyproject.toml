@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68.0.0"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "mustmatch"
@@ -8,27 +8,25 @@ version = "0.0.2"
 description = "CLI output assertion tool for documentation testing"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { text = "MIT" }
 authors = [
-    {name = "Ian Maurer", email = "ian@genomoncology.com" }
+  { name = "Ian Maurer", email = "ian@genomoncology.com" },
 ]
 keywords = ["testing", "documentation", "cli", "assertions"]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Testing",
-    "Topic :: Documentation",
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Testing",
+  "Topic :: Documentation",
 ]
-dependencies = [
-    "mistune>=3.0",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/genomoncology/mustmatch"
@@ -42,19 +40,17 @@ mustmatch = "mustmatch.pytest_plugin"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "ruff>=0.1.0",
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "ruff>=0.1.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools]
-py-modules = ["sitecustomize"]
+[tool.maturin]
+manifest-path = "crates/mustmatch-python/Cargo.toml"
+module-name = "mustmatch._core"
+python-source = "src"
 
 [tool.mustmatch]
-# Optional modules injected into every Python markdown block.
 auto_imports = []
 
 [tool.pytest.ini_options]
@@ -76,21 +72,21 @@ source = ["mustmatch"]
 branch = true
 parallel = true
 omit = [
-    "*/src/mustmatch/__main__.py",
-    "*/src/mustmatch/version.py",
-    "*/src/mustmatch/pytest_plugin.py",
-    "*/src/mustmatch/cli.py",
+  "*/src/mustmatch/__main__.py",
+  "*/src/mustmatch/version.py",
+  "*/src/mustmatch/pytest_plugin.py",
+  "*/src/mustmatch/cli.py",
 ]
 
 [tool.coverage.report]
 fail_under = 45
 omit = [
-    "*/src/mustmatch/__main__.py",
-    "*/src/mustmatch/version.py",
-    "*/src/mustmatch/pytest_plugin.py",
-    "*/src/mustmatch/cli.py",
+  "*/src/mustmatch/__main__.py",
+  "*/src/mustmatch/version.py",
+  "*/src/mustmatch/pytest_plugin.py",
+  "*/src/mustmatch/cli.py",
 ]
 exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:",
+  "pragma: no cover",
+  "if __name__ == .__main__.:",
 ]

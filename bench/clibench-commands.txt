@@ -1,0 +1,9 @@
+# Tag COMMAND
+python/assert/exact bash -lc 'printf "hello\n" | .venv/bin/python -m mustmatch "hello"'
+python/assert/like bash -lc 'printf "hello world\n" | .venv/bin/python -m mustmatch like "world"'
+python/assert/regex bash -lc 'printf "v1.2.3\n" | .venv/bin/python -m mustmatch "/^v[0-9]+[.][0-9]+[.][0-9]+$/"'
+python/assert/json-subset bash -lc 'printf "{\"status\":\"ok\",\"count\":42}\n" | .venv/bin/python -m mustmatch like "{\"status\":\"ok\"}"'
+rust/assert/exact bash -lc 'printf "hello\n" | target/debug/mustmatch-cli "hello"'
+rust/assert/like bash -lc 'printf "hello world\n" | target/debug/mustmatch-cli like "world"'
+rust/assert/regex bash -lc 'printf "v1.2.3\n" | target/debug/mustmatch-cli "/^v[0-9]+[.][0-9]+[.][0-9]+$/"'
+rust/assert/json-subset bash -lc 'printf "{\"status\":\"ok\",\"count\":42}\n" | target/debug/mustmatch-cli like "{\"status\":\"ok\"}"'

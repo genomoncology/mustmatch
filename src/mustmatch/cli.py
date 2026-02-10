@@ -12,12 +12,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from .services.comparator import (
-    CompareMode,
-    compare,
-    detect_mode,
-)
-from .services.normalizer import NormalizeOptions, normalize
+from ._core import compare, detect_mode, normalize
+from .runtime import create_python_namespace, run_bash, run_python
 from .version import __version__
 
 HELP = """\
@@ -63,23 +59,18 @@ def _run_match(
     """Run the match logic. Returns exit code."""
     actual = sys.stdin.read()
 
-    norm_opts = NormalizeOptions(
-        strip_ansi=True,
-        normalize_newlines=True,
-        trim=True,
-    )
-    actual = normalize(actual, norm_opts)
-    expected = normalize(expected, norm_opts)
+    actual = normalize(actual, strip_ansi=True, normalize_newlines=True, trim=True)
+    expected = normalize(expected, strip_ansi=True, normalize_newlines=True, trim=True)
 
     mode = detect_mode(expected)
 
     if like:
-        if mode == CompareMode.JSON:
+        if mode == "json":
             subset = True
-            if detect_mode(actual) == CompareMode.JSONL:
-                mode = CompareMode.JSONL
+            if detect_mode(actual) == "jsonl":
+                mode = "jsonl"
         else:
-            mode = CompareMode.CONTAINS
+            mode = "contains"
             subset = False
     else:
         subset = False
@@ -121,9 +112,7 @@ def _run_test(
     """Run markdown tests. Returns exit code."""
     import subprocess
 
-    from .services.fixture import create_md_fixture
-    from .services.parser import get_table_for_block, parse_markdown
-    from .services.runner import create_python_namespace, run_bash, run_python
+    from ._core import create_md_fixture, get_table_for_block, parse_markdown
 
     files: list[Path] = []
     for path in paths:

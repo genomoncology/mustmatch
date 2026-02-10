@@ -16,15 +16,17 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import tomllib
 
-from .services.fixture import TableRow, build_table_rows, create_md_fixture
-from .services.parser import (
+from ._core import (
     Block,
     ParseResult,
     Table,
+    TableRow,
+    build_table_rows,
+    create_md_fixture,
     get_table_for_block,
     parse_markdown,
 )
-from .services.runner import create_python_namespace, run_bash, run_python
+from .runtime import create_python_namespace, run_bash, run_python
 
 if TYPE_CHECKING:
     from typing import Iterator

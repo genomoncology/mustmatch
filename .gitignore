@@ -33,3 +33,4 @@ htmlcov/
 /sitecustomize.py
 .ruff_cache/
 coverage.xml
+target/

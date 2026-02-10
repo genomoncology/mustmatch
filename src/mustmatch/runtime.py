@@ -1,5 +1,5 @@
 """
-Block runner for executing bash and Python code.
+Runtime execution helpers for mustmatch.
 
 Bash blocks run via subprocess, Python blocks run via exec().
 """
@@ -34,17 +34,7 @@ def run_bash(
     env: dict[str, str] | None = None,
     timeout: float | None = None,
 ) -> RunResult:
-    """Execute bash code and capture output.
-
-    Args:
-        code: Bash code to execute.
-        cwd: Working directory (defaults to current directory).
-        env: Environment variables (defaults to current environment).
-        timeout: Timeout in seconds (defaults to no timeout).
-
-    Returns:
-        RunResult with stdout, stderr, exit_code, and duration.
-    """
+    """Execute bash code and capture output."""
     start = time.perf_counter()
     bash_code = f"set -e\n{code}"
 
@@ -65,23 +55,23 @@ def run_bash(
             exit_code=result.returncode,
             duration=duration,
         )
-    except subprocess.TimeoutExpired as e:
+    except subprocess.TimeoutExpired as exc:
         duration = time.perf_counter() - start
         return RunResult(
-            stdout=e.stdout or "" if isinstance(e.stdout, str) else "",
-            stderr=e.stderr or "" if isinstance(e.stderr, str) else "",
+            stdout=exc.stdout or "" if isinstance(exc.stdout, str) else "",
+            stderr=exc.stderr or "" if isinstance(exc.stderr, str) else "",
             exit_code=-1,
             duration=duration,
-            exception=e,
+            exception=exc,
         )
-    except Exception as e:
+    except Exception as exc:  # noqa: BLE001
         duration = time.perf_counter() - start
         return RunResult(
             stdout="",
-            stderr=str(e),
+            stderr=str(exc),
             exit_code=-1,
             duration=duration,
-            exception=e,
+            exception=exc,
         )
 
 
@@ -92,16 +82,7 @@ def run_python(
     locals_dict: dict[str, Any] | None = None,
     timeout: float | None = None,
 ) -> RunResult:
-    """Execute Python code via exec().
-
-    Args:
-        code: Python code to execute.
-        globals_dict: Global namespace (will be modified in place).
-        locals_dict: Local namespace (optional, defaults to globals_dict).
-
-    Returns:
-        RunResult with stdout, stderr (from exception), exit_code, and duration.
-    """
+    """Execute Python code via exec()."""
     if globals_dict is None:
         globals_dict = {"__builtins__": __builtins__}
     if locals_dict is None:
@@ -127,7 +108,7 @@ def run_python(
             signal.signal(signal.SIGALRM, _handle_timeout)
             signal.setitimer(signal.ITIMER_REAL, timeout)
             timer_enabled = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             timer_enabled = False
             old_handler = None
 
@@ -142,27 +123,16 @@ def run_python(
             exit_code=0,
             duration=duration,
         )
-    except _RunPythonTimeout as e:
+    except _RunPythonTimeout as exc:
         duration = time.perf_counter() - start
         return RunResult(
             stdout=stdout_capture.getvalue(),
             stderr=f"Timed out after {timeout}s",
             exit_code=-1,
             duration=duration,
-            exception=e,
+            exception=exc,
         )
-    except AssertionError as e:
-        duration = time.perf_counter() - start
-        # Format assertion error with traceback
-        tb = traceback.format_exc()
-        return RunResult(
-            stdout=stdout_capture.getvalue(),
-            stderr=tb,
-            exit_code=1,
-            duration=duration,
-            exception=e,
-        )
-    except Exception as e:
+    except AssertionError as exc:
         duration = time.perf_counter() - start
         tb = traceback.format_exc()
         return RunResult(
@@ -170,7 +140,17 @@ def run_python(
             stderr=tb,
             exit_code=1,
             duration=duration,
-            exception=e,
+            exception=exc,
+        )
+    except Exception as exc:  # noqa: BLE001
+        duration = time.perf_counter() - start
+        tb = traceback.format_exc()
+        return RunResult(
+            stdout=stdout_capture.getvalue(),
+            stderr=tb,
+            exit_code=1,
+            duration=duration,
+            exception=exc,
         )
     finally:
         if timer_enabled:
@@ -188,24 +168,15 @@ def create_python_namespace(
     current_block: Any | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Create a namespace for Python code execution.
-
-    Args:
-        table: Optional table data to inject as 'table' variable.
-        parse_result: Optional ParseResult to create 'md' fixture.
-        current_block: Optional current Block for context.
-        extra: Optional namespace values to merge in.
-
-    Returns:
-        A namespace dictionary ready for exec().
-    """
+    """Create a namespace for Python code execution."""
     namespace: dict[str, Any] = {"__builtins__": __builtins__}
 
     if table is not None:
         namespace["table"] = table
 
     if parse_result is not None:
-        from .fixture import create_md_fixture
+        from ._core import create_md_fixture
+
         namespace["md"] = create_md_fixture(parse_result, current_block)
 
     if extra:

@@ -1,0 +1,12 @@
+[package]
+name = "mustmatch-cli"
+version = "0.0.2"
+edition = "2024"
+license = "MIT"
+
+[[bin]]
+name = "mustmatch-cli"
+path = "src/main.rs"
+
+[dependencies]
+mustmatch-core = { path = "../mustmatch-core" }

@@ -1,30 +1,29 @@
 # mustmatch
 
-`mustmatch` does two things:
-
-1. CLI assertion tool for command output
-2. Pytest plugin for executable Markdown documentation
+`mustmatch` provides two tightly coupled capabilities for executable documentation workflows. It asserts CLI output in shell pipelines, and it executes Markdown `bash`/`python` fences as pytest tests. The Rust core handles parsing, normalization, and comparison while Python keeps runtime orchestration.
 
 ## Install
 
-```bash
+Use a normal Python virtual environment and install with pip. This snippet is documentation-only and intentionally skipped during executable doc runs.
+
+```bash skip
 pip install mustmatch
 ```
 
-## Side 1: CLI Assertions
+## CLI Assertions
 
-Use `mustmatch` in pipelines to verify output.
+Pipe command output into `mustmatch` and compare against one expected value.
 
 ```bash
 echo "hello" | mustmatch "hello"
 echo "hello world" | mustmatch like "world"
-date +%Y-%m-%d | mustmatch '/^\d{4}-\d{2}-\d{2}$/'
+echo "v1.2.3" | mustmatch "/^v[0-9]+[.][0-9]+[.][0-9]+$/"
 echo '{"status":"ok","count":42}' | mustmatch like '{"status":"ok"}'
 ```
 
-## Side 2: Executable Markdown
+## Executable Markdown
 
-Write documentation in Markdown and run it as pytest.
+Markdown documents become test files under pytest collection. Tables can drive per-row Python checks with `each_row`.
 
 ````markdown
 # Math Behavior
@@ -36,8 +35,9 @@ Write documentation in Markdown and run it as pytest.
 | 2     | 4      |
 
 ```python each_row
-from types import SimpleNamespace
-result = SimpleNamespace(input=row.input, output=row.input * 2)
+doubled = row.input * 2
+result = {"input": row.input, "output": doubled}
+row_label = f"row-{row_index}"
 ```
 ````
 
@@ -47,28 +47,31 @@ Run docs as tests:
 pytest docs/ -v
 ```
 
-## CLI Reference
+## Documentation Map
 
-```text
-Usage:
-    command | mustmatch [not] [like] EXPECTED
+The executable specification is in `docs/`:
 
-Options:
-    -i, --ignore-case    Case-insensitive
-    -q, --quiet          Suppress mismatch output
-    --version            Show version
-    -h, --help           Show help
+1. `docs/01-overview.md`
+2. `docs/02-cli-assertions.md`
+3. `docs/03-executable-documents.md`
+4. `docs/04-fixtures-and-tables.md`
+5. `docs/05-directives.md`
+6. `docs/06-comparison-modes.md`
+7. `docs/07-normalization.md`
+8. `docs/08-configuration.md`
+9. `docs/09-examples.md`
+
+## CLI Bench Plan
+
+Benchmark commands are tracked in `bench/clibench-commands.txt` so Python and Rust paths can be compared with the same tag set.
+
+```bash
+# Python baseline
+CLIBENCH_PROJECT=mustmatch-cli uv run --script /home/ian/workspace/.codex/skills/clibench/clibench.py batch bench/clibench-commands.txt
+
+# Compare prefixes
+CLIBENCH_PROJECT=mustmatch-cli uv run --script /home/ian/workspace/.codex/skills/clibench/clibench.py compare python rust
 ```
-
-## Documentation
-
-- `docs/index.md` - learning path
-- `docs/quick-start.md` - CLI quick start
-- `docs/comparison-modes.md` - matching modes
-- `docs/writing-test-documents.md` - executable Markdown walkthrough
-- `docs/fixture.md` - `md` fixture and table APIs
-- `docs/each-row.md` - `each_row`, `setup`, `expect_error`, `perf`
-- `docs/conventions.md` - writing conventions
 
 ## License
 
