@@ -1,9 +1,5 @@
 """
-CLI interface - thin layer that delegates to services.
-
-Grammar:
-    mustmatch [not] [like] EXPECTED
-    mustmatch test PATHS
+CLI interface - delegates to Rust core via _core module.
 """
 
 from __future__ import annotations

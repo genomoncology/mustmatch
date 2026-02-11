@@ -15,32 +15,30 @@ uv run ruff check src
 
 ```text
 mustmatch/
+├── crates/
+│   ├── mustmatch-core/     # Rust core: parser, comparator, normalizer, coercion, fixture
+│   ├── mustmatch-python/   # PyO3 bindings exposing mustmatch._core
+│   └── mustmatch-cli/      # Standalone Rust CLI binary
 ├── src/mustmatch/
 │   ├── __init__.py
 │   ├── __main__.py
-│   ├── cli.py
-│   ├── pytest_plugin.py
-│   ├── version.py
-│   └── services/
-│       ├── comparator.py
-│       ├── fixture.py
-│       ├── normalizer.py
-│       ├── parser.py
-│       └── runner.py
-├── docs/
+│   ├── cli.py              # Python CLI (match + test subcommands)
+│   ├── runtime.py          # Bash/Python block execution
+│   ├── pytest_plugin.py    # pytest collector for .md files
+│   └── version.py
+├── docs/                   # Executable documentation (pytest tests)
 │   ├── index.md
-│   ├── quick-start.md
-│   ├── comparison-modes.md
-│   ├── normalization.md
-│   ├── examples.md
-│   ├── writing-test-documents.md
-│   ├── fixture.md
-│   ├── each-row.md
-│   ├── conventions.md
-│   ├── error-handling.md
-│   ├── json-subset.md
-│   └── jsonl.md
-└── pyproject.toml
+│   ├── 01-overview.md
+│   ├── 02-cli-assertions.md
+│   ├── 03-executable-documents.md
+│   ├── 04-fixtures-and-tables.md
+│   ├── 05-directives.md
+│   ├── 06-comparison-modes.md
+│   ├── 07-normalization.md
+│   ├── 08-configuration.md
+│   └── 09-examples.md
+├── bench/                  # CLI benchmark commands
+└── pyproject.toml          # Package config (maturin build)
 ```
 
 ## Plugin Features

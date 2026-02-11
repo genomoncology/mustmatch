@@ -14,39 +14,52 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyList};
 use serde_json::Value;
 
-fn json_value_to_py(py: Python<'_>, value: Value) -> PyObject {
+fn json_value_to_py(py: Python<'_>, value: Value) -> PyResult<PyObject> {
     match value {
-        Value::Null => py.None(),
-        Value::Bool(v) => v.into_py(py),
+        Value::Null => Ok(py.None()),
+        Value::Bool(v) => Ok(v.into_py(py)),
         Value::Number(v) => {
             if let Some(as_i64) = v.as_i64() {
-                as_i64.into_py(py)
+                Ok(as_i64.into_py(py))
             } else if let Some(as_u64) = v.as_u64() {
-                as_u64.into_py(py)
+                Ok(as_u64.into_py(py))
             } else if let Some(as_f64) = v.as_f64() {
-                as_f64.into_py(py)
+                Ok(as_f64.into_py(py))
             } else {
-                v.to_string().into_py(py)
+                Ok(v.to_string().into_py(py))
             }
         }
-        Value::String(v) => v.into_py(py),
-        Value::Array(values) => values
+        Value::String(v) => Ok(v.into_py(py)),
+        Value::Array(values) => Ok(values
             .into_iter()
             .map(|item| json_value_to_py(py, item))
-            .collect::<Vec<PyObject>>()
-            .into_py(py),
+            .collect::<PyResult<Vec<PyObject>>>()?
+            .into_py(py)),
         Value::Object(values) => {
             let dict = PyDict::new_bound(py);
             for (key, value) in values {
-                let _ = dict.set_item(key, json_value_to_py(py, value));
+                dict.set_item(key, json_value_to_py(py, value)?)?;
             }
-            dict.into_py(py)
+            Ok(dict.into_py(py))
         }
     }
 }
 
 fn normalize_lookup(value: &str) -> String {
-    value.to_lowercase().replace([' ', '-'], "_")
+    let mut normalized = String::with_capacity(value.len());
+    let mut prev_underscore = false;
+
+    for ch in value.chars().flat_map(char::to_lowercase) {
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch);
+            prev_underscore = false;
+        } else if !prev_underscore {
+            normalized.push('_');
+            prev_underscore = true;
+        }
+    }
+
+    normalized.trim_matches('_').to_string()
 }
 
 fn resolve_index(length: usize, index: isize) -> Option<usize> {
@@ -213,14 +226,14 @@ impl PyTableRow {
         }
 
         match self.inner.get(name) {
-            Some(value) => Ok(json_value_to_py(py, value)),
+            Some(value) => Ok(json_value_to_py(py, value)?),
             None => Err(PyAttributeError::new_err(format!("No column {name:?}"))),
         }
     }
 
     fn __getitem__(&self, key: &str, py: Python<'_>) -> PyResult<PyObject> {
         match self.inner.get(key) {
-            Some(value) => Ok(json_value_to_py(py, value)),
+            Some(value) => Ok(json_value_to_py(py, value)?),
             None => Err(PyKeyError::new_err(key.to_string())),
         }
     }
@@ -229,7 +242,7 @@ impl PyTableRow {
         self.inner.keys()
     }
 
-    fn values(&self, py: Python<'_>) -> Vec<PyObject> {
+    fn values(&self, py: Python<'_>) -> PyResult<Vec<PyObject>> {
         self.inner
             .values()
             .into_iter()
@@ -237,11 +250,11 @@ impl PyTableRow {
             .collect()
     }
 
-    fn items(&self, py: Python<'_>) -> Vec<(String, PyObject)> {
+    fn items(&self, py: Python<'_>) -> PyResult<Vec<(String, PyObject)>> {
         self.inner
             .items()
             .into_iter()
-            .map(|(key, value)| (key, json_value_to_py(py, value)))
+            .map(|(key, value)| Ok((key, json_value_to_py(py, value)?)))
             .collect()
     }
 }
@@ -300,7 +313,7 @@ impl PyFixtureTable {
         Ok(list.call_method0("__iter__")?.into_py(py))
     }
 
-    fn as_dicts(&self, py: Python<'_>) -> Vec<HashMap<String, PyObject>> {
+    fn as_dicts(&self, py: Python<'_>) -> PyResult<Vec<HashMap<String, PyObject>>> {
         self.rows
             .iter()
             .map(|row| {
@@ -309,7 +322,7 @@ impl PyFixtureTable {
                     .inner
                     .items()
                     .into_iter()
-                    .map(|(key, value)| (key, json_value_to_py(py, value)))
+                    .map(|(key, value)| Ok((key, json_value_to_py(py, value)?)))
                     .collect()
             })
             .collect()
@@ -612,4 +625,22 @@ fn _core(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(strip_ansi, module)?)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_lookup;
+
+    #[test]
+    fn normalize_lookup_strips_punctuation() {
+        assert_eq!(
+            normalize_lookup("Context-Based Disambiguation: Disease Context"),
+            "context_based_disambiguation_disease_context"
+        );
+    }
+
+    #[test]
+    fn normalize_lookup_collapses_separators() {
+        assert_eq!(normalize_lookup("  A--B__C  "), "a_b_c");
+    }
 }

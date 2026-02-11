@@ -1,8 +1,8 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
-static ANSI_ESCAPE_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static ANSI_ESCAPE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07").expect("valid ansi regex")
 });
 

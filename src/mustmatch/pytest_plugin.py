@@ -1,7 +1,7 @@
 """
 Pytest plugin for mustmatch markdown testing.
 
-Uses services layer directly - no subprocess spawning for comparisons.
+Comparisons use Rust core via _core module.
 Bash blocks run via subprocess, Python blocks via exec().
 """
 

@@ -125,7 +125,7 @@ fn is_table_separator(line: &str) -> bool {
     }
 
     let cells: Vec<&str> = trimmed.split('|').collect();
-    if cells.len() < 2 {
+    if cells.is_empty() {
         return false;
     }
 
@@ -319,5 +319,27 @@ result = {"input": row.input, "output": row.input * 2}
         let parsed = parse_markdown(source);
         assert_eq!(parsed.blocks.len(), 1);
         assert_eq!(parsed.blocks[0].language, "bash");
+    }
+
+    #[test]
+    fn parses_single_column_tables() {
+        let source = r#"# Root
+
+## Single Column
+
+| expected_text |
+|---------------|
+| Variant Browser |
+| ClinVar |
+"#;
+
+        let parsed = parse_markdown(source);
+        assert_eq!(parsed.tables.len(), 1);
+        assert_eq!(parsed.tables[0].headers, vec!["expected_text".to_string()]);
+        assert_eq!(parsed.tables[0].rows.len(), 2);
+        assert_eq!(
+            parsed.tables[0].rows[0],
+            vec!["Variant Browser".to_string()]
+        );
     }
 }

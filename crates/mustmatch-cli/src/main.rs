@@ -2,7 +2,8 @@ use std::io::{self, Read};
 
 use mustmatch_core::{CompareMode, NormalizeOptions, compare, detect_mode, normalize};
 
-const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n";
 
 #[derive(Debug, Clone)]
 struct MatchArgs {
@@ -33,6 +34,9 @@ fn parse_match_args(args: &[String]) -> Result<MatchArgs, i32> {
             quiet = true;
         } else if arg == "-h" || arg == "--help" {
             println!("{HELP}");
+            return Err(0);
+        } else if arg == "--version" {
+            println!("mustmatch-cli {VERSION}");
             return Err(0);
         } else if arg == "--" {
             expected_separator = Some(positional.len());
@@ -152,9 +156,15 @@ fn run_match(args: MatchArgs) -> i32 {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
-    if args.len() == 1 && (args[0] == "-h" || args[0] == "--help") {
-        println!("{HELP}");
-        std::process::exit(0);
+    if args.len() == 1 {
+        if args[0] == "-h" || args[0] == "--help" {
+            println!("{HELP}");
+            std::process::exit(0);
+        }
+        if args[0] == "--version" {
+            println!("mustmatch-cli {VERSION}");
+            std::process::exit(0);
+        }
     }
 
     match parse_match_args(&args) {
