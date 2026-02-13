@@ -36,3 +36,26 @@ total = sum(range(1000))
 assert total > 0
 assert isinstance(total, int)
 ```
+
+## Table Selection
+
+Use `table=<name>` when multiple prior tables are in scope and you want a specific one.
+Table names use the same normalization as `md.tables[...]` lookups.
+
+### Shared Inputs
+
+| text | expected |
+|------|----------|
+| BRAF mutation | BRAF |
+
+### Alternate Inputs
+
+| text | expected |
+|------|----------|
+| KRAS mutation | KRAS |
+
+```python table=shared_inputs
+assert len(scenarios) == 1
+assert scenarios[0].text == "BRAF mutation"
+assert scenarios[0].expected == "BRAF"
+```

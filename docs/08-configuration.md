@@ -22,3 +22,16 @@ assert rows[0]["value"] == 42
 assert rows[0]["raw"] == "42"
 assert detect_mode('/^a$/') == "regex"
 ```
+
+## Mustmatch-Only Mode
+
+`--mustmatch-only` filters bash blocks to those that actually pipe into `mustmatch`.
+Blocks that only mention `mustmatch` text without a pipe are skipped.
+
+```bash
+echo "run through mustmatch" | mustmatch like "run through mustmatch"
+```
+
+```bash
+echo "mustmatch appears here without a pipe"
+```

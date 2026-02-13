@@ -17,6 +17,26 @@ result = {"input": row.input, "output": doubled, "label": row.label}
 label_copy = row.label
 ```
 
+## Scenarios Fixture
+
+When a Python block follows a table, that table is available as `scenarios`.
+This gives concise access to typed `TableRow` values without hard-coding a table slug.
+
+| sample | expected_hits |
+|--------|---------------|
+| BRAF   | 1             |
+| EGFR   | 2             |
+
+```python
+assert len(scenarios) == 2
+assert scenarios[0].sample == "BRAF"
+assert scenarios[1].expected_hits == 2
+
+counts = {row.sample: row.expected_hits for row in scenarios}
+assert counts["BRAF"] == 1
+assert counts["EGFR"] == 2
+```
+
 ## Document Fixture
 
 `md` exposes collected sections and tables. This lets blocks validate document wiring as part of executable docs.

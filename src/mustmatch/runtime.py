@@ -164,6 +164,7 @@ def run_python(
 def create_python_namespace(
     *,
     table: list[dict[str, str]] | None = None,
+    table_rows: list[Any] | None = None,
     parse_result: Any | None = None,
     current_block: Any | None = None,
     extra: dict[str, Any] | None = None,
@@ -173,6 +174,9 @@ def create_python_namespace(
 
     if table is not None:
         namespace["table"] = table
+
+    if table_rows:
+        namespace["scenarios"] = table_rows
 
     if parse_result is not None:
         from ._core import create_md_fixture
