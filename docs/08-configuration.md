@@ -23,14 +23,17 @@ assert rows[0]["raw"] == "42"
 assert detect_mode('/^a$/') == "regex"
 ```
 
-## Mustmatch-Only Mode
+## Pipe-Only Bash Execution
 
-`--mustmatch-only` filters bash blocks to those that actually pipe into `mustmatch`.
-Blocks that only mention `mustmatch` text without a pipe are skipped.
+Bash blocks only execute when they pipe into `mustmatch`. This keeps executable
+assertions explicit and prevents non-assertion shell snippets from running.
 
 ```bash
 echo "run through mustmatch" | mustmatch like "run through mustmatch"
 ```
+
+This sentinel block mentions `mustmatch` but has no pipe, so it should be
+collected as markdown content only and not executed:
 
 ```bash
 echo "mustmatch appears here without a pipe"

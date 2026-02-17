@@ -85,12 +85,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=30,
         help="Timeout per block in seconds (default: 30)",
     )
-    group.addoption(
-        "--mustmatch-only",
-        action="store_true",
-        default=False,
-        help="Only run bash blocks that pipe into mustmatch",
-    )
 
 
 def pytest_collect_file(
@@ -246,7 +240,6 @@ class MarkdownFile(pytest.File):
         lang = self.config.getoption("--mustmatch-lang", default="all")
         memory = self.config.getoption("--mustmatch-memory", default=False)
         timeout = self.config.getoption("--mustmatch-timeout", default=30)
-        mustmatch_only = self.config.getoption("--mustmatch-only", default=False)
 
         content = self.path.read_text()
         result = parse_markdown(content)
@@ -302,7 +295,7 @@ class MarkdownFile(pytest.File):
                     table_data = [dict(row._data) for row in table_rows]
 
             if block.language == "bash":
-                if mustmatch_only and not _bash_block_has_mustmatch_pipe(block.content):
+                if not _bash_block_has_mustmatch_pipe(block.content):
                     continue
                 yield BashItem.from_parent(
                     self,
