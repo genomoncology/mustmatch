@@ -11,6 +11,21 @@ mustmatch supports lightweight configuration through `pyproject.toml` and pytest
 auto_imports = ["math"]
 ```
 
+## Repo Bootstrap
+
+Installed-package pytest usage still relies on the `pytest11` entry point. This
+checkout also bootstraps the plugin from source so contributor runs collect
+Markdown tests even when a generated console script has gone stale.
+
+Repo-local pytest config blocks the `mustmatch` entry-point alias and then
+preloads `mustmatch.pytest_plugin` from `src`. That avoids double registration
+when entry-point metadata is visible while keeping checkout-local runs
+independent from editable-install metadata visibility.
+
+```bash
+uv run pytest --trace-config --co -q docs/01-overview.md 2>&1 | mustmatch like "mustmatch.pytest_plugin"
+```
+
 ## Public Core API
 
 The Rust-backed public helpers are importable from `mustmatch._core`. These checks validate mode detection and table coercion behavior.

@@ -27,7 +27,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv python install ${{ matrix.python-version }}
       - run: uv sync --extra dev
-      - run: uv run pytest docs/ README.md -v
+      - run: uv run python -m pytest docs/ README.md -v
       - name: Lint
         if: matrix.python-version == '3.12'
         run: uv run ruff check src

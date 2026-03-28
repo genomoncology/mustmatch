@@ -19,18 +19,18 @@ build:
 test:
 	@echo "Running tests..."
 	@uv sync --extra dev
-	@uv run pytest docs/ README.md -q
+	@uv run python -m pytest docs/ README.md -q
 	@echo "✓ Tests passed"
 
 coverage:
 	@echo "Running coverage..."
 	@uv sync --extra dev
 	@rm -f .coverage .coverage.* docs/.coverage docs/.coverage.*
-	@COVERAGE_PROCESS_START="$(shell pwd)/.coveragerc" COVERAGE_FILE="$(shell pwd)/.coverage" uv run coverage run -m pytest docs/ README.md -q
-	@uv run coverage combine --quiet . docs
-	@uv run coverage report
-	@uv run coverage html
-	@uv run coverage xml
+	@COVERAGE_PROCESS_START="$(shell pwd)/pyproject.toml" COVERAGE_FILE="$(shell pwd)/.coverage" uv run python -m coverage run -m pytest docs/ README.md -q
+	@uv run python -m coverage combine --quiet . docs
+	@uv run python -m coverage report
+	@uv run python -m coverage html
+	@uv run python -m coverage xml
 	@echo "✓ Coverage: htmlcov/index.html"
 
 clean:

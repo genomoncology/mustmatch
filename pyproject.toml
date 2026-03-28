@@ -54,6 +54,7 @@ python-source = "src"
 auto_imports = []
 
 [tool.pytest.ini_options]
+addopts = ["-p", "no:mustmatch", "-p", "mustmatch.pytest_plugin"]
 testpaths = ["docs"]
 pythonpath = ["src"]
 python_files = []
@@ -76,6 +77,12 @@ omit = [
   "*/src/mustmatch/version.py",
   "*/src/mustmatch/pytest_plugin.py",
   "*/src/mustmatch/cli.py",
+]
+
+[tool.coverage.paths]
+mustmatch = [
+  "src/mustmatch",
+  "/tmp/tmp*/mustmatch",
 ]
 
 [tool.coverage.report]

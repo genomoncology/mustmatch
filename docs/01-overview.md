@@ -9,7 +9,7 @@ The CLI is optimized for shell pipelines, while the pytest plugin executes `bash
 | Surface | Purpose | Entry point |
 |---------|---------|-------------|
 | CLI | Assert command output from stdin | `mustmatch` |
-| Pytest plugin | Run markdown blocks as tests | `pytest docs/` |
+| Pytest plugin | Run markdown blocks as tests | `python -m pytest docs/` |
 
 ## Basic Behavior
 
