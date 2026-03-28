@@ -47,6 +47,13 @@ Run docs as tests:
 pytest docs/ -v
 ```
 
+## Quality Checks
+
+Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint markdown specs without executing their fences.
+
+- `mustmatch verify-matrix .march/design-final.md --repo-root .`
+- `mustmatch lint docs/02-cli-assertions.md`
+
 ## Documentation Map
 
 The executable specification is in `docs/`:
@@ -60,6 +67,8 @@ The executable specification is in `docs/`:
 7. `docs/07-normalization.md`
 8. `docs/08-configuration.md`
 9. `docs/09-examples.md`
+10. `docs/10-verify-matrix.md`
+11. `docs/11-lint.md`
 
 ## CLI Bench Plan
 

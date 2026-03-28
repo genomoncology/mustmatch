@@ -5,10 +5,12 @@ CLI interface - delegates to Rust core via _core module.
 from __future__ import annotations
 
 import argparse
+import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 
-from ._core import compare, detect_mode, normalize
 from .runtime import create_python_namespace, run_bash, run_python
 from .version import __version__
 
@@ -18,6 +20,8 @@ mustmatch - Assert CLI output matches expected value.
 Usage:
     command | mustmatch [not] [like] EXPECTED
     mustmatch test [OPTIONS] PATHS
+    mustmatch verify-matrix [OPTIONS] DESIGN
+    mustmatch lint [OPTIONS] SPEC
 
 Match stdin against expected:
     echo "hello" | mustmatch "hello"
@@ -30,6 +34,12 @@ Test markdown files:
     mustmatch test docs/
     mustmatch test -v README.md
 
+Verify proof-matrix references:
+    mustmatch verify-matrix .march/design-final.md --repo-root .
+
+Lint markdown specs:
+    mustmatch lint docs/02-cli-assertions.md
+
 Options:
     -i, --ignore-case    Case-insensitive comparison
     -q, --quiet          Suppress output
@@ -41,7 +51,192 @@ Test options:
     --timeout N          Timeout per block (default: 30)
     --lang LANG          Language: bash, python, all
     --memory             Share Python state between blocks
+
+Verify-matrix options:
+    --repo-root PATH     Repo root used to resolve proof references
+    --json               Emit structured JSON
+
+Lint options:
+    --min-like-len N     Flag mustmatch like literals shorter than this length
+    --json               Emit structured JSON
 """
+
+TABLE_ROW_RE = re.compile(r"^\|(.+)\|\s*$")
+CODE_RE = re.compile(r"`([^`]+)`")
+MUSTMATCH_JSON_RE = re.compile(r"\|\s*mustmatch\s+json\b")
+SHORT_LIKE_RE = re.compile(r'\|\s*mustmatch\s+like\s+("([^"]*)"|\'([^\']*)\')')
+FENCE_RE = re.compile(r"^```(?P<info>.*)$")
+REPO_ROOT_FILE_NAMES = {
+    "CLAUDE.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "Makefile",
+    "README.md",
+    "pyproject.toml",
+    "rustfmt.toml",
+    "uv.lock",
+}
+REPO_FILE_EXTENSIONS = {
+    ".json",
+    ".lock",
+    ".md",
+    ".py",
+    ".rs",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+    ".zig",
+}
+REPO_PATH_PREFIXES = (
+    ".march/",
+    "bench/",
+    "crates/",
+    "docs/",
+    "lib/",
+    "scripts/",
+    "spec/",
+    "src/",
+    "test/",
+    "tests/",
+)
+
+
+def looks_like_repo_path(value: str) -> bool:
+    """Return True when a backticked table value looks like a repo file path."""
+    value = value.strip()
+    if not value:
+        return False
+    if any(ch.isspace() for ch in value):
+        return False
+    if any(token in value for token in ("://", "${", "&&", "||", ";", "|", ">", "<")):
+        return False
+    if value.startswith(("~", "$")):
+        return False
+
+    candidate = Path(value)
+
+    if value in REPO_ROOT_FILE_NAMES:
+        return True
+    if candidate.is_absolute():
+        return (
+            candidate.suffix in REPO_FILE_EXTENSIONS
+            or candidate.name in REPO_ROOT_FILE_NAMES
+        )
+    if value.startswith(REPO_PATH_PREFIXES):
+        return True
+    return candidate.suffix in REPO_FILE_EXTENSIONS
+
+
+def collect_table_refs(text: str) -> list[tuple[int, str]]:
+    """Collect backticked repo-like references from markdown table rows."""
+    refs: list[tuple[int, str]] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if not TABLE_ROW_RE.match(line):
+            continue
+        for code in CODE_RE.findall(line):
+            if looks_like_repo_path(code):
+                refs.append((lineno, code))
+    return refs
+
+
+def collect_shell_blocks(text: str) -> list[tuple[int, str, str]]:
+    """Collect fenced shell blocks without depending on the Rust extension."""
+    blocks: list[tuple[int, str, str]] = []
+    current_lang: str | None = None
+    current_start: int | None = None
+    current_lines: list[str] = []
+
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if current_lang is None:
+            match = FENCE_RE.match(line)
+            if not match:
+                continue
+
+            info = match.group("info").strip()
+            current_lang = info.split(maxsplit=1)[0].lower() if info else ""
+            current_start = lineno + 1
+            current_lines = []
+            continue
+
+        if line.strip() == "```":
+            blocks.append(
+                (current_start or lineno, current_lang, "\n".join(current_lines))
+            )
+            current_lang = None
+            current_start = None
+            current_lines = []
+            continue
+
+        current_lines.append(line)
+
+    return blocks
+
+
+def lint_spec_file(spec: Path, *, min_like_len: int = 10) -> dict[str, object]:
+    """Lint markdown assertions and shell blocks without executing the spec."""
+    findings: list[dict[str, object]] = []
+    text = spec.read_text()
+
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if MUSTMATCH_JSON_RE.search(line):
+            findings.append(
+                {
+                    "line": lineno,
+                    "rule": "invalid-mustmatch-mode",
+                    "message": "uses unsupported `mustmatch json` syntax",
+                    "text": line.strip(),
+                }
+            )
+
+        match = SHORT_LIKE_RE.search(line)
+        if match:
+            literal = match.group(2) if match.group(2) is not None else match.group(3)
+            if literal is not None and len(literal) < min_like_len:
+                findings.append(
+                    {
+                        "line": lineno,
+                        "rule": "short-like-pattern",
+                        "message": (
+                            f'uses short `mustmatch like` literal "{literal}" '
+                            f"({len(literal)} chars)"
+                        ),
+                        "text": line.strip(),
+                    }
+                )
+
+    for start_line, language, block in collect_shell_blocks(text):
+        if language not in {"bash", "sh", "shell", "zsh"}:
+            continue
+
+        try:
+            result = subprocess.run(
+                ["bash", "-n"],
+                input=block,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError("bash is required to lint shell code blocks") from exc
+
+        if result.returncode != 0:
+            findings.append(
+                {
+                    "line": start_line,
+                    "rule": "invalid-shell-syntax",
+                    "message": result.stderr.strip() or "bash -n failed",
+                    "text": block.splitlines()[0] if block.splitlines() else "",
+                }
+            )
+
+    return {
+        "spec": str(spec),
+        "finding_count": len(findings),
+        "status": "fail" if findings else "pass",
+        "findings": findings,
+    }
 
 
 def _run_match(
@@ -53,6 +248,8 @@ def _run_match(
     quiet: bool = False,
 ) -> int:
     """Run the match logic. Returns exit code."""
+    from ._core import compare, detect_mode, normalize
+
     actual = sys.stdin.read()
 
     actual = normalize(actual, strip_ansi=True, normalize_newlines=True, trim=True)
@@ -106,8 +303,6 @@ def _run_test(
     fail_fast: bool = False,
 ) -> int:
     """Run markdown tests. Returns exit code."""
-    import subprocess
-
     from ._core import create_md_fixture, get_table_for_block, parse_markdown
 
     files: list[Path] = []
@@ -270,6 +465,10 @@ def main(args: list[str] | None = None) -> int:
     # Route to test subcommand
     if args[0] == "test":
         return _main_test(args[1:])
+    if args[0] == "verify-matrix":
+        return _main_verify_matrix(args[1:])
+    if args[0] == "lint":
+        return _main_lint(args[1:])
 
     # Default: match command
     return _main_match(args)
@@ -378,6 +577,140 @@ def _main_test(args: list[str]) -> int:
         quiet=parsed.quiet,
         fail_fast=parsed.fail_fast,
     )
+
+
+def _main_verify_matrix(args: list[str]) -> int:
+    """Parse and run proof-matrix verification."""
+    parser = argparse.ArgumentParser(
+        prog="mustmatch verify-matrix",
+        description="Verify proof-matrix file references resolve inside a repo.",
+        add_help=True,
+    )
+    parser.add_argument("design", type=Path, help="Markdown design file to inspect")
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        required=True,
+        help="Repo root used to resolve backticked file references",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit structured JSON instead of human-readable lines",
+    )
+
+    parsed = parser.parse_args(args)
+
+    if not parsed.design.is_file():
+        print(f"Error: design file not found: {parsed.design}", file=sys.stderr)
+        return 2
+    if not parsed.repo_root.is_dir():
+        print(f"Error: repo root not found: {parsed.repo_root}", file=sys.stderr)
+        return 2
+
+    design = parsed.design.resolve()
+    repo_root = parsed.repo_root.resolve()
+    refs = collect_table_refs(design.read_text())
+
+    checked: list[dict[str, object]] = []
+    failure_count = 0
+
+    for lineno, ref in refs:
+        reference_path = Path(ref)
+        if reference_path.is_absolute():
+            resolved_path = reference_path.resolve()
+            status = "invalid"
+        else:
+            resolved_path = (repo_root / reference_path).resolve()
+            if not resolved_path.is_relative_to(repo_root):
+                status = "invalid"
+            elif resolved_path.exists():
+                status = "ok"
+            else:
+                status = "missing"
+
+        if status != "ok":
+            failure_count += 1
+
+        checked.append(
+            {
+                "line": lineno,
+                "reference": ref,
+                "resolved_path": str(resolved_path),
+                "status": status,
+            }
+        )
+
+    result = {
+        "design": str(design),
+        "repo_root": str(repo_root),
+        "references_checked": len(checked),
+        "failure_count": failure_count,
+        "status": "fail" if failure_count else "pass",
+        "results": checked,
+    }
+
+    if parsed.json:
+        json.dump(result, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    else:
+        for item in checked:
+            print(
+                f"{str(item['status']).upper()} line {item['line']}: "
+                f"{item['reference']} -> {item['resolved_path']}"
+            )
+
+    return 1 if failure_count else 0
+
+
+def _main_lint(args: list[str]) -> int:
+    """Parse and run spec assertion lint."""
+    parser = argparse.ArgumentParser(
+        prog="mustmatch lint",
+        description="Lint markdown spec assertions without executing them.",
+        add_help=True,
+    )
+    parser.add_argument("spec", type=Path, help="Markdown spec file to inspect")
+    parser.add_argument(
+        "--min-like-len",
+        type=int,
+        default=10,
+        help="Flag mustmatch like literals shorter than this length",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit structured JSON instead of human-readable lines",
+    )
+
+    parsed = parser.parse_args(args)
+
+    if not parsed.spec.is_file():
+        print(f"Error: spec file not found: {parsed.spec}", file=sys.stderr)
+        return 2
+
+    try:
+        result = lint_spec_file(
+            parsed.spec.resolve(),
+            min_like_len=parsed.min_like_len,
+        )
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if parsed.json:
+        json.dump(result, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    else:
+        print(f"spec={result['spec']}")
+        print(f"findings={result['finding_count']}")
+        for finding in result["findings"]:
+            print(
+                f"FAIL line {finding['line']} {finding['rule']}: "
+                f"{finding['message']}"
+            )
+
+    return 1 if result["finding_count"] else 0
 
 
 def cli() -> None:
