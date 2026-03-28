@@ -34,3 +34,6 @@ htmlcov/
 .ruff_cache/
 coverage.xml
 target/
+.agents/
+.claude/
+.march/
