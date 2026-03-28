@@ -35,7 +35,9 @@ cat > "$fixture" <<'EOF'
 ```python
 print("hello from nested fence")
 EOF
+printf '%s\n' '```' >> "$fixture"
 grep -n '```python' "$fixture" | mustmatch like '```python'
+grep -n '^```$' "$fixture" | mustmatch like '```'
 echo "nested fence survived" | mustmatch "nested fence survived"
 rm -rf "$tmpdir"
 ```
