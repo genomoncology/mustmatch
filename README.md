@@ -67,6 +67,8 @@ The executable specification is in `docs/`:
 7. `docs/07-normalization.md`
 8. `docs/08-configuration.md`
 9. `docs/09-examples.md`
+10. `docs/10-verify-matrix.md`
+11. `docs/11-lint.md`
 
 ## CLI Bench Plan
 
