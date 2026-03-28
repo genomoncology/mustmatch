@@ -44,7 +44,7 @@ row_label = f"row-{row_index}"
 Run docs as tests:
 
 ```bash
-pytest docs/ -v
+python -m pytest docs/ -v
 ```
 
 ## Quality Checks

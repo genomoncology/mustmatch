@@ -6,8 +6,8 @@ CLI assertion utility and pytest plugin for executable Markdown.
 
 ```bash
 uv sync --extra dev
-uv run pytest
-uv run pytest --cov
+uv run python -m pytest docs/ README.md -q
+uv run python -m coverage run -m pytest docs/ README.md -q
 uv run ruff check src
 ```
 
