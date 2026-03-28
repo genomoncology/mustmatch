@@ -95,6 +95,14 @@ fn parse_fence_start(line: &str) -> Option<(String, String)> {
     Some((marker, info))
 }
 
+fn is_closing_fence(line: &str, opening_marker: &str) -> bool {
+    let Some((candidate_marker, info)) = parse_fence_start(line) else {
+        return false;
+    };
+
+    info.is_empty() && candidate_marker.starts_with(opening_marker)
+}
+
 fn parse_table_cells(line: &str) -> Vec<String> {
     let mut trimmed = line.trim();
     if let Some(rest) = trimmed.strip_prefix('|') {
@@ -168,7 +176,7 @@ pub fn parse_markdown(content: &str) -> ParseResult {
             let mut code_lines = Vec::new();
             let mut scan = index + 1;
             while scan < lines.len() {
-                if lines[scan].trim_start().starts_with(&marker) {
+                if is_closing_fence(lines[scan], &marker) {
                     break;
                 }
                 code_lines.push(lines[scan]);
@@ -341,5 +349,47 @@ result = {"input": row.input, "output": row.input * 2}
             parsed.tables[0].rows[0],
             vec!["Variant Browser".to_string()]
         );
+    }
+
+    #[test]
+    fn keeps_inner_fence_with_info_inside_bash_block() {
+        let source = r#"## Nested Fences
+
+```bash
+tmpdir="$(mktemp -d)"
+fixture="$tmpdir/generated.md"
+cat > "$fixture" <<'EOF'
+# Generated fixture
+
+```python
+print("hello from nested fence")
+EOF
+echo "after heredoc" | mustmatch like "after heredoc"
+rm -rf "$tmpdir"
+```
+"#;
+
+        let parsed = parse_markdown(source);
+        assert_eq!(parsed.blocks.len(), 1);
+
+        let block = &parsed.blocks[0];
+        assert_eq!(block.language, "bash");
+        assert!(block.content.contains("```python"));
+        assert!(block.content.contains("print(\"hello from nested fence\")"));
+        assert!(
+            block
+                .content
+                .contains("echo \"after heredoc\" | mustmatch like \"after heredoc\"")
+        );
+    }
+
+    #[test]
+    fn accepts_longer_closing_fence_with_trailing_spaces() {
+        let source = "## Longer Closing Fence\n\n```bash\nprintf 'line before close\\n'\n````   \noutside fence\n";
+
+        let parsed = parse_markdown(source);
+        assert_eq!(parsed.blocks.len(), 1);
+        assert_eq!(parsed.blocks[0].language, "bash");
+        assert_eq!(parsed.blocks[0].content, "printf 'line before close\\n'\n");
     }
 }

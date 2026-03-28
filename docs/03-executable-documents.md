@@ -21,3 +21,21 @@ echo "doc blocks are executable" | mustmatch like "executable"
 printf "line one\nline two\n" | head -1 | mustmatch "line one"
 echo "done" | mustmatch not "error"
 ```
+
+## Nested Fences In Bash Blocks
+
+Bash examples sometimes generate Markdown fixtures that begin another fenced block before the surrounding example is finished. The collector should keep the outer bash example intact so the assertions after the heredoc still run.
+
+```bash
+tmpdir="$(mktemp -d)"
+fixture="$tmpdir/generated.md"
+cat > "$fixture" <<'EOF'
+# Generated fixture
+
+```python
+print("hello from nested fence")
+EOF
+grep -n '```python' "$fixture" | mustmatch like '```python'
+echo "nested fence survived" | mustmatch "nested fence survived"
+rm -rf "$tmpdir"
+```

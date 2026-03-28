@@ -44,7 +44,8 @@ row_label = f"row-{row_index}"
 Run docs as tests:
 
 ```bash
-python -m pytest docs/ -v
+uv sync --extra dev --reinstall-package mustmatch
+uv run python -m pytest docs/ -v
 ```
 
 ## Quality Checks
