@@ -5,40 +5,38 @@
 - `checkpoint status`
 - `GIT_EDITOR=true git rebase main`
 - `git --no-pager diff --stat main..HEAD | tail -1`
-- `cargo test -p mustmatch-core --lib`
-- `uv run python -m pytest docs/03-executable-documents.md docs/10-verify-matrix.md docs/11-lint.md -q`
-- `uv run python -m pytest docs/03-executable-documents.md --collect-only -q | mustmatch like "Nested Fences In Bash Blocks"`
-- `uv sync --extra dev --reinstall-package mustmatch`
-- `uv run python -m pytest docs/03-executable-documents.md -q`
-- `uv run python -m pytest docs/10-verify-matrix.md docs/11-lint.md -q`
-- `make check < /dev/null > ... 2>&1`
-- `make test < /dev/null > ... 2>&1`
-- `uv run python -m pytest docs/ README.md -q < /dev/null > ... 2>&1`
-- `git --no-pager status --short`
-- `git add .github/workflows/test.yml CLAUDE.md Makefile README.md crates/mustmatch-core/src/parser.rs docs/03-executable-documents.md`
+- `git remote -v`
+- `rg -n "CHANGELOG|Changelog|## 0\\.[0-9]+" .`
+- `make check`
+- `make test`
+- `python3 - <<'PY' ...` (red proof: assert the required `CHANGELOG.md` sections and release bullets; expected failure before the file existed)
+- `python3 - <<'PY' ...` (green proof: assert the required `CHANGELOG.md` sections and release bullets after implementation)
+- `make check < /dev/null > /home/ian/.copilot/session-state/dfb91b23-ebb2-48c0-b17e-4e549b9dddb4/files/make-check.log 2>&1`
+- `make test < /dev/null > /home/ian/.copilot/session-state/dfb91b23-ebb2-48c0-b17e-4e549b9dddb4/files/make-test.log 2>&1`
+- `git --no-pager status --short --branch`
+- `git add CHANGELOG.md`
 - `git --no-pager diff --cached`
-- `cargo fmt`
 
 ## What changed
 
-- Added `is_closing_fence` in `crates/mustmatch-core/src/parser.rs`, reusing `parse_fence_start` so a closing fence must have no info string while still allowing longer same-marker closing fences.
-- Added two Rust parser regression tests in `crates/mustmatch-core/src/parser.rs` for nested inner fences and longer closing fences with trailing spaces.
-- Extended `docs/03-executable-documents.md` with a new `Nested Fences In Bash Blocks` executable regression proof.
-- Updated `Makefile`, `.github/workflows/test.yml`, `CLAUDE.md`, and `README.md` to use `uv sync --extra dev --reinstall-package mustmatch` before Python-side verification so Rust-core changes rebuild the editable `mustmatch._core` extension.
-- Wrote the external planning artifact `/home/ian/workspace/planning/mustmatch/planning/quality-bar.md` with refreshed smoke tests, timings, fragile areas, security boundaries, and spec health.
+- Added a root `CHANGELOG.md` with a `0.0.4` release entry.
+- Documented the release additions: `mustmatch verify-matrix`, `mustmatch lint`, and the executable specs `docs/10-verify-matrix.md` and `docs/11-lint.md`.
+- Documented the release fixes: pytest plugin autodiscovery via `pytest11` and nested fenced code blocks in the Rust Markdown parser.
+- Documented the release-wide change that bootstrapped the mustmatch team quality bar for this repository.
+- Left package versioning, workflows, and code paths unchanged, matching the approved minimal-scope design.
 
 ## Tests and proof
 
-- The new Rust regression test `keeps_inner_fence_with_info_inside_bash_block` failed before the parser fix and passed after it.
-- `uv run python -m pytest docs/03-executable-documents.md --collect-only -q | mustmatch like "Nested Fences In Bash Blocks"` failed before the fix (section skipped) and passed after the parser fix plus editable-package rebuild.
-- `uv run python -m pytest docs/03-executable-documents.md -q` passes with `3 passed`.
-- `uv run python -m pytest docs/10-verify-matrix.md docs/11-lint.md -q` passes with `6 passed`.
-- `cargo test -p mustmatch-core --lib` passes with `30 passed`.
-- `make check` passes.
-- `make test` passes with `33 passed in 4.38s`.
-- `uv run python -m pytest docs/ README.md -q` passes with `33 passed in 4.24s`.
+- Repo prior-art search found no existing changelog or release-notes file, so `CHANGELOG.md` was added as a new root artifact.
+- A focused red proof for the changelog content failed before implementation because `CHANGELOG.md` did not exist.
+- The matching green proof passed after the changelog was added and verified the required `Added`, `Fixed`, and `Changed` sections plus the ticketed release items.
+- `make check` passed before implementation.
+- `make test` passed before implementation with `33 passed`.
+- The PyPI JSON endpoint (`https://pypi.org/pypi/mustmatch/json`) was reachable and reported the currently published package version as `0.0.3`, which is consistent with this release ticket.
+- Final verification passed with `make check < /dev/null > ... 2>&1` and `make test < /dev/null > ... 2>&1`.
+- The final logged `make test` run passed with `33 passed in 4.93s`.
 
 ## Deviations from the approved design
 
-- The executable-doc proof in `docs/03-executable-documents.md` does **not** include a literal inner line containing only ```` ``` ```` inside an outer triple-backtick Markdown fence. With the existing indentation behavior intentionally left unchanged, that line would become a real closing fence in the surrounding Markdown source. The docs proof therefore focuses on the actual regression line ```` ```python ```` while the Rust unit tests cover closing-fence semantics and longer closing fences precisely.
-- The approved design did not call for build-script changes, but they were necessary for trustworthy verification. Plain `uv sync --extra dev` left `src/mustmatch/_core.abi3.so` stale after Rust edits, which caused Python-side pytest runs to exercise the old parser binary.
+- No repository-scope deviations were needed.
+- The approved design also describes remote operational release steps (push to `origin/main`, tag `v0.0.4`, and external GitHub Actions/PyPI verification). This code step implemented the worktree artifact and local proof only; no remote publish operations were performed here.
