@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 
 use mustmatch_core::{
-    CompareMode, NormalizeOptions, ParseResult, TableRowData,
+    CompareMode, ContainsLineReport, NormalizeOptions, ParseResult, TableRowData,
+    analyze_contains_lines as core_analyze_contains_lines,
     build_table_rows as core_build_table_rows, compare as core_compare,
     create_md_fixture as core_create_md_fixture, detect_mode as core_detect_mode,
     get_table_for_block as core_get_table_for_block, normalize as core_normalize,
@@ -200,6 +201,33 @@ struct PyCompareResult {
     message: String,
     #[pyo3(get)]
     mode: String,
+}
+
+#[pyclass(module = "mustmatch._core", name = "ContainsLineReport")]
+#[derive(Clone)]
+struct PyContainsLineReport {
+    #[pyo3(get)]
+    expected_count: usize,
+    #[pyo3(get)]
+    found_lines: Vec<String>,
+    #[pyo3(get)]
+    missing_lines: Vec<String>,
+    #[pyo3(get)]
+    found_message: String,
+    #[pyo3(get)]
+    missing_message: String,
+}
+
+impl PyContainsLineReport {
+    fn from_inner(inner: ContainsLineReport) -> Self {
+        Self {
+            expected_count: inner.expected_count,
+            found_message: inner.found_message(),
+            missing_message: inner.missing_message(),
+            found_lines: inner.found_lines,
+            missing_lines: inner.missing_lines,
+        }
+    }
 }
 
 #[pyclass(module = "mustmatch._core", name = "TableRow")]
@@ -580,6 +608,11 @@ fn compare(
     }
 }
 
+#[pyfunction(signature = (actual, expected, ignore_case = false))]
+fn analyze_contains_lines(actual: &str, expected: &str, ignore_case: bool) -> PyContainsLineReport {
+    PyContainsLineReport::from_inner(core_analyze_contains_lines(actual, expected, ignore_case))
+}
+
 #[pyfunction]
 fn detect_mode(expected: &str) -> String {
     core_detect_mode(expected).as_str().to_string()
@@ -608,6 +641,7 @@ fn _core(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyTable>()?;
     module.add_class::<PyParseResult>()?;
     module.add_class::<PyCompareResult>()?;
+    module.add_class::<PyContainsLineReport>()?;
     module.add_class::<PyTableRow>()?;
     module.add_class::<PySection>()?;
     module.add_class::<PyFixtureTable>()?;
@@ -620,6 +654,7 @@ fn _core(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(build_table_rows, module)?)?;
     module.add_function(wrap_pyfunction!(create_md_fixture, module)?)?;
     module.add_function(wrap_pyfunction!(compare, module)?)?;
+    module.add_function(wrap_pyfunction!(analyze_contains_lines, module)?)?;
     module.add_function(wrap_pyfunction!(detect_mode, module)?)?;
     module.add_function(wrap_pyfunction!(normalize, module)?)?;
     module.add_function(wrap_pyfunction!(strip_ansi, module)?)?;

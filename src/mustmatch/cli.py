@@ -248,7 +248,7 @@ def _run_match(
     quiet: bool = False,
 ) -> int:
     """Run the match logic. Returns exit code."""
-    from ._core import compare, detect_mode, normalize
+    from ._core import analyze_contains_lines, compare, detect_mode, normalize
 
     actual = sys.stdin.read()
 
@@ -256,6 +256,19 @@ def _run_match(
     expected = normalize(expected, strip_ansi=True, normalize_newlines=True, trim=True)
 
     mode = detect_mode(expected)
+
+    if like and "\n" in expected and mode not in {"json", "jsonl"}:
+        report = analyze_contains_lines(actual, expected, ignore_case=ignore_case)
+        matches = not report.found_lines if negate else not report.missing_lines
+
+        if matches:
+            return 0
+
+        if not quiet:
+            message = report.found_message if negate else report.missing_message
+            print(message, file=sys.stderr)
+
+        return 1
 
     if like:
         if mode == "json":

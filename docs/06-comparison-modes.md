@@ -4,12 +4,16 @@ mustmatch auto-detects comparison mode from expected-value syntax. You can still
 
 ## Exact, Contains, And Negation
 
-Plain strings default to exact mode. `like` performs contains checks, and `not` flips the final expectation.
+Plain strings default to exact mode. `like` performs contains checks, and `not` flips the final expectation. When the expected plain-text value spans multiple lines, contains mode still applies, but each non-empty expected line is checked independently. In that multiline plain-text case, `not like` means none of those expected lines may appear.
 
 ```bash
 echo "ready" | mustmatch "ready"
 echo "ready now" | mustmatch like "ready"
 echo "ready now" | mustmatch not like "failed"
+printf 'ready now\nstill healthy\n' | mustmatch like "ready
+healthy"
+printf 'ready now\nstill healthy\n' | mustmatch not like "failed
+panic"
 ```
 
 ## Regex And JSON Family

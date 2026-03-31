@@ -1,6 +1,8 @@
 use std::io::{self, Read};
 
-use mustmatch_core::{CompareMode, NormalizeOptions, compare, detect_mode, normalize};
+use mustmatch_core::{
+    CompareMode, NormalizeOptions, analyze_contains_lines, compare, detect_mode, normalize,
+};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n";
@@ -106,6 +108,10 @@ fn parse_match_args(args: &[String]) -> Result<MatchArgs, i32> {
     })
 }
 
+fn is_plain_multiline_like(mode: CompareMode, expected: &str, like: bool) -> bool {
+    like && expected.contains('\n') && !matches!(mode, CompareMode::Json | CompareMode::Jsonl)
+}
+
 fn run_match(args: MatchArgs) -> i32 {
     let mut input = String::new();
     if let Err(err) = io::stdin().read_to_string(&mut input) {
@@ -117,7 +123,32 @@ fn run_match(args: MatchArgs) -> i32 {
     let actual = normalize(&input, options);
     let expected = normalize(&args.expected, options);
 
-    let mut mode = detect_mode(&expected);
+    let detected_mode = detect_mode(&expected);
+
+    if is_plain_multiline_like(detected_mode, &expected, args.like) {
+        let report = analyze_contains_lines(&actual, &expected, args.ignore_case);
+        let matches = if args.negate {
+            report.found_lines.is_empty()
+        } else {
+            report.missing_lines.is_empty()
+        };
+
+        if matches {
+            return 0;
+        }
+
+        if !args.quiet {
+            if args.negate {
+                eprintln!("{}", report.found_message());
+            } else {
+                eprintln!("{}", report.missing_message());
+            }
+        }
+
+        return 1;
+    }
+
+    let mut mode = detected_mode;
     let mut subset = false;
 
     if args.like {
