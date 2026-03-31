@@ -112,15 +112,9 @@ fn is_plain_multiline_like(mode: CompareMode, expected: &str, like: bool) -> boo
     like && expected.contains('\n') && !matches!(mode, CompareMode::Json | CompareMode::Jsonl)
 }
 
-fn run_match(args: MatchArgs) -> i32 {
-    let mut input = String::new();
-    if let Err(err) = io::stdin().read_to_string(&mut input) {
-        eprintln!("Error: failed to read stdin: {err}");
-        return 2;
-    }
-
+fn evaluate_match(input: &str, args: &MatchArgs) -> (bool, String) {
     let options = NormalizeOptions::default();
-    let actual = normalize(&input, options);
+    let actual = normalize(input, options);
     let expected = normalize(&args.expected, options);
 
     let detected_mode = detect_mode(&expected);
@@ -134,18 +128,15 @@ fn run_match(args: MatchArgs) -> i32 {
         };
 
         if matches {
-            return 0;
+            return (true, String::new());
         }
 
-        if !args.quiet {
-            if args.negate {
-                eprintln!("{}", report.found_message());
-            } else {
-                eprintln!("{}", report.missing_message());
-            }
-        }
-
-        return 1;
+        let message = if args.negate {
+            report.found_message()
+        } else {
+            report.missing_message()
+        };
+        return (false, message);
     }
 
     let mut mode = detected_mode;
@@ -170,15 +161,30 @@ fn run_match(args: MatchArgs) -> i32 {
     }
 
     if matches {
+        return (true, String::new());
+    }
+
+    if args.negate {
+        (false, "FAIL: Expected NOT to match, but it did".to_string())
+    } else {
+        (false, result.message)
+    }
+}
+
+fn run_match(args: MatchArgs) -> i32 {
+    let mut input = String::new();
+    if let Err(err) = io::stdin().read_to_string(&mut input) {
+        eprintln!("Error: failed to read stdin: {err}");
+        return 2;
+    }
+
+    let (matches, message) = evaluate_match(&input, &args);
+    if matches {
         return 0;
     }
 
     if !args.quiet {
-        if args.negate {
-            eprintln!("FAIL: Expected NOT to match, but it did");
-        } else {
-            eprintln!("{}", result.message);
-        }
+        eprintln!("{message}");
     }
 
     1
@@ -206,7 +212,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_match_args;
+    use super::{MatchArgs, evaluate_match, parse_match_args};
 
     #[test]
     fn parses_not_like_sequence() {
@@ -223,5 +229,53 @@ mod tests {
         let args = vec!["--wat".to_string(), "hello".to_string()];
         let result = parse_match_args(&args);
         assert!(matches!(result, Err(2)));
+    }
+
+    #[test]
+    fn multiline_like_requires_all_lines_and_reports_missing() {
+        let args = MatchArgs {
+            expected: "PARK2\nNOTCH1".to_string(),
+            negate: false,
+            like: true,
+            ignore_case: false,
+            quiet: false,
+        };
+
+        let (matches, message) = evaluate_match("PARK2 | causes | omim\n", &args);
+
+        assert!(!matches);
+        assert_eq!(message, "Missing 1 of 2 expected lines:\n  - \"NOTCH1\"");
+    }
+
+    #[test]
+    fn multiline_not_like_fails_when_any_line_is_found() {
+        let args = MatchArgs {
+            expected: "PARK2\nNOTCH1".to_string(),
+            negate: true,
+            like: true,
+            ignore_case: false,
+            quiet: false,
+        };
+
+        let (matches, message) = evaluate_match("PARK2 | causes | omim\n", &args);
+
+        assert!(!matches);
+        assert_eq!(message, "Found 1 of 2 forbidden lines:\n  - \"PARK2\"");
+    }
+
+    #[test]
+    fn multiline_like_ignore_case_matches_per_line() {
+        let args = MatchArgs {
+            expected: "hello\nworld".to_string(),
+            negate: false,
+            like: true,
+            ignore_case: true,
+            quiet: false,
+        };
+
+        let (matches, message) = evaluate_match("HELLO there\nsome WORLD\n", &args);
+
+        assert!(matches);
+        assert!(message.is_empty());
     }
 }
