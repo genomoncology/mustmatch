@@ -271,9 +271,9 @@ def _run_match(
         return 1
 
     if like:
-        if mode == "json":
+        if mode in {"json", "jsonl"}:
             subset = True
-            if detect_mode(actual) == "jsonl":
+            if mode == "json" and detect_mode(actual) == "jsonl":
                 mode = "jsonl"
         else:
             mode = "contains"

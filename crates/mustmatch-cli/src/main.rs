@@ -143,9 +143,9 @@ fn evaluate_match(input: &str, args: &MatchArgs) -> (bool, String) {
     let mut subset = false;
 
     if args.like {
-        if mode == CompareMode::Json {
+        if matches!(mode, CompareMode::Json | CompareMode::Jsonl) {
             subset = true;
-            if detect_mode(&actual) == CompareMode::Jsonl {
+            if mode == CompareMode::Json && detect_mode(&actual) == CompareMode::Jsonl {
                 mode = CompareMode::Jsonl;
             }
         } else {
