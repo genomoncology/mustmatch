@@ -12,6 +12,49 @@ echo "alpha beta" | mustmatch like "beta"
 echo "alpha beta" | mustmatch not like "gamma"
 ```
 
+## Multi-line Like
+
+Multi-line plain-text `like` keeps contains mode, but it treats each non-empty expected line as its own substring assertion. That keeps shell specs compact while still reporting which lines are missing or forbidden.
+
+```bash
+printf 'PARK2 | causes | omim\nPINK1 | causes | omim\n' | mustmatch like "PARK2
+PINK1
+causes"
+
+printf '  PARK2 | causes\n  PINK1 | causes\n' | mustmatch like "  PARK2
+
+  PINK1"
+
+printf 'HELLO there\nsome WORLD\n' | mustmatch -i like "hello
+world"
+```
+
+Failures still report the exact lines that made the assertion fail, including the separate rule for negated multi-line checks.
+
+```bash
+tmpdir="$(mktemp -d)"
+stderr="$tmpdir/stderr.txt"
+if printf 'PARK2 | causes | omim\n' | mustmatch like $'PARK2\nNOTCH1' 2>"$stderr"; then
+  echo "multi-line like unexpectedly passed"
+  exit 1
+fi
+cat "$stderr" | mustmatch like "Missing 1 of 2 expected lines:"
+cat "$stderr" | mustmatch like '"NOTCH1"'
+rm -rf "$tmpdir"
+```
+
+```bash
+tmpdir="$(mktemp -d)"
+stderr="$tmpdir/stderr.txt"
+if printf 'PARK2 | causes | omim\n' | mustmatch not like $'PARK2\nNOTCH1' 2>"$stderr"; then
+  echo "multi-line not like unexpectedly passed"
+  exit 1
+fi
+cat "$stderr" | mustmatch like "Found 1 of 2 forbidden lines:"
+cat "$stderr" | mustmatch like '"PARK2"'
+rm -rf "$tmpdir"
+```
+
 ## Regex
 
 Regex mode uses `/pattern/flags` syntax. The `i` flag is supported and can also be combined with `--ignore-case`.

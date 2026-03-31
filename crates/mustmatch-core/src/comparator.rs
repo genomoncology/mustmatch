@@ -48,6 +48,23 @@ pub struct CompareResult {
     pub mode: CompareMode,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ContainsLineReport {
+    pub expected_count: usize,
+    pub found_lines: Vec<String>,
+    pub missing_lines: Vec<String>,
+}
+
+impl ContainsLineReport {
+    pub fn missing_message(&self) -> String {
+        format_missing_lines_message(self)
+    }
+
+    pub fn found_message(&self) -> String {
+        format_found_lines_message(self)
+    }
+}
+
 fn parse_regex_literal(value: &str) -> Option<(String, String)> {
     let trimmed = value.trim();
     if !trimmed.starts_with('/') {
@@ -96,7 +113,92 @@ pub fn exact(actual: &str, expected: &str) -> CompareResult {
     }
 }
 
+fn format_missing_lines_message(report: &ContainsLineReport) -> String {
+    format!(
+        "Missing {} of {} expected lines:\n{}",
+        report.missing_lines.len(),
+        report.expected_count,
+        report
+            .missing_lines
+            .iter()
+            .map(|line| format!("  - {line:?}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    )
+}
+
+fn format_found_lines_message(report: &ContainsLineReport) -> String {
+    format!(
+        "Found {} of {} forbidden lines:\n{}",
+        report.found_lines.len(),
+        report.expected_count,
+        report
+            .found_lines
+            .iter()
+            .map(|line| format!("  - {line:?}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    )
+}
+
+fn compare_multiline_contains(report: &ContainsLineReport) -> CompareResult {
+    if report.missing_lines.is_empty() {
+        return CompareResult {
+            matches: true,
+            message: String::new(),
+            mode: CompareMode::Contains,
+        };
+    }
+
+    CompareResult {
+        matches: false,
+        message: report.missing_message(),
+        mode: CompareMode::Contains,
+    }
+}
+
+pub fn analyze_contains_lines(
+    actual: &str,
+    expected: &str,
+    ignore_case: bool,
+) -> ContainsLineReport {
+    let actual_folded = ignore_case.then(|| actual.to_lowercase());
+    let mut found_lines = Vec::new();
+    let mut missing_lines = Vec::new();
+
+    for line in expected.split('\n') {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let found = match &actual_folded {
+            Some(actual_folded) => {
+                let expected_folded = line.to_lowercase();
+                actual_folded.contains(&expected_folded)
+            }
+            None => actual.contains(line),
+        };
+
+        if found {
+            found_lines.push(line.to_string());
+        } else {
+            missing_lines.push(line.to_string());
+        }
+    }
+
+    ContainsLineReport {
+        expected_count: found_lines.len() + missing_lines.len(),
+        found_lines,
+        missing_lines,
+    }
+}
+
 pub fn contains(actual: &str, expected: &str) -> CompareResult {
+    if expected.contains('\n') {
+        let report = analyze_contains_lines(actual, expected, false);
+        return compare_multiline_contains(&report);
+    }
+
     if actual.contains(expected) {
         return CompareResult {
             matches: true,
@@ -345,6 +447,11 @@ pub fn compare(
             }
         }
         CompareMode::Contains => {
+            if expected.contains('\n') {
+                let report = analyze_contains_lines(actual, expected, ignore_case);
+                return compare_multiline_contains(&report);
+            }
+
             if ignore_case {
                 let actual_folded = actual.to_lowercase();
                 let expected_folded = expected.to_lowercase();
@@ -435,7 +542,7 @@ pub fn extract_regex_pattern(expected: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{CompareMode, compare, detect_mode, json_match};
+    use super::{CompareMode, analyze_contains_lines, compare, contains, detect_mode, json_match};
 
     #[test]
     fn detects_modes_like_python() {
@@ -462,5 +569,85 @@ mod tests {
         let unsupported = compare("hello", "/hello/g", CompareMode::Regex, false, false);
         assert!(!unsupported.matches);
         assert!(unsupported.message.contains("Unsupported regex flags"));
+    }
+
+    #[test]
+    fn contains_single_line_behavior_unchanged() {
+        let result = contains("alpha beta", "beta");
+        assert!(result.matches);
+
+        let failure = contains("alpha beta", "gamma");
+        assert!(!failure.matches);
+        assert!(
+            failure
+                .message
+                .contains("Expected substring not found: \"gamma\"")
+        );
+    }
+
+    #[test]
+    fn contains_multiline_requires_all_non_empty_lines() {
+        let result = contains("alpha beta\ngamma delta", "alpha\ngamma");
+        assert!(result.matches);
+
+        let failure = contains("alpha beta\ngamma delta", "alpha\ndelta\nepsilon");
+        assert!(!failure.matches);
+        assert_eq!(
+            failure.message,
+            "Missing 1 of 3 expected lines:\n  - \"epsilon\""
+        );
+    }
+
+    #[test]
+    fn contains_multiline_skips_blank_separator_lines() {
+        let result = contains("  alpha here\n  beta there", "  alpha\n\n  beta");
+        assert!(result.matches);
+    }
+
+    #[test]
+    fn contains_multiline_preserves_line_whitespace() {
+        let result = contains("alpha\n  beta trailer\n gamma", "  beta\n gamma");
+        assert!(result.matches);
+    }
+
+    #[test]
+    fn contains_multiline_ignore_case_uses_per_line_matching() {
+        let result = compare(
+            "HELLO there\nsome WORLD",
+            "hello\nworld",
+            CompareMode::Contains,
+            false,
+            true,
+        );
+        assert!(result.matches);
+    }
+
+    #[test]
+    fn contains_multiline_blank_only_expected_is_vacuously_true() {
+        let result = contains("anything", "\n  \n");
+        assert!(result.matches);
+    }
+
+    #[test]
+    fn analyze_contains_lines_reports_found_and_missing_lines() {
+        let report =
+            analyze_contains_lines("alpha\n  beta\nomega", "alpha\n\ngamma\n  beta", false);
+
+        assert_eq!(report.expected_count, 3);
+        assert_eq!(
+            report.found_lines,
+            vec!["alpha".to_string(), "  beta".to_string()]
+        );
+        assert_eq!(report.missing_lines, vec!["gamma".to_string()]);
+    }
+
+    #[test]
+    fn format_found_lines_message_lists_forbidden_lines() {
+        let report = analyze_contains_lines("alpha\nbeta", "alpha\ngamma", false);
+
+        assert_eq!(
+            report.found_message(),
+            "Found 1 of 2 forbidden lines:\n  - \"alpha\""
+        );
     }
 }

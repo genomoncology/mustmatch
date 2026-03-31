@@ -5,8 +5,8 @@ pub mod normalizer;
 pub mod parser;
 
 pub use comparator::{
-    CompareMode, CompareResult, compare, contains, detect_mode, exact, extract_regex_pattern,
-    json_match, jsonl_match, regex_match,
+    CompareMode, CompareResult, ContainsLineReport, analyze_contains_lines, compare, contains,
+    detect_mode, exact, extract_regex_pattern, json_match, jsonl_match, regex_match,
 };
 pub use fixture::{
     FixtureTable, MdFixture, SectionData, TableRowData, build_table_rows, create_md_fixture,
