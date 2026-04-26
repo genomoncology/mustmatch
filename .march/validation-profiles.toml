@@ -1,0 +1,24 @@
+# Validation profiles for March build flow.
+# Each [profile.<name>] entry maps a named gate to the shell command that runs it.
+#
+# mustmatch is itself the executable spec runner that other repos invoke;
+# its own README + docs tests are its spec.
+
+[profile.preflight]
+command = "make check"
+
+[profile.baseline]
+command = "make check"
+
+[profile.focused]
+command = "make test"
+
+# build precondition: mustmatch's own docs+README executable tests are its spec.
+[profile.spec-only]
+command = "make test"
+
+[profile.full-blocking]
+command = "make check && make test"
+
+[profile.full-contracts]
+command = "make check && make test"

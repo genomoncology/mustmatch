@@ -36,4 +36,5 @@ coverage.xml
 target/
 .agents/
 .claude/
-.march/
+.march/*
+!.march/validation-profiles.toml
