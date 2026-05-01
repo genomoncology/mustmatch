@@ -187,7 +187,13 @@ pub fn parse_markdown(content: &str) -> ParseResult {
                 language = "bash".to_string();
             }
 
-            if language == "bash" || language == "python" {
+            let is_executable_language = language == "bash" || language == "python";
+            let is_output_expectation = directives.contains_key("expect")
+                || directives.contains_key("for")
+                || directives.contains_key("mustmatch-output")
+                || directives.contains_key("output");
+
+            if is_executable_language || is_output_expectation {
                 let mut content = code_lines.join("\n");
                 if !content.is_empty() {
                     content.push('\n');
