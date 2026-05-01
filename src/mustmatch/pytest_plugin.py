@@ -8,8 +8,11 @@ Bash blocks run via subprocess, Python blocks via exec().
 from __future__ import annotations
 
 import importlib
+import json
+import os
 import re
 import subprocess
+import textwrap
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -55,6 +58,14 @@ class MustmatchHookSpec:
     @pytest.hookspec
     def pytest_mustmatch_namespace(self) -> dict[str, Any] | None:
         """Return namespace values injected into every Python block."""
+
+    @pytest.hookspec(firstresult=True)
+    def pytest_mustmatch_context(
+        self,
+        context: str,
+        cwd: Path,
+    ) -> dict[str, Any] | None:
+        """Return execution settings for a named Markdown run context."""
 
 
 def pytest_addhooks(pluginmanager: pytest.PytestPluginManager) -> None:
@@ -175,6 +186,111 @@ def _bash_block_has_mustmatch_pipe(script: str) -> bool:
     return False
 
 
+def _is_run_block(block: Block) -> bool:
+    return block.language == "bash" and (
+        "run" in block.directives or "mustmatch-run" in block.directives
+    )
+
+
+def _is_output_block(block: Block) -> bool:
+    return (
+        "expect" in block.directives
+        or "for" in block.directives
+        or "mustmatch-output" in block.directives
+        or "output" in block.directives
+    )
+
+
+def _block_id(block: Block) -> str | None:
+    value = block.directives.get("id")
+    if value:
+        return value
+    if block.name:
+        return _normalize_lookup(block.name)
+    return None
+
+
+def _expect_target(block: Block) -> str | None:
+    return block.directives.get("expect") or block.directives.get("for")
+
+
+def _expect_mode(block: Block) -> str:
+    if "not-contains" in block.directives or "not_contains" in block.directives:
+        return "not-contains"
+    if "equals" in block.directives:
+        return "equals"
+    return "contains"
+
+
+def _clean_expected(content: str) -> str:
+    return textwrap.dedent(content).strip("\n")
+
+
+def _json_contains(actual: Any, expected: Any) -> bool:
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        for key, value in expected.items():
+            if key not in actual or not _json_contains(actual[key], value):
+                return False
+        return True
+
+    if isinstance(expected, list):
+        if not isinstance(actual, list):
+            return False
+        for expected_item in expected:
+            if not any(
+                _json_contains(actual_item, expected_item) for actual_item in actual
+            ):
+                return False
+        return True
+
+    return actual == expected
+
+
+def _assert_output_matches(
+    actual: str,
+    expected: str,
+    *,
+    language: str,
+    mode: str,
+) -> None:
+    if mode == "not-contains":
+        needles = [line for line in expected.splitlines() if line.strip()]
+        for needle in needles or [expected]:
+            if needle in actual:
+                raise BlockAssertionError(f"Output unexpectedly contained:\n{needle}")
+        return
+
+    if mode == "equals":
+        if actual.strip() != expected.strip():
+            raise BlockAssertionError(
+                "Output did not equal expected text.\n"
+                f"expected:\n{expected}\nactual:\n{actual}"
+            )
+        return
+
+    if language == "json":
+        try:
+            actual_json = json.loads(actual)
+            expected_json = json.loads(expected)
+        except json.JSONDecodeError:
+            pass
+        else:
+            if not _json_contains(actual_json, expected_json):
+                raise BlockAssertionError(
+                    "JSON output did not contain expected structure.\n"
+                    f"expected:\n{expected}\nactual:\n{actual}"
+                )
+            return
+
+    if expected not in actual:
+        raise BlockAssertionError(
+            "Output did not contain expected text.\n"
+            f"expected:\n{expected}\nactual:\n{actual}"
+        )
+
+
 def _normalize_lookup(value: str) -> str:
     """Normalize names using md.tables[...] semantics."""
     normalized: list[str] = []
@@ -232,6 +348,165 @@ def _get_named_table_for_block(
     return scoped_match or global_match
 
 
+class RunStore:
+    """Shared run-block cache for one collected Markdown file."""
+
+    def __init__(
+        self,
+        config: pytest.Config,
+        path: Path,
+        blocks: dict[str, Block],
+    ) -> None:
+        self.config = config
+        self.path = path
+        self.blocks = blocks
+        self.results: dict[str, Any] = {}
+
+    def _context_settings(self, block: Block) -> tuple[Path, dict[str, str]]:
+        cwd = self.path.parent
+        env = os.environ.copy()
+        context = block.directives.get("context", "").strip()
+        if not context:
+            return cwd, env
+
+        settings = self.config.hook.pytest_mustmatch_context(context=context, cwd=cwd)
+        if settings is None:
+            raise BlockAssertionError(
+                f"No mustmatch context provider handled context={context!r}"
+            )
+        if not isinstance(settings, dict):
+            raise BlockAssertionError(
+                "pytest_mustmatch_context() must return dict[str, Any] or None"
+            )
+
+        context_cwd = settings.get("cwd")
+        if context_cwd:
+            cwd = Path(context_cwd)
+
+        context_env = settings.get("env", {})
+        if context_env:
+            if not isinstance(context_env, dict):
+                raise BlockAssertionError("mustmatch context env must be a dict")
+            env.update({str(key): str(value) for key, value in context_env.items()})
+
+        return cwd, env
+
+    def run(self, block_id: str, timeout: float) -> Any:
+        if block_id in self.results:
+            return self.results[block_id]
+        block = self.blocks.get(block_id)
+        if block is None:
+            raise BlockAssertionError(f"No mustmatch run block with id={block_id!r}")
+
+        cwd, env = self._context_settings(block)
+        result = run_bash(block.content, cwd=cwd, env=env, timeout=timeout)
+        if isinstance(result.exception, subprocess.TimeoutExpired):
+            raise BlockAssertionError(
+                f"Command timed out after {timeout}s",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+        if result.exception is not None:
+            raise BlockAssertionError(
+                result.stderr or str(result.exception),
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+        if result.exit_code != 0:
+            msg = f"Exit code {result.exit_code}"
+            if result.stderr:
+                msg = f"{msg}\n{result.stderr}"
+            raise BlockAssertionError(
+                msg,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
+        self.results[block_id] = result
+        return result
+
+
+class RunBlockItem(pytest.Item):
+    """Test item for a named run block."""
+
+    def __init__(
+        self,
+        name: str,
+        parent: pytest.Collector,
+        block: Block,
+        block_id: str,
+        store: RunStore,
+        timeout: int = 30,
+    ) -> None:
+        super().__init__(name, parent)
+        self.block = block
+        self.block_id = block_id
+        self.store = store
+        self.timeout = timeout
+
+    def runtest(self) -> None:
+        self.store.run(self.block_id, _get_timeout(self.timeout, self.block.directives))
+
+    def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
+        if isinstance(excinfo.value, BlockAssertionError):
+            err = excinfo.value
+            parts = [str(err)]
+            if err.stdout:
+                parts.append(f"stdout:\n{err.stdout}")
+            if err.stderr:
+                parts.append(f"stderr:\n{err.stderr}")
+            return "\n".join(parts)
+        return str(excinfo.value)
+
+    def reportinfo(self) -> tuple[Path, int, str]:
+        return self.path, self.block.line_start - 1, self.name
+
+
+class OutputExpectationItem(pytest.Item):
+    """Test item that compares a named run block with a separate output block."""
+
+    def __init__(
+        self,
+        name: str,
+        parent: pytest.Collector,
+        block: Block,
+        target_id: str,
+        run_block: Block,
+        store: RunStore,
+        timeout: int = 30,
+    ) -> None:
+        super().__init__(name, parent)
+        self.block = block
+        self.target_id = target_id
+        self.run_block = run_block
+        self.store = store
+        self.timeout = timeout
+
+    def runtest(self) -> None:
+        result = self.store.run(
+            self.target_id,
+            _get_timeout(self.timeout, self.run_block.directives),
+        )
+        stream = self.block.directives.get("stream", "stdout")
+        actual = result.stderr if stream == "stderr" else result.stdout
+        _assert_output_matches(
+            actual,
+            _clean_expected(self.block.content),
+            language=self.block.language,
+            mode=_expect_mode(self.block),
+        )
+
+    def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
+        if isinstance(excinfo.value, BlockAssertionError):
+            return str(excinfo.value)
+        return str(excinfo.value)
+
+    def reportinfo(self) -> tuple[Path, int, str]:
+        return self.path, self.block.line_start - 1, self.name
+
+
 class MarkdownFile(pytest.File):
     """Collector for markdown files containing code blocks."""
 
@@ -250,9 +525,20 @@ class MarkdownFile(pytest.File):
                 continue
             if lang == "all" or block.language == lang:
                 blocks.append(block)
+            elif lang == "bash" and _is_output_block(block):
+                blocks.append(block)
 
         if not blocks:
             return
+
+        run_blocks: dict[str, Block] = {}
+        for block in blocks:
+            if _is_run_block(block):
+                block_id = _block_id(block)
+                if block_id:
+                    run_blocks[block_id] = block
+
+        run_store = RunStore(self.config, self.path, run_blocks)
 
         shared_namespace: dict[str, Any] | None = None
         if memory:
@@ -266,6 +552,48 @@ class MarkdownFile(pytest.File):
                 continue
 
             name = self._make_name(block)
+
+            if _is_run_block(block):
+                block_id = _block_id(block)
+                if block_id is None:
+                    raise ValueError("mustmatch run blocks require id=<name>")
+                yield RunBlockItem.from_parent(
+                    self,
+                    name=f"{name} [run:{block_id}]",
+                    block=block,
+                    block_id=block_id,
+                    store=run_store,
+                    timeout=timeout,
+                )
+                continue
+
+            if _is_output_block(block):
+                target_id = _expect_target(block)
+                if not target_id:
+                    raise ValueError(
+                        "mustmatch output blocks require expect=<run-id> "
+                        "or for=<run-id>"
+                    )
+                run_block = run_blocks.get(target_id)
+                if run_block is None:
+                    raise ValueError(
+                        "mustmatch output block references unknown run id "
+                        f"{target_id!r}"
+                    )
+                yield OutputExpectationItem.from_parent(
+                    self,
+                    name=f"{name} [expect:{target_id}]",
+                    block=block,
+                    target_id=target_id,
+                    run_block=run_block,
+                    store=run_store,
+                    timeout=timeout,
+                )
+                continue
+
+            if block.language not in {"bash", "python"}:
+                continue
+
             setup_for_block = [
                 setup_block
                 for setup_block in setup_blocks
