@@ -1,6 +1,6 @@
 # mustmatch
 
-`mustmatch` provides two tightly coupled capabilities for executable documentation workflows. It asserts CLI output in shell pipelines, and it executes Markdown `bash`/`python` fences as pytest tests. The Rust core handles parsing, normalization, and comparison while Python keeps runtime orchestration.
+`mustmatch` provides executable documentation tools for command-line projects. It asserts CLI output in shell pipelines, runs Markdown examples as documentation tests, and supports documentation-first named runs where commands and expected output are separate readable blocks. The Rust core handles parsing, normalization, and comparison while Python keeps runtime orchestration.
 
 ## Install
 
@@ -23,7 +23,29 @@ echo '{"status":"ok","count":42}' | mustmatch like '{"status":"ok"}'
 
 ## Executable Markdown
 
-Markdown documents become test files under pytest collection. Tables can drive per-row Python checks with `each_row`.
+Markdown documents can be run directly with `mustmatch test` or collected by pytest. Prefer documentation-first named runs: show the command a user would type, then show the expected output separately.
+
+````markdown
+```bash run id=version-json
+mytool --json version
+```
+
+```json expect=version-json contains
+{
+  "name": "mytool"
+}
+```
+````
+
+Later commands can reuse JSON fields from earlier runs without visible `jq`, Python one-liners, or temporary files:
+
+````markdown
+```bash run id=detail uses=version-json
+mytool get {{version-json.name}}
+```
+````
+
+Tables can also drive per-row Python checks with `each_row` when Python is the clearest way to express fixture logic.
 
 ````markdown
 # Math Behavior
@@ -41,10 +63,16 @@ row_label = f"row-{row_index}"
 ```
 ````
 
-Run docs as tests:
+Run docs directly:
 
 ```bash
 uv sync --extra dev --reinstall-package mustmatch
+uv run mustmatch test docs/ -v
+```
+
+Or collect them through pytest when a project already uses pytest:
+
+```bash
 uv run python -m pytest docs/ -v
 ```
 
@@ -70,6 +98,8 @@ The executable specification is in `docs/`:
 9. `docs/09-examples.md`
 10. `docs/10-verify-matrix.md`
 11. `docs/11-lint.md`
+12. `docs/12-named-runs.md`
+13. `docs/13-standalone-doc-runner.md`
 
 ## CLI Bench Plan
 
