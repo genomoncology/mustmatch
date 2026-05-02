@@ -11,17 +11,21 @@ user goal, then show the command and the important output.
 
 ## 2. Show The Real User Command
 
-Prefer the command a user would type:
+Prefer the command a user would type, paired with the output a user would see:
 
 ````markdown
-```bash run id=detail uses=match
-mytool annotation get {{match.annotation_id}} identity
+```console mustmatch
+$ mytool resource get widget-123
+# Example Widget
+
+Status: active
+Owner: platform-team
 ```
 ````
 
 Avoid visible extraction plumbing such as `jq`, Python one-liners, shell loops,
-temporary files, or environment-variable handoffs unless that plumbing is the
-feature being documented.
+temporary files, template substitutions, or environment-variable handoffs unless
+that plumbing is the feature being documented.
 
 ## 3. Hide Setup, But Name It Clearly
 
@@ -30,8 +34,11 @@ other harness work. The document should name the context's purpose, not explain
 its mechanics in every example.
 
 ````markdown
-```bash run id=server-status context=demo-server
-mytool server status --json
+```console mustmatch context=demo-server
+$ mytool server status
+# Server Status
+
+Connected: yes
 ```
 ````
 

@@ -23,7 +23,16 @@ echo '{"status":"ok","count":42}' | mustmatch like '{"status":"ok"}'
 
 ## Executable Markdown
 
-Markdown documents can be run directly with `mustmatch test` or collected by pytest. Prefer documentation-first named runs: show the command a user would type, then show the expected output separately.
+Markdown documents can be run directly with `mustmatch test` or collected by pytest. Prefer documentation-first examples: show the command a user would type and the output they should expect.
+
+````markdown
+```console mustmatch
+$ mytool version
+mytool 1.2.3
+```
+````
+
+Named runs are available when command and output need to be decoupled, especially for JSON subset checks.
 
 ````markdown
 ```bash run id=version-json

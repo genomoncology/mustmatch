@@ -38,6 +38,46 @@ def test_named_run_substitution_supports_nested_json_and_lists(tmp_path: Path) -
     assert summary.passed == 3
 
 
+def test_console_block_runs_visible_command_and_checks_output(tmp_path: Path) -> None:
+    doc = write(
+        tmp_path / "docs" / "console.md",
+        r"""
+        # Console Workflow
+
+        ```console mustmatch
+        $ printf '# Widget\n\nStatus: active\nOwner: platform-team\n'
+        # Widget
+
+        Status: active
+        ```
+        """,
+    )
+
+    summary = run_markdown_tests([doc], lang="all", quiet=True)
+
+    assert summary.failed == 0
+    assert summary.passed == 1
+
+
+def test_console_block_reports_missing_output(tmp_path: Path) -> None:
+    doc = write(
+        tmp_path / "docs" / "console.md",
+        r"""
+        # Console Workflow
+
+        ```console mustmatch
+        $ printf 'Status: active\n'
+        Status: inactive
+        ```
+        """,
+    )
+
+    summary = run_markdown_tests([doc], lang="all", quiet=True)
+
+    assert summary.failed == 1
+    assert "Output did not contain expected text" in summary.failures[0]
+
+
 def test_missing_substitution_run_fails_clearly(tmp_path: Path) -> None:
     doc = write(
         tmp_path / "docs" / "broken.md",

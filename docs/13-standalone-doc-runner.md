@@ -5,6 +5,19 @@ same documentation-first shape as the pytest plugin: a command block can be name
 once, expected output can live in separate blocks, and later commands can reuse
 JSON fields from earlier runs without visible shell plumbing.
 
+## Console Examples Show Command And Output Together
+
+Use `console mustmatch` when documentation should show exactly what a user types
+and the output they should expect. Lines beginning with `$ ` are executed; the
+following lines are matched against stdout.
+
+```console mustmatch
+$ printf '# Example Widget\n\nStatus: active\nOwner: platform-team\n'
+# Example Widget
+
+Status: active
+```
+
 ## Named Runs Work Outside Pytest
 
 A run block captures stdout. A separate JSON block checks the important shape of
