@@ -19,7 +19,7 @@ build:
 test:
 	@echo "Running tests..."
 	@uv sync --extra dev --reinstall-package mustmatch
-	@uv run python -m pytest docs/ README.md -q
+	@uv run python -m pytest docs/ README.md tests -q
 	@echo "✓ Tests passed"
 
 coverage:

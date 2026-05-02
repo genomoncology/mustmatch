@@ -76,6 +76,23 @@ Or collect them through pytest when a project already uses pytest:
 uv run python -m pytest docs/ -v
 ```
 
+## Principles for Good Executable Docs
+
+Good executable docs should teach first and test second:
+
+1. Documentation first, test second — a reader should learn the product without noticing the harness.
+2. Show the real user command, not extraction plumbing.
+3. Hide setup in contexts or fixtures, but name the context clearly.
+4. Assert meaningful multiline fragments or JSON subsets instead of one-word smoke checks.
+5. Keep positive behavior assertions separate from leak and safety assertions.
+6. Test stable contracts, not incidental formatting trivia.
+7. Keep framework examples generic; put domain-specific examples in the domain project.
+8. Make live dependencies explicit: deterministic by default, clearly required or opt-in when live.
+9. Keep one behavior per section.
+10. Prefer progressive disclosure: common path first, advanced harness features later.
+
+See `docs/14-good-executable-docs.md` for the full guidance.
+
 ## Quality Checks
 
 Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint markdown specs without executing their fences.
@@ -100,6 +117,7 @@ The executable specification is in `docs/`:
 11. `docs/11-lint.md`
 12. `docs/12-named-runs.md`
 13. `docs/13-standalone-doc-runner.md`
+14. `docs/14-good-executable-docs.md`
 
 ## CLI Bench Plan
 

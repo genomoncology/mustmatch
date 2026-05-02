@@ -15,3 +15,8 @@ The numbered docs are intended to be read sequentially. Later files assume the c
 7. `07-normalization.md`
 8. `08-configuration.md`
 9. `09-examples.md`
+10. `10-verify-matrix.md`
+11. `11-lint.md`
+12. `12-named-runs.md`
+13. `13-standalone-doc-runner.md`
+14. `14-good-executable-docs.md`

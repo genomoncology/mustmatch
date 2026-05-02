@@ -10,14 +10,14 @@ JSON fields from earlier runs without visible shell plumbing.
 A run block captures stdout. A separate JSON block checks the important shape of
 that output.
 
-```bash run id=variant-json
-printf '{"annotation_id":"ann_braf_v600e","gene":"BRAF","alteration":"BRAF V600E"}\n'
+```bash run id=resource-json
+printf '{"resource_id":"widget-123","name":"Example Widget","status":"active"}\n'
 ```
 
-```json expect=variant-json contains
+```json expect=resource-json contains
 {
-  "gene": "BRAF",
-  "alteration": "BRAF V600E"
+  "name": "Example Widget",
+  "status": "active"
 }
 ```
 
@@ -27,19 +27,40 @@ Use `{{run-id.field}}` inside a later `bash run` block to substitute a JSON valu
 from a previous run. The Markdown shows the product workflow instead of showing
 `jq`, Python one-liners, or temporary files.
 
-```bash run id=annotation-card
-printf 'Annotation {{variant-json.annotation_id}}: BRAF V600E\n'
+```bash run id=resource-detail uses=resource-json
+printf 'Resource {{resource-json.resource_id}}: Example Widget\n'
 ```
 
-```text expect=annotation-card contains
-Annotation ann_braf_v600e: BRAF V600E
+```text expect=resource-detail contains
+Resource widget-123: Example Widget
 ```
+
+## Project Contexts Hide Setup
+
+Projects can define named contexts in `pyproject.toml` to keep setup, temporary
+state, environment files, required environment variables, and PATH additions out
+of the user-facing example. The Markdown names the context, but the command stays
+focused on the behavior being documented.
+
+````toml
+[tool.mustmatch.contexts.demo]
+cwd = "{tmp}"
+path = ["{root}/target/debug"]
+required_env = ["DEMO_TOKEN"]
+setup = ["mytool server add demo --url $DEMO_URL"]
+````
+
+````markdown
+```bash run id=demo-status context=demo
+mytool status --json
+```
+````
 
 ## Leak Checks Stay Separate
 
-```text expect=annotation-card not-contains
-/api/
+```text expect=resource-detail not-contains
+/api/internal
 raw_payload
-token_value
-COSMIC
+password
+secret_token
 ```
