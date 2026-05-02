@@ -11,7 +11,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .runtime import create_python_namespace, run_bash, run_python
 from .version import __version__
 
 HELP = """\
@@ -309,147 +308,35 @@ def _run_test(
     paths: list[Path],
     *,
     lang: str = "all",
-    memory: bool = False,
+    memory: bool = False,  # kept for CLI compatibility; doc runner is block-isolated
     timeout: int = 30,
     verbose: bool = False,
     quiet: bool = False,
     fail_fast: bool = False,
 ) -> int:
     """Run markdown tests. Returns exit code."""
-    from ._core import create_md_fixture, get_table_for_block, parse_markdown
+    from .doc_runner import run_markdown_tests
 
-    files: list[Path] = []
-    for path in paths:
-        if path.is_file() and path.suffix == ".md":
-            files.append(path)
-        elif path.is_dir():
-            files.extend(path.rglob("*.md"))
-
-    if not files:
-        if not quiet:
-            print("No markdown files found", file=sys.stderr)
-        return 0
-
-    passed = 0
-    failed = 0
-    skipped = 0
-
-    for file in sorted(files):
-        content = file.read_text()
-        result = parse_markdown(content)
-
-        blocks = [
-            b for b in result.blocks
-            if lang == "all" or b.language == lang
-        ]
-
-        if not blocks:
-            continue
-
-        namespace = create_python_namespace(parse_result=result) if memory else None
-
-        for block in blocks:
-            if "skip" in block.directives:
-                skipped += 1
-                if verbose:
-                    print(f"SKIP {file}:{block.line_start} [{block.language}]")
-                continue
-
-            name = block.name or "unnamed"
-
-            block_timeout = timeout
-            if "timeout" in block.directives:
-                try:
-                    block_timeout = int(block.directives["timeout"])
-                except ValueError:
-                    pass
-
-            if block.language == "bash":
-                run_result = run_bash(
-                    block.content,
-                    cwd=file.parent,
-                    timeout=float(block_timeout),
-                )
-            elif block.language == "python":
-                table = get_table_for_block(result, block)
-                table_data: list[dict[str, str]] | None = None
-                if table is not None:
-                    table_data = [
-                        dict(zip(table.headers, row))
-                        for row in table.rows
-                    ]
-                if memory and namespace is not None:
-                    if table_data is None:
-                        namespace.pop("table", None)
-                    else:
-                        namespace["table"] = table_data
-                    namespace["md"] = create_md_fixture(result, block)
-                    run_result = run_python(
-                        block.content,
-                        globals_dict=namespace,
-                        timeout=float(block_timeout),
-                    )
-                else:
-                    ns = create_python_namespace(
-                        table=table_data,
-                        parse_result=result,
-                        current_block=block,
-                    )
-                    run_result = run_python(
-                        block.content,
-                        globals_dict=ns,
-                        timeout=float(block_timeout),
-                    )
-            else:
-                continue
-
-            timed_out = isinstance(
-                run_result.exception,
-                (subprocess.TimeoutExpired, TimeoutError),
-            )
-
-            if timed_out:
-                failed += 1
-                if not quiet:
-                    print(
-                        f"FAIL {file}:{block.line_start} {name} - "
-                        f"timeout after {block_timeout}s",
-                        file=sys.stderr,
-                    )
-                if fail_fast:
-                    break
-
-            elif run_result.exit_code != 0:
-                failed += 1
-                if not quiet:
-                    msg = (
-                        f"FAIL {file}:{block.line_start} {name} - "
-                        f"exit {run_result.exit_code}"
-                    )
-                    print(msg, file=sys.stderr)
-                    if verbose and run_result.stderr:
-                        print(f"  {run_result.stderr}", file=sys.stderr)
-                if fail_fast:
-                    break
-            else:
-                passed += 1
-                if verbose:
-                    print(f"PASS {file}:{block.line_start} {name}")
-
-        if fail_fast and failed > 0:
-            break
+    summary = run_markdown_tests(
+        paths,
+        lang=lang,
+        timeout=timeout,
+        verbose=verbose,
+        quiet=quiet,
+        fail_fast=fail_fast,
+    )
 
     if not quiet:
         parts = []
-        if passed:
-            parts.append(f"{passed} passed")
-        if failed:
-            parts.append(f"{failed} failed")
-        if skipped:
-            parts.append(f"{skipped} skipped")
+        if summary.passed:
+            parts.append(f"{summary.passed} passed")
+        if summary.failed:
+            parts.append(f"{summary.failed} failed")
+        if summary.skipped:
+            parts.append(f"{summary.skipped} skipped")
         print(", ".join(parts) or "no tests")
 
-    return 1 if failed > 0 else 0
+    return summary.exit_code
 
 
 def main(args: list[str] | None = None) -> int:
@@ -719,8 +606,7 @@ def _main_lint(args: list[str]) -> int:
         print(f"findings={result['finding_count']}")
         for finding in result["findings"]:
             print(
-                f"FAIL line {finding['line']} {finding['rule']}: "
-                f"{finding['message']}"
+                f"FAIL line {finding['line']} {finding['rule']}: {finding['message']}"
             )
 
     return 1 if result["finding_count"] else 0

@@ -174,6 +174,7 @@ def _values_equivalent(actual: Any, expected: Any) -> bool:
 
 
 _MUSTMATCH_PIPE_RE = re.compile(r"\|\s*mustmatch\b")
+_RUN_TEMPLATE_RE = re.compile(r"\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}")
 
 
 def _bash_block_has_mustmatch_pipe(script: str) -> bool:
@@ -391,6 +392,39 @@ class RunStore:
 
         return cwd, env
 
+    def _json_path(self, value: Any, path: list[str]) -> Any:
+        current = value
+        for part in path:
+            if isinstance(current, dict):
+                current = current[part]
+            elif isinstance(current, list):
+                current = current[int(part)]
+            else:
+                raise KeyError(".".join(path))
+        return current
+
+    def _result_json(self, block_id: str) -> Any:
+        result = self.run(block_id, 30.0)
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise BlockAssertionError(
+                f"Run block id={block_id!r} did not produce JSON stdout"
+            ) from exc
+
+    def _substitute_runs(self, content: str) -> str:
+        def replace(match: re.Match[str]) -> str:
+            expression = match.group(1)
+            parts = expression.split(".")
+            if len(parts) < 2:
+                raise BlockAssertionError(
+                    f"Template {match.group(0)} must reference run.field"
+                )
+            block_id, path = parts[0], parts[1:]
+            return str(self._json_path(self._result_json(block_id), path))
+
+        return _RUN_TEMPLATE_RE.sub(replace, content)
+
     def run(self, block_id: str, timeout: float) -> Any:
         if block_id in self.results:
             return self.results[block_id]
@@ -399,7 +433,9 @@ class RunStore:
             raise BlockAssertionError(f"No mustmatch run block with id={block_id!r}")
 
         cwd, env = self._context_settings(block)
-        result = run_bash(block.content, cwd=cwd, env=env, timeout=timeout)
+        result = run_bash(
+            self._substitute_runs(block.content), cwd=cwd, env=env, timeout=timeout
+        )
         if isinstance(result.exception, subprocess.TimeoutExpired):
             raise BlockAssertionError(
                 f"Command timed out after {timeout}s",
