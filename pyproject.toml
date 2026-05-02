@@ -55,11 +55,11 @@ auto_imports = []
 
 [tool.pytest.ini_options]
 addopts = ["-p", "no:mustmatch", "-p", "mustmatch.pytest_plugin"]
-testpaths = ["docs"]
+testpaths = ["docs", "tests"]
 pythonpath = ["src"]
-python_files = []
-python_classes = []
-python_functions = []
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 
 [tool.ruff]
 line-length = 88

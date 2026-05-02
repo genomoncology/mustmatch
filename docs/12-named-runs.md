@@ -12,13 +12,13 @@ expect=<id> contains` block checks that stdout contains the expected JSON
 structure without requiring the documentation to pipe through shell variables.
 
 ```bash run id=version-json
-printf '{"name":"genomoncology","version":"0.1.0","extra":{"ignored":true}}\n'
+printf '{"name":"mytool","version":"1.2.3","extra":{"ignored":true}}\n'
 ```
 
 ```json expect=version-json contains
 {
-  "name": "genomoncology",
-  "version": "0.1.0"
+  "name": "mytool",
+  "version": "1.2.3"
 }
 ```
 
@@ -27,32 +27,32 @@ printf '{"name":"genomoncology","version":"0.1.0","extra":{"ignored":true}}\n'
 Markdown and text output expectations compare multiline fragments so examples
 show useful context instead of brittle one-word checks.
 
-```bash run id=trial-card
+```bash run id=resource-card
 cat <<'EOF'
-# Trial: NCT04267848
+# Resource: widget-123
 
 | Field | Value |
 |---|---|
-| Title | BRAF V600E Lung Cancer Basket Study |
-| Status | RECRUITING |
-| Phase | Phase 2 |
+| Name | Example Widget |
+| Status | active |
+| Owner | platform-team |
 
-## Eligibility
+## Notes
 
-Adults with BRAF V600E NSCLC
+This resource is safe to show in documentation.
 EOF
 ```
 
-```markdown expect=trial-card contains
+```markdown expect=resource-card contains
 | Field | Value |
 |---|---|
-| Title | BRAF V600E Lung Cancer Basket Study |
-| Status | RECRUITING |
-| Phase | Phase 2 |
+| Name | Example Widget |
+| Status | active |
+| Owner | platform-team |
 
-## Eligibility
+## Notes
 
-Adults with BRAF V600E NSCLC
+This resource is safe to show in documentation.
 ```
 
 ## Follow-Up Commands Reuse JSON Fields
@@ -62,25 +62,27 @@ Later run blocks can refer to JSON fields captured by earlier runs with
 workflow instead of showing `jq`, Python one-liners, temporary files, or shell
 variables.
 
-```bash run id=annotation-summary
-printf '{"annotation_id":"ann_braf_v600e","alteration":"BRAF V600E"}\n'
+```bash run id=resource-summary
+printf '{"resource_id":"widget-123","label":"Example Widget"}\n'
 ```
 
-```bash run id=annotation-identity uses=annotation-summary
-printf 'Identity: {{annotation-summary.annotation_id}} {{annotation-summary.alteration}}\n'
+```bash run id=resource-identity uses=resource-summary
+printf 'Identity: {{resource-summary.resource_id}} {{resource-summary.label}}\n'
 ```
 
-```text expect=annotation-identity contains
-Identity: ann_braf_v600e BRAF V600E
+```text expect=resource-identity contains
+Identity: widget-123 Example Widget
 ```
 
 ## Leak Checks Stay Separate
 
-Absence assertions can list one forbidden string per line.
+Absence assertions can list one forbidden string per line. Keep them separate
+from the positive behavior assertion so the reader can tell which block explains
+the feature and which block protects safety boundaries.
 
-```text expect=trial-card not-contains
-/api/
-token_value
+```text expect=resource-card not-contains
+/api/internal
+password
+secret_token
 raw_payload
-COSMIC
 ```
