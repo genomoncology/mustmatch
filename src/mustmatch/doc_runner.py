@@ -70,6 +70,7 @@ _OUTPUT_DIRECTIVES = {"expect", "for", "mustmatch-output", "output"}
 _TEMPLATE_RE = re.compile(r"\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}")
 _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _MUSTMATCH_PIPE_RE = re.compile(r"\|\s*mustmatch\b")
+_CONSOLE_PROMPT_RE = re.compile(r"^\$\s+(?P<command>.+)$")
 
 
 def is_run_block(block: Block) -> bool:
@@ -80,6 +81,10 @@ def is_run_block(block: Block) -> bool:
 
 def is_output_block(block: Block) -> bool:
     return any(key in block.directives for key in _OUTPUT_DIRECTIVES)
+
+
+def is_console_block(block: Block) -> bool:
+    return block.language == "console" and "mustmatch" in block.directives
 
 
 def block_id(block: Block) -> str | None:
@@ -126,6 +131,37 @@ def bash_block_has_mustmatch_pipe(script: str) -> bool:
         if _MUSTMATCH_PIPE_RE.search(code):
             return True
     return False
+
+
+def parse_console_examples(content: str) -> list[tuple[str, str]]:
+    examples: list[tuple[str, str]] = []
+    command: str | None = None
+    expected_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal command, expected_lines
+        if command is not None:
+            examples.append((command, "\n".join(expected_lines).strip("\n")))
+        command = None
+        expected_lines = []
+
+    for line in content.splitlines():
+        match = _CONSOLE_PROMPT_RE.match(line)
+        if match:
+            flush()
+            command = match.group("command")
+            continue
+        if command is not None:
+            expected_lines.append(line)
+        elif line.strip():
+            raise DocRunError("console mustmatch blocks must start commands with `$ `")
+
+    flush()
+    if not examples:
+        raise DocRunError(
+            "console mustmatch blocks require at least one `$ command` line"
+        )
+    return examples
 
 
 def json_contains(actual: Any, expected: Any) -> bool:
@@ -452,6 +488,31 @@ class MarkdownRunner:
     def run_block(self, block: Block) -> None:
         if "skip" in block.directives:
             raise SkipBlock
+        if is_console_block(block):
+            context_name = block.directives.get("context", "").strip() or None
+            settings = self.contexts.resolve(context_name, self.path.parent)
+            for command, expected in parse_console_examples(block.content):
+                result = run_bash(
+                    self.substitute_runs(command),
+                    cwd=settings.cwd,
+                    env=settings.env,
+                    timeout=self._timeout_for(block),
+                )
+                if result.exit_code != 0:
+                    raise DocRunError(
+                        f"console command exited {result.exit_code}: {command}",
+                        stdout=result.stdout,
+                        stderr=result.stderr,
+                        exit_code=result.exit_code,
+                    )
+                if expected:
+                    assert_output_matches(
+                        result.stdout,
+                        expected,
+                        language="markdown",
+                        mode=expect_mode(block),
+                    )
+            return
         if is_run_block(block):
             ident = block_id(block)
             if not ident:
@@ -521,12 +582,23 @@ class MarkdownRunner:
         cases: list[DocTestCase] = []
         for block in self.parse_result.blocks:
             if self.lang != "all" and block.language != self.lang:
-                if not (self.lang == "bash" and is_output_block(block)):
+                if not (
+                    self.lang == "bash"
+                    and (is_output_block(block) or is_console_block(block))
+                ):
                     continue
-            if block.language not in {"bash", "python", "json", "markdown", "text"}:
+            if block.language not in {
+                "bash",
+                "python",
+                "json",
+                "markdown",
+                "text",
+                "console",
+            }:
                 continue
             if not (
-                is_run_block(block)
+                is_console_block(block)
+                or is_run_block(block)
                 or is_output_block(block)
                 or block.language in {"bash", "python"}
             ):
