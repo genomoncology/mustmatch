@@ -112,6 +112,30 @@ def clean_expected(content: str) -> str:
     return content.strip("\n")
 
 
+def expected_exit(block: Block) -> int:
+    directive = "exit_code" if "exit_code" in block.directives else "exit"
+    value = block.directives.get(directive)
+    if value is None:
+        return 0
+    try:
+        return int(value, 10)
+    except ValueError as exc:
+        raise DocRunError(
+            f"exit directive {directive} must be an integer, got {value!r}"
+        ) from exc
+
+
+def selected_stream(block: Block) -> str:
+    stream = block.directives.get("stream", "stdout")
+    if stream not in {"stdout", "stderr"}:
+        raise DocRunError(f"stream directive must be stdout or stderr, got {stream!r}")
+    return stream
+
+
+def result_stream(result: Any, stream: str) -> str:
+    return result.stderr if stream == "stderr" else result.stdout
+
+
 def normalize_lookup(value: str) -> str:
     normalized: list[str] = []
     prev_underscore = False
@@ -469,15 +493,18 @@ class MarkdownRunner:
         context_name = block.directives.get("context", "").strip() or None
         settings = self.contexts.resolve(context_name, self.path.parent)
         content = self.substitute_runs(block.content)
+        expected = expected_exit(block)
+        stream = selected_stream(block)
         result = run_bash(
             content,
             cwd=settings.cwd,
             env=settings.env,
             timeout=self._timeout_for(block),
         )
-        if result.exit_code != 0:
+        if result.exit_code != expected:
             raise DocRunError(
-                f"run {ident!r} exited {result.exit_code}",
+                f"run {ident!r} expected exit {expected}, "
+                f"actual exit {result.exit_code}, selected stream {stream}",
                 stdout=result.stdout,
                 stderr=result.stderr,
                 exit_code=result.exit_code,
@@ -491,6 +518,8 @@ class MarkdownRunner:
         if is_console_block(block):
             context_name = block.directives.get("context", "").strip() or None
             settings = self.contexts.resolve(context_name, self.path.parent)
+            expected_code = expected_exit(block)
+            stream = selected_stream(block)
             for command, expected in parse_console_examples(block.content):
                 result = run_bash(
                     self.substitute_runs(command),
@@ -498,16 +527,18 @@ class MarkdownRunner:
                     env=settings.env,
                     timeout=self._timeout_for(block),
                 )
-                if result.exit_code != 0:
+                if result.exit_code != expected_code:
                     raise DocRunError(
-                        f"console command exited {result.exit_code}: {command}",
+                        f"console command expected exit {expected_code}, "
+                        f"actual exit {result.exit_code}, selected stream {stream}: "
+                        f"{command}",
                         stdout=result.stdout,
                         stderr=result.stderr,
                         exit_code=result.exit_code,
                     )
                 if expected:
                     assert_output_matches(
-                        result.stdout,
+                        result_stream(result, stream),
                         expected,
                         language="markdown",
                         mode=expect_mode(block),
@@ -524,8 +555,12 @@ class MarkdownRunner:
             if not target:
                 raise DocRunError("output blocks require expect=<run-id>")
             result = self.run_named(target)
-            stream = block.directives.get("stream", "stdout")
-            actual = result.stderr if stream == "stderr" else result.stdout
+            stream = (
+                selected_stream(block)
+                if "stream" in block.directives
+                else selected_stream(self.run_blocks[target])
+            )
+            actual = result_stream(result, stream)
             assert_output_matches(
                 actual,
                 clean_expected(block.content),
