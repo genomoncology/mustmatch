@@ -501,6 +501,13 @@ class MarkdownRunner:
             env=settings.env,
             timeout=self._timeout_for(block),
         )
+        if result.exception is not None:
+            raise DocRunError(
+                result.stderr or str(result.exception),
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
         if result.exit_code != expected:
             raise DocRunError(
                 f"run {ident!r} expected exit {expected}, "
@@ -527,6 +534,13 @@ class MarkdownRunner:
                     env=settings.env,
                     timeout=self._timeout_for(block),
                 )
+                if result.exception is not None:
+                    raise DocRunError(
+                        result.stderr or str(result.exception),
+                        stdout=result.stdout,
+                        stderr=result.stderr,
+                        exit_code=result.exit_code,
+                    )
                 if result.exit_code != expected_code:
                     raise DocRunError(
                         f"console command expected exit {expected_code}, "

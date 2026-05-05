@@ -639,6 +639,20 @@ class ConsoleItem(pytest.Item):
                 env=env,
                 timeout=timeout,
             )
+            if isinstance(result.exception, subprocess.TimeoutExpired):
+                raise BlockAssertionError(
+                    f"Command timed out after {timeout}s",
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    exit_code=result.exit_code,
+                )
+            if result.exception is not None:
+                raise BlockAssertionError(
+                    result.stderr or str(result.exception),
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    exit_code=result.exit_code,
+                )
             if result.exit_code != expected_code:
                 raise BlockAssertionError(
                     f"expected exit {expected_code}, actual exit {result.exit_code}, "
