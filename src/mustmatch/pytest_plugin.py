@@ -175,6 +175,33 @@ def _values_equivalent(actual: Any, expected: Any) -> bool:
 
 _MUSTMATCH_PIPE_RE = re.compile(r"\|\s*mustmatch\b")
 _RUN_TEMPLATE_RE = re.compile(r"\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}")
+_CONSOLE_PROMPT_RE = re.compile(r"^\$\s+(?P<command>.+)$")
+
+
+def _expected_exit(block: Block) -> int:
+    directive = "exit_code" if "exit_code" in block.directives else "exit"
+    value = block.directives.get(directive)
+    if value is None:
+        return 0
+    try:
+        return int(value, 10)
+    except ValueError as exc:
+        raise BlockAssertionError(
+            f"exit directive {directive} must be an integer, got {value!r}"
+        ) from exc
+
+
+def _selected_stream(block: Block) -> str:
+    stream = block.directives.get("stream", "stdout")
+    if stream not in {"stdout", "stderr"}:
+        raise BlockAssertionError(
+            f"stream directive must be stdout or stderr, got {stream!r}"
+        )
+    return stream
+
+
+def _result_stream(result: Any, stream: str) -> str:
+    return result.stderr if stream == "stderr" else result.stdout
 
 
 def _bash_block_has_mustmatch_pipe(script: str) -> bool:
@@ -200,6 +227,43 @@ def _is_output_block(block: Block) -> bool:
         or "mustmatch-output" in block.directives
         or "output" in block.directives
     )
+
+
+def _is_console_block(block: Block) -> bool:
+    return block.language == "console" and "mustmatch" in block.directives
+
+
+def _parse_console_examples(content: str) -> list[tuple[str, str]]:
+    examples: list[tuple[str, str]] = []
+    command: str | None = None
+    expected_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal command, expected_lines
+        if command is not None:
+            examples.append((command, "\n".join(expected_lines).strip("\n")))
+        command = None
+        expected_lines = []
+
+    for line in content.splitlines():
+        match = _CONSOLE_PROMPT_RE.match(line)
+        if match:
+            flush()
+            command = match.group("command")
+            continue
+        if command is not None:
+            expected_lines.append(line)
+        elif line.strip():
+            raise BlockAssertionError(
+                "console mustmatch blocks must start commands with `$ `"
+            )
+
+    flush()
+    if not examples:
+        raise BlockAssertionError(
+            "console mustmatch blocks require at least one `$ command` line"
+        )
+    return examples
 
 
 def _block_id(block: Block) -> str | None:
@@ -433,6 +497,8 @@ class RunStore:
             raise BlockAssertionError(f"No mustmatch run block with id={block_id!r}")
 
         cwd, env = self._context_settings(block)
+        expected = _expected_exit(block)
+        stream = _selected_stream(block)
         result = run_bash(
             self._substitute_runs(block.content), cwd=cwd, env=env, timeout=timeout
         )
@@ -450,12 +516,10 @@ class RunStore:
                 stderr=result.stderr,
                 exit_code=result.exit_code,
             )
-        if result.exit_code != 0:
-            msg = f"Exit code {result.exit_code}"
-            if result.stderr:
-                msg = f"{msg}\n{result.stderr}"
+        if result.exit_code != expected:
             raise BlockAssertionError(
-                msg,
+                f"expected exit {expected}, actual exit {result.exit_code}, "
+                f"selected stream {stream}",
                 stdout=result.stdout,
                 stderr=result.stderr,
                 exit_code=result.exit_code,
@@ -525,8 +589,12 @@ class OutputExpectationItem(pytest.Item):
             self.target_id,
             _get_timeout(self.timeout, self.run_block.directives),
         )
-        stream = self.block.directives.get("stream", "stdout")
-        actual = result.stderr if stream == "stderr" else result.stdout
+        stream = (
+            _selected_stream(self.block)
+            if "stream" in self.block.directives
+            else _selected_stream(self.run_block)
+        )
+        actual = _result_stream(result, stream)
         _assert_output_matches(
             actual,
             _clean_expected(self.block.content),
@@ -537,6 +605,79 @@ class OutputExpectationItem(pytest.Item):
     def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
         if isinstance(excinfo.value, BlockAssertionError):
             return str(excinfo.value)
+        return str(excinfo.value)
+
+    def reportinfo(self) -> tuple[Path, int, str]:
+        return self.path, self.block.line_start - 1, self.name
+
+
+class ConsoleItem(pytest.Item):
+    """Test item for a console mustmatch block."""
+
+    def __init__(
+        self,
+        name: str,
+        parent: pytest.Collector,
+        block: Block,
+        store: RunStore,
+        timeout: int = 30,
+    ) -> None:
+        super().__init__(name, parent)
+        self.block = block
+        self.store = store
+        self.timeout = timeout
+
+    def runtest(self) -> None:
+        timeout = _get_timeout(self.timeout, self.block.directives)
+        cwd, env = self.store._context_settings(self.block)
+        expected_code = _expected_exit(self.block)
+        stream = _selected_stream(self.block)
+        for command, expected in _parse_console_examples(self.block.content):
+            result = run_bash(
+                self.store._substitute_runs(command),
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+            )
+            if isinstance(result.exception, subprocess.TimeoutExpired):
+                raise BlockAssertionError(
+                    f"Command timed out after {timeout}s",
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    exit_code=result.exit_code,
+                )
+            if result.exception is not None:
+                raise BlockAssertionError(
+                    result.stderr or str(result.exception),
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    exit_code=result.exit_code,
+                )
+            if result.exit_code != expected_code:
+                raise BlockAssertionError(
+                    f"expected exit {expected_code}, actual exit {result.exit_code}, "
+                    f"selected stream {stream}: {command}",
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    exit_code=result.exit_code,
+                )
+            if expected:
+                _assert_output_matches(
+                    _result_stream(result, stream),
+                    expected,
+                    language="markdown",
+                    mode=_expect_mode(self.block),
+                )
+
+    def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:
+        if isinstance(excinfo.value, BlockAssertionError):
+            err = excinfo.value
+            parts = [str(err)]
+            if err.stdout:
+                parts.append(f"stdout:\n{err.stdout}")
+            if err.stderr:
+                parts.append(f"stderr:\n{err.stderr}")
+            return "\n".join(parts)
         return str(excinfo.value)
 
     def reportinfo(self) -> tuple[Path, int, str]:
@@ -561,7 +702,9 @@ class MarkdownFile(pytest.File):
                 continue
             if lang == "all" or block.language == lang:
                 blocks.append(block)
-            elif lang == "bash" and _is_output_block(block):
+            elif lang == "bash" and (
+                _is_output_block(block) or _is_console_block(block)
+            ):
                 blocks.append(block)
 
         if not blocks:
@@ -622,6 +765,16 @@ class MarkdownFile(pytest.File):
                     block=block,
                     target_id=target_id,
                     run_block=run_block,
+                    store=run_store,
+                    timeout=timeout,
+                )
+                continue
+
+            if _is_console_block(block):
+                yield ConsoleItem.from_parent(
+                    self,
+                    name=name,
+                    block=block,
                     store=run_store,
                     timeout=timeout,
                 )

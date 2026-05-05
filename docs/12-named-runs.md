@@ -22,6 +22,21 @@ printf '{"name":"mytool","version":"1.2.3","extra":{"ignored":true}}\n'
 }
 ```
 
+## Named Runs Can Capture Expected Errors
+
+Expected failure examples should stay readable: the command remains a plain run
+block, while the directives record the expected status and stream. A later
+expectation block reads the selected stream without `set +e`, temporary files,
+or stderr redirection in the document.
+
+```bash run id=bad-usage exit=2 stream=stderr
+mustmatch --bad-option
+```
+
+```text expect=bad-usage contains
+Error: unknown option: --bad-option
+```
+
 ## Multiline Text Fragments Stay Contextual
 
 Markdown and text output expectations compare multiline fragments so examples

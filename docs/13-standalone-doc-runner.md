@@ -18,6 +18,17 @@ $ printf '# Example Widget\n\nStatus: active\nOwner: platform-team\n'
 Status: active
 ```
 
+## Expected Errors Can Match Stderr
+
+Invalid-usage examples should show the command and the error a user sees without
+turning the documentation into a shell harness. `exit=2` records the expected
+status, and `stream=stderr` says the inline output belongs to stderr.
+
+```console mustmatch exit=2 stream=stderr
+$ mustmatch --bad-option
+Error: unknown option: --bad-option
+```
+
 ## Named Runs Work Outside Pytest
 
 A run block captures stdout. A separate JSON block checks the important shape of
