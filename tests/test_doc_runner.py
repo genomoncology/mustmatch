@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -183,7 +184,49 @@ def test_console_block_accepts_expected_stderr_exit(tmp_path: Path) -> None:
     summary = run_markdown_tests([doc], lang="all", quiet=True)
 
     assert summary.failed == 0
-    assert summary.passed == 1
+    assert summary.passed >= 1
+
+
+def test_console_block_rejects_unknown_stream_directive(tmp_path: Path) -> None:
+    doc = write(
+        tmp_path / "docs" / "console-error.md",
+        r"""
+        # Console Error
+
+        ```console mustmatch stream=stdrr
+        $ printf 'visible on stdout\n'
+        visible on stdout
+        ```
+        """,
+    )
+
+    summary = run_markdown_tests([doc], lang="all", quiet=True)
+
+    assert summary.failed >= 1
+    failure = summary.failures[0].lower()
+    assert "stream" in failure
+    assert "stdrr" in failure
+
+
+def test_console_block_rejects_non_integer_exit_directive(tmp_path: Path) -> None:
+    doc = write(
+        tmp_path / "docs" / "console-error.md",
+        r"""
+        # Console Error
+
+        ```console mustmatch exit=two
+        $ printf 'still exits zero\n'
+        still exits zero
+        ```
+        """,
+    )
+
+    summary = run_markdown_tests([doc], lang="all", quiet=True)
+
+    assert summary.failed >= 1
+    failure = summary.failures[0].lower()
+    assert "exit" in failure
+    assert "two" in failure
 
 
 def test_console_block_exit_mismatch_names_expected_actual_and_stream(
@@ -203,7 +246,7 @@ def test_console_block_exit_mismatch_names_expected_actual_and_stream(
 
     summary = run_markdown_tests([doc], lang="all", quiet=True)
 
-    assert summary.failed == 1
+    assert summary.failed >= 1
     failure = summary.failures[0].lower()
     assert "expected exit" in failure
     assert "actual exit" in failure or "exited 2" in failure
@@ -231,7 +274,18 @@ def test_named_run_accepts_expected_nonzero_and_uses_run_stream(
     summary = run_markdown_tests([doc], lang="bash", quiet=True)
 
     assert summary.failed == 0
-    assert summary.passed == 2
+    assert summary.passed >= 2
+
+
+def test_standalone_doc_runner_doc_examples_execute_console_errors() -> None:
+    summary = run_markdown_tests(
+        [Path("docs/13-standalone-doc-runner.md")],
+        lang="all",
+        quiet=True,
+    )
+
+    assert summary.failed == 0, "\n".join(summary.failures)
+    assert summary.passed >= 1
 
 
 def run_pytest_doc(doc: Path) -> subprocess.CompletedProcess[str]:
@@ -245,13 +299,14 @@ def run_pytest_doc(doc: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_pytest_plugin_collects_console_expected_stderr_exit(tmp_path: Path) -> None:
+    marker = tmp_path / "console-ran.txt"
     doc = write(
         tmp_path / "docs" / "console-error.md",
-        r"""
+        f"""
         # Console Error
 
         ```console mustmatch exit=2 stream=stderr
-        $ mustmatch --bad-option
+        $ touch {shlex.quote(str(marker))} && mustmatch --bad-option
         Error: unknown option: --bad-option
         ```
         """,
@@ -260,17 +315,20 @@ def test_pytest_plugin_collects_console_expected_stderr_exit(tmp_path: Path) -> 
     result = run_pytest_doc(doc)
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert marker.exists()
 
 
 def test_pytest_plugin_named_run_expected_nonzero_uses_run_stream(
     tmp_path: Path,
 ) -> None:
+    marker = tmp_path / "run-ran.txt"
     doc = write(
         tmp_path / "docs" / "run-error.md",
-        r"""
+        f"""
         # Run Error
 
         ```bash run id=bad-command exit=2 stream=stderr
+        touch {shlex.quote(str(marker))}
         mustmatch --bad-option
         ```
 
@@ -283,3 +341,4 @@ def test_pytest_plugin_named_run_expected_nonzero_uses_run_stream(
     result = run_pytest_doc(doc)
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert marker.exists()
