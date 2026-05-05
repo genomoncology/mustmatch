@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 from textwrap import dedent
 
@@ -163,3 +165,121 @@ def test_context_required_env_reports_missing_values(tmp_path: Path) -> None:
 
     assert summary.failed == 1
     assert "requires environment values: MISSING_DOC_SECRET" in summary.failures[0]
+
+
+def test_console_block_accepts_expected_stderr_exit(tmp_path: Path) -> None:
+    doc = write(
+        tmp_path / "docs" / "console-error.md",
+        r"""
+        # Console Error
+
+        ```console mustmatch exit=2 stream=stderr
+        $ mustmatch --bad-option
+        Error: unknown option: --bad-option
+        ```
+        """,
+    )
+
+    summary = run_markdown_tests([doc], lang="all", quiet=True)
+
+    assert summary.failed == 0
+    assert summary.passed == 1
+
+
+def test_console_block_exit_mismatch_names_expected_actual_and_stream(
+    tmp_path: Path,
+) -> None:
+    doc = write(
+        tmp_path / "docs" / "console-error.md",
+        r"""
+        # Console Error
+
+        ```console mustmatch exit=0 stream=stderr
+        $ mustmatch --bad-option
+        Error: unknown option: --bad-option
+        ```
+        """,
+    )
+
+    summary = run_markdown_tests([doc], lang="all", quiet=True)
+
+    assert summary.failed == 1
+    failure = summary.failures[0].lower()
+    assert "expected exit" in failure
+    assert "actual exit" in failure or "exited 2" in failure
+    assert "stderr" in failure
+
+
+def test_named_run_accepts_expected_nonzero_and_uses_run_stream(
+    tmp_path: Path,
+) -> None:
+    doc = write(
+        tmp_path / "docs" / "run-error.md",
+        r"""
+        # Run Error
+
+        ```bash run id=bad-command exit=2 stream=stderr
+        mustmatch --bad-option
+        ```
+
+        ```text expect=bad-command contains
+        Error: unknown option: --bad-option
+        ```
+        """,
+    )
+
+    summary = run_markdown_tests([doc], lang="bash", quiet=True)
+
+    assert summary.failed == 0
+    assert summary.passed == 2
+
+
+def run_pytest_doc(doc: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", str(doc), "-q"],
+        check=False,
+        cwd=Path.cwd(),
+        text=True,
+        capture_output=True,
+    )
+
+
+def test_pytest_plugin_collects_console_expected_stderr_exit(tmp_path: Path) -> None:
+    doc = write(
+        tmp_path / "docs" / "console-error.md",
+        r"""
+        # Console Error
+
+        ```console mustmatch exit=2 stream=stderr
+        $ mustmatch --bad-option
+        Error: unknown option: --bad-option
+        ```
+        """,
+    )
+
+    result = run_pytest_doc(doc)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_pytest_plugin_named_run_expected_nonzero_uses_run_stream(
+    tmp_path: Path,
+) -> None:
+    doc = write(
+        tmp_path / "docs" / "run-error.md",
+        r"""
+        # Run Error
+
+        ```bash run id=bad-command exit=2 stream=stderr
+        mustmatch --bad-option
+        ```
+
+        ```text expect=bad-command contains
+        Error: unknown option: --bad-option
+        ```
+        """,
+    )
+
+    result = run_pytest_doc(doc)
+
+    assert result.returncode == 0, result.stdout + result.stderr
