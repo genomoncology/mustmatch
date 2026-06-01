@@ -1,7 +1,8 @@
 use std::io::{self, Read};
 
 use mustmatch_core::{
-    CompareMode, NormalizeOptions, analyze_contains_lines, compare, detect_mode, normalize,
+    CompareMode, NormalizeOptions, analyze_contains_lines, compare, compare_ellipsis, detect_mode,
+    has_ellipsis, normalize,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -118,6 +119,24 @@ fn evaluate_match(input: &str, args: &MatchArgs) -> (bool, String) {
     let expected = normalize(&args.expected, options);
 
     let detected_mode = detect_mode(&expected);
+
+    if args.like && has_ellipsis(&expected) {
+        let result = compare_ellipsis(&actual, &expected, args.ignore_case);
+        let matches = if args.negate {
+            !result.matches
+        } else {
+            result.matches
+        };
+        if matches {
+            return (true, String::new());
+        }
+        let message = if args.negate {
+            "Negated ellipsis match: the forbidden pattern was found.".to_string()
+        } else {
+            result.message
+        };
+        return (false, message);
+    }
 
     if is_plain_multiline_like(detected_mode, &expected, args.like) {
         let report = analyze_contains_lines(&actual, &expected, args.ignore_case);

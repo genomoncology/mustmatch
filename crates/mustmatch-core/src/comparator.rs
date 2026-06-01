@@ -194,6 +194,10 @@ pub fn analyze_contains_lines(
 }
 
 pub fn contains(actual: &str, expected: &str) -> CompareResult {
+    if has_ellipsis(expected) {
+        return compare_ellipsis(actual, expected, false);
+    }
+
     if expected.contains('\n') {
         let report = analyze_contains_lines(actual, expected, false);
         return compare_multiline_contains(&report);
@@ -210,6 +214,121 @@ pub fn contains(actual: &str, expected: &str) -> CompareResult {
     CompareResult {
         matches: false,
         message: format!("Expected substring not found: {expected:?}\nActual: {actual:?}"),
+        mode: CompareMode::Contains,
+    }
+}
+
+/// True when the expected block uses ellipsis (`...`): either a standalone
+/// `...` line (skip any number of lines) or a line ending in `...` (match the
+/// line as a prefix and ignore the rest). Used to keep doc blocks short and to
+/// elide volatile or long output while still anchoring on the lines that matter.
+pub fn has_ellipsis(expected: &str) -> bool {
+    expected.split('\n').any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty() && (trimmed == "..." || trimmed.ends_with("..."))
+    })
+}
+
+enum EllipsisToken {
+    /// A standalone `...` line: skip any number of actual lines.
+    Gap,
+    /// A content line that must be found (as a substring of one actual line).
+    Line(String),
+}
+
+fn tokenize_ellipsis(expected: &str) -> Vec<EllipsisToken> {
+    let mut tokens = Vec::new();
+    for raw in expected.split('\n') {
+        let line = raw.trim_end();
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.trim() == "..." {
+            tokens.push(EllipsisToken::Gap);
+            continue;
+        }
+        // A trailing `...` makes the line a prefix anchor: keep the text before
+        // it and ignore the rest of the actual line (it is matched as a
+        // substring, so the tail is naturally ignored).
+        let text = match line.strip_suffix("...") {
+            Some(stripped) => stripped.trim_end().to_string(),
+            None => line.to_string(),
+        };
+        tokens.push(EllipsisToken::Line(text));
+    }
+    tokens
+}
+
+/// Ordered match with explicit `...` gaps. Content lines between gaps must match
+/// consecutive actual lines (adjacency is what makes `...` meaningful); a `...`
+/// skips any number of lines until the next content anchor is found. The first
+/// anchor may appear anywhere (an implicit leading gap) so docs need not anchor
+/// on table headers/banners.
+pub fn compare_ellipsis(actual: &str, expected: &str, ignore_case: bool) -> CompareResult {
+    let tokens = tokenize_ellipsis(expected);
+    let actual_lines: Vec<&str> = actual.split('\n').collect();
+    // Collapse internal whitespace so a clean doc line (`name | BRAF`) matches
+    // padded table output (`name        | BRAF`). Column padding is a rendering
+    // artifact, not behaviour, so ellipsis matching is whitespace-insensitive.
+    let fold = |value: &str| {
+        let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+        if ignore_case {
+            collapsed.to_lowercase()
+        } else {
+            collapsed
+        }
+    };
+
+    let mut ai = 0usize;
+    let mut skip = true; // implicit leading gap: first anchor floats forward
+    for token in &tokens {
+        match token {
+            EllipsisToken::Gap => skip = true,
+            EllipsisToken::Line(text) => {
+                let needle = fold(text);
+                if skip {
+                    let mut found = None;
+                    while ai < actual_lines.len() {
+                        if fold(actual_lines[ai]).contains(&needle) {
+                            found = Some(ai);
+                            break;
+                        }
+                        ai += 1;
+                    }
+                    match found {
+                        Some(j) => {
+                            ai = j + 1;
+                            skip = false;
+                        }
+                        None => {
+                            return CompareResult {
+                                matches: false,
+                                message: format!(
+                                    "Ellipsis match failed: no line containing {text:?} found after the preceding `...`."
+                                ),
+                                mode: CompareMode::Contains,
+                            };
+                        }
+                    }
+                } else if ai < actual_lines.len() && fold(actual_lines[ai]).contains(&needle) {
+                    ai += 1;
+                } else {
+                    let got = actual_lines.get(ai).copied().unwrap_or("<end of output>");
+                    return CompareResult {
+                        matches: false,
+                        message: format!(
+                            "Ellipsis match failed: expected the next line to contain {text:?}, got {got:?}. Insert `...` to skip lines."
+                        ),
+                        mode: CompareMode::Contains,
+                    };
+                }
+            }
+        }
+    }
+
+    CompareResult {
+        matches: true,
+        message: String::new(),
         mode: CompareMode::Contains,
     }
 }
@@ -447,6 +566,10 @@ pub fn compare(
             }
         }
         CompareMode::Contains => {
+            if has_ellipsis(expected) {
+                return compare_ellipsis(actual, expected, ignore_case);
+            }
+
             if expected.contains('\n') {
                 let report = analyze_contains_lines(actual, expected, ignore_case);
                 return compare_multiline_contains(&report);
@@ -542,7 +665,10 @@ pub fn extract_regex_pattern(expected: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{CompareMode, analyze_contains_lines, compare, contains, detect_mode, json_match};
+    use super::{
+        CompareMode, analyze_contains_lines, compare, contains, detect_mode, has_ellipsis,
+        json_match,
+    };
 
     #[test]
     fn detects_modes_like_python() {
@@ -649,5 +775,79 @@ mod tests {
             report.found_message(),
             "Found 1 of 2 forbidden lines:\n  - \"alpha\""
         );
+    }
+
+    #[test]
+    fn has_ellipsis_detects_standalone_and_trailing() {
+        assert!(has_ellipsis("name | BRAF\n...\ndescription | foo"));
+        assert!(has_ellipsis("description | Protein kinase that ..."));
+        assert!(!has_ellipsis("name | BRAF\ndescription | foo"));
+    }
+
+    #[test]
+    fn ellipsis_skips_leading_banner_then_matches_adjacent_rows() {
+        // psql -x expanded output: a RECORD banner we don't care about, then rows.
+        let actual = "-[ RECORD 1 ]----------\n\
+                      name | BRAF\n\
+                      long_name | B-Raf proto-oncogene, serine/threonine kinase\n\
+                      description | Protein kinase that participates in MAPK signalling";
+        let expected = "...\n\
+                        name | BRAF\n\
+                        long_name | B-Raf proto-oncogene, serine/threonine ...\n\
+                        description | Protein kinase that ...";
+        let result = contains(actual, expected);
+        assert!(result.matches, "message: {}", result.message);
+    }
+
+    #[test]
+    fn ellipsis_gap_skips_any_number_of_lines() {
+        let actual = "header\nrow a\nrow b\nrow c\nrow d\nfooter";
+        let result = contains(actual, "row a\n...\nfooter");
+        assert!(result.matches, "message: {}", result.message);
+    }
+
+    #[test]
+    fn ellipsis_adjacency_failure_needs_a_gap() {
+        // In ellipsis mode (a leading `...` here), content lines with no `...`
+        // between them must be adjacent. `row b` sits between, so this fails and
+        // the message tells the author to insert `...`.
+        let actual = "row a\nrow b\nrow c";
+        let failure = contains(actual, "...\nrow a\nrow c");
+        assert!(!failure.matches);
+        assert!(failure.message.contains("Insert `...` to skip lines"));
+    }
+
+    #[test]
+    fn plain_multiline_without_ellipsis_stays_unordered() {
+        // No `...` anywhere → legacy each-line-appears (order-independent).
+        let actual = "row a\nrow b\nrow c";
+        assert!(contains(actual, "row c\nrow a").matches);
+    }
+
+    #[test]
+    fn ellipsis_missing_anchor_after_gap_fails() {
+        let actual = "alpha\nbeta\ngamma";
+        let failure = contains(actual, "alpha\n...\nomega");
+        assert!(!failure.matches);
+        assert!(failure.message.contains("omega"));
+    }
+
+    #[test]
+    fn ellipsis_trailing_prefix_matches_long_value() {
+        let actual = "value | the quick brown fox jumps over the lazy dog";
+        let result = contains(actual, "value | the quick brown ...");
+        assert!(result.matches, "message: {}", result.message);
+    }
+
+    #[test]
+    fn ellipsis_routes_through_compare_with_ignore_case() {
+        let result = compare(
+            "HEADER\nNAME | BRAF",
+            "...\nname | braf",
+            CompareMode::Contains,
+            false,
+            true,
+        );
+        assert!(result.matches, "message: {}", result.message);
     }
 }
