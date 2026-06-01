@@ -7,8 +7,9 @@ use mustmatch_core::{
     analyze_contains_lines as core_analyze_contains_lines,
     build_table_rows as core_build_table_rows, compare as core_compare,
     create_md_fixture as core_create_md_fixture, detect_mode as core_detect_mode,
-    get_table_for_block as core_get_table_for_block, normalize as core_normalize,
-    parse_markdown as core_parse_markdown, strip_ansi as core_strip_ansi,
+    get_table_for_block as core_get_table_for_block, has_ellipsis as core_has_ellipsis,
+    normalize as core_normalize, parse_markdown as core_parse_markdown,
+    strip_ansi as core_strip_ansi,
 };
 use pyo3::exceptions::{PyAttributeError, PyIndexError, PyKeyError, PyTypeError};
 use pyo3::prelude::*;
@@ -618,6 +619,11 @@ fn detect_mode(expected: &str) -> String {
     core_detect_mode(expected).as_str().to_string()
 }
 
+#[pyfunction]
+fn has_ellipsis(expected: &str) -> bool {
+    core_has_ellipsis(expected)
+}
+
 #[pyfunction(signature = (text, strip_ansi = true, normalize_newlines = true, trim = true))]
 fn normalize(text: &str, strip_ansi: bool, normalize_newlines: bool, trim: bool) -> String {
     core_normalize(
@@ -656,6 +662,7 @@ fn _core(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(compare, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_contains_lines, module)?)?;
     module.add_function(wrap_pyfunction!(detect_mode, module)?)?;
+    module.add_function(wrap_pyfunction!(has_ellipsis, module)?)?;
     module.add_function(wrap_pyfunction!(normalize, module)?)?;
     module.add_function(wrap_pyfunction!(strip_ansi, module)?)?;
 

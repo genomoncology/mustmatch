@@ -247,7 +247,13 @@ def _run_match(
     quiet: bool = False,
 ) -> int:
     """Run the match logic. Returns exit code."""
-    from ._core import analyze_contains_lines, compare, detect_mode, normalize
+    from ._core import (
+        analyze_contains_lines,
+        compare,
+        detect_mode,
+        has_ellipsis,
+        normalize,
+    )
 
     actual = sys.stdin.read()
 
@@ -255,6 +261,25 @@ def _run_match(
     expected = normalize(expected, strip_ansi=True, normalize_newlines=True, trim=True)
 
     mode = detect_mode(expected)
+
+    # Ellipsis (`...`) switches to the ordered skip/prefix matcher in the Rust
+    # core via compare(); it must take precedence over the unordered multi-line
+    # contains path below.
+    if like and mode not in {"json", "jsonl"} and has_ellipsis(expected):
+        result = compare(
+            actual, expected, mode="contains", subset=False, ignore_case=ignore_case
+        )
+        matches = (not result.matches) if negate else result.matches
+        if matches:
+            return 0
+        if not quiet:
+            message = (
+                "Negated ellipsis match: the forbidden pattern was found."
+                if negate
+                else result.message
+            )
+            print(message, file=sys.stderr)
+        return 1
 
     if like and "\n" in expected and mode not in {"json", "jsonl"}:
         report = analyze_contains_lines(actual, expected, ignore_case=ignore_case)
