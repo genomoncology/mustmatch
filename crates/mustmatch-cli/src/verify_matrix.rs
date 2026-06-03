@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::LazyLock;
@@ -151,9 +152,9 @@ fn verify_matrix(design: &Path, repo_root: &Path) -> Result<Value, String> {
     for table_ref in refs {
         let reference_path = Path::new(&table_ref.reference);
         let (resolved_path, status) = if reference_path.is_absolute() {
-            (lexical_normalize(reference_path), "invalid")
+            (resolve_path(reference_path), "invalid")
         } else {
-            let resolved_path = lexical_normalize(&repo_root.join(reference_path));
+            let resolved_path = resolve_path(&repo_root.join(reference_path));
             let status = if !resolved_path.starts_with(repo_root) {
                 "invalid"
             } else if resolved_path.exists() {
@@ -255,6 +256,29 @@ fn path_file_name_is_repo_root_name(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn resolve_path(path: &Path) -> PathBuf {
+    if let Ok(resolved) = fs::canonicalize(path) {
+        return resolved;
+    }
+
+    let mut suffix: Vec<OsString> = Vec::new();
+    let mut current = path;
+    while let Some(parent) = current.parent() {
+        if let Some(name) = current.file_name() {
+            suffix.push(name.to_os_string());
+        }
+        if let Ok(mut resolved) = fs::canonicalize(parent) {
+            for part in suffix.iter().rev() {
+                resolved.push(part);
+            }
+            return lexical_normalize(&resolved);
+        }
+        current = parent;
+    }
+
+    lexical_normalize(path)
+}
+
 fn lexical_normalize(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();
     for component in path.components() {
@@ -275,8 +299,9 @@ fn lexical_normalize(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_table_refs, lexical_normalize, looks_like_repo_path};
+    use super::{collect_table_refs, lexical_normalize, looks_like_repo_path, verify_matrix};
     use std::path::Path;
+    use tempfile::tempdir;
 
     #[test]
     fn repo_path_heuristic_rejects_false_positive_traps() {
@@ -326,5 +351,28 @@ mod tests {
             lexical_normalize(Path::new("/repo/docs/../README.md")),
             Path::new("/repo/README.md")
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn verify_matrix_rejects_symlink_escape() {
+        let dir = tempdir().expect("tempdir");
+        let repo_root = dir.path().join("repo");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(repo_root.join("docs")).expect("repo docs");
+        std::fs::create_dir_all(&outside).expect("outside dir");
+        std::fs::write(repo_root.join("README.md"), "# repo\n").expect("readme");
+        std::os::unix::fs::symlink(&outside, repo_root.join("docs/outside")).expect("symlink");
+        let design = dir.path().join("design.md");
+        std::fs::write(
+            &design,
+            "| behavior | location |\n| --- | --- |\n| escape | `docs/outside/missing.md` |\n",
+        )
+        .expect("design");
+
+        let result = verify_matrix(&design, &repo_root).expect("verify result");
+
+        assert_eq!(result["failure_count"], 1);
+        assert_eq!(result["results"][0]["status"], "invalid");
     }
 }
