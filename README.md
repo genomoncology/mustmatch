@@ -110,7 +110,7 @@ Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the
 
 ## Documentation Map
 
-The executable specification is in `docs/`:
+The executable documentation is in `docs/`:
 
 1. `docs/01-overview.md`
 2. `docs/02-cli-assertions.md`

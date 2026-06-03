@@ -28,10 +28,10 @@ A named `bash run id=<id> each_row=<table>` block and a matching `expect=<id> ea
 ````markdown
 ## Status Lines
 
-| name  | status       | expected     | str:label |
-|-------|--------------|--------------|-----------|
-| alpha | status=ready | alpha ready  | alpha-case |
-| beta  | status=done  | beta done    | beta-case |
+| name  | status       | expected           | str:label |
+|-------|--------------|--------------------|-----------|
+| alpha | status=ready | alpha status=ready | alpha-case |
+| beta  | status=done  | beta status=done   | beta-case |
 
 ```bash run id=status-line each_row="Status Lines"
 printf '{{name}} {{status}}\n'
