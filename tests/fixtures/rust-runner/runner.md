@@ -35,6 +35,35 @@ printf 'Resource {{resource-json.resource_id}} is {{resource-json.status}}\n'
 Resource widget-123 is active
 ```
 
+## Named runs honor dependencies
+
+The `uses=` directive runs a dependency before the current block, even when the current command does not reference the dependency's JSON output.
+
+```bash run id=write-marker context=demo
+printf 'dependency=ready\n' > dependency.txt
+```
+
+```bash run id=read-marker uses=write-marker context=demo
+cat dependency.txt
+```
+
+```text expect=read-marker contains
+dependency=ready
+```
+
+## Expected exits and stderr streams
+
+A named run can document an expected non-zero exit and select stderr for the later expectation.
+
+```bash run id=stderr-nonzero exit=3 stream=stderr
+printf 'recoverable warning\n' >&2
+exit 3
+```
+
+```text expect=stderr-nonzero contains
+recoverable warning
+```
+
 ## Contexts hide setup
 
 A context prepares the working directory, PATH, and environment before the documented command runs.

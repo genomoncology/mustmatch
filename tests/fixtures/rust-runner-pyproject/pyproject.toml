@@ -1,0 +1,9 @@
+[tool.mustmatch]
+path = ["{root}/../../../target/debug"]
+
+[tool.mustmatch.contexts.fallback]
+cwd = "{tmp}"
+setup = ["printf 'fallback=ready\n' > {tmp}/fallback.txt"]
+
+[tool.mustmatch.contexts.fallback.env]
+FALLBACK_VALUE = "pyproject"
