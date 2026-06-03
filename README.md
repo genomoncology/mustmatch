@@ -54,7 +54,7 @@ mytool get {{version-json.name}}
 ```
 ````
 
-Tables can also drive per-row bash scenarios with `each_row`. Bare `{{column}}` placeholders come from the current row. Embedded `file=<relative/path>` blocks can show input files directly and materialize them before later Rust-runner bash blocks in the same section.
+Tables can also drive per-row bash scenarios with `each_row`. Bare `{{column}}` placeholders come from the current row. Embedded `file=<relative/path>` blocks can show input files directly and materialize them before later Rust-runner bash blocks in the same section. Rust-runner lifecycle hooks can keep suite, file, and context setup/teardown in configuration instead of Markdown.
 
 ````markdown
 # Math Behavior
@@ -127,6 +127,7 @@ The executable documentation is in `docs/`:
 13. `docs/13-standalone-doc-runner.md`
 14. `docs/14-good-executable-docs.md`
 15. `docs/15-embedded-files.md`
+16. `docs/16-lifecycle-hooks.md`
 
 ## CLI Bench Plan
 

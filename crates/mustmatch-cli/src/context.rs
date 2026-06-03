@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,11 +14,33 @@ pub(crate) struct ContextSettings {
     pub(crate) env: HashMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConfigKey {
+    pub(crate) root: PathBuf,
+    pub(crate) source: Option<&'static str>,
+}
+
+struct ContextScope {
+    name: String,
+    settings: ContextSettings,
+    tokens: HashMap<&'static str, String>,
+}
+
+struct HookScope {
+    cwd: PathBuf,
+    env: HashMap<String, String>,
+    tokens: HashMap<&'static str, String>,
+}
+
 pub(crate) struct ContextRegistry {
     root: PathBuf,
     source: Option<&'static str>,
     config: Value,
-    cache: HashMap<String, ContextSettings>,
+    cache: HashMap<String, ContextScope>,
+    remaining_uses: HashMap<String, usize>,
+    touched: HashSet<String>,
+    suite_scope: Option<HookScope>,
+    file_scope: Option<HookScope>,
     tempdirs: Vec<TempDir>,
 }
 
@@ -44,8 +66,82 @@ impl ContextRegistry {
             source,
             config,
             cache: HashMap::new(),
+            remaining_uses: HashMap::new(),
+            touched: HashSet::new(),
+            suite_scope: None,
+            file_scope: None,
             tempdirs: Vec::new(),
         })
+    }
+
+    pub(crate) fn config_key(&self) -> ConfigKey {
+        ConfigKey {
+            root: self.root.clone(),
+            source: self.source,
+        }
+    }
+
+    pub(crate) fn register_context_use(&mut self, name: &str, cache_scope: Option<&str>) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        *self
+            .remaining_uses
+            .entry(context_cache_key(name, cache_scope))
+            .or_insert(0) += 1;
+    }
+
+    pub(crate) fn finish_case(&mut self) -> Result<(), String> {
+        let touched: Vec<String> = self.touched.drain().collect();
+        let mut first_error = None;
+        for key in touched {
+            let remaining = self.remaining_uses.entry(key.clone()).or_insert(1);
+            *remaining = remaining.saturating_sub(1);
+            if *remaining == 0 {
+                self.remaining_uses.remove(&key);
+                if let Err(err) = self.run_context_teardown(&key) {
+                    first_error.get_or_insert(err);
+                }
+            }
+        }
+        match first_error {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    }
+
+    pub(crate) fn run_suite_setup(&mut self) -> Result<(), String> {
+        let config = section_config(&self.config, "suite");
+        let root = self.root.clone();
+        let scope = self.hook_scope(&config, &root)?;
+        run_hook_commands("suite", "setup", &config, &scope)?;
+        self.suite_scope = Some(scope);
+        Ok(())
+    }
+
+    pub(crate) fn run_suite_teardown(&mut self) -> Result<(), String> {
+        let Some(scope) = self.suite_scope.take() else {
+            return Ok(());
+        };
+        let config = section_config(&self.config, "suite");
+        run_hook_commands("suite", "teardown", &config, &scope)
+    }
+
+    pub(crate) fn run_file_setup(&mut self, default_cwd: &Path) -> Result<(), String> {
+        let config = section_config(&self.config, "file");
+        let scope = self.hook_scope(&config, default_cwd)?;
+        run_hook_commands("file", "setup", &config, &scope)?;
+        self.file_scope = Some(scope);
+        Ok(())
+    }
+
+    pub(crate) fn run_file_teardown(&mut self) -> Result<(), String> {
+        let Some(scope) = self.file_scope.take() else {
+            return Ok(());
+        };
+        let config = section_config(&self.config, "file");
+        run_hook_commands("file", "teardown", &config, &scope)
     }
 
     pub(crate) fn resolve_scoped(
@@ -57,12 +153,10 @@ impl ContextRegistry {
         let Some(name) = name.filter(|value| !value.trim().is_empty()) else {
             return Ok(self.base_settings(default_cwd));
         };
-        let cache_key = match cache_scope {
-            Some(scope) => format!("{name}@{scope}"),
-            None => name.to_string(),
-        };
-        if let Some(settings) = self.cache.get(&cache_key) {
-            return Ok(settings.clone());
+        let cache_key = context_cache_key(name, cache_scope);
+        if let Some(scope) = self.cache.get(&cache_key) {
+            self.touched.insert(cache_key);
+            return Ok(scope.settings.clone());
         }
 
         let config = self
@@ -85,6 +179,9 @@ impl ContextRegistry {
         let cwd_value = config.get("cwd").and_then(Value::as_str).unwrap_or(".");
         let cwd = resolve_path(&self.root, &expand(cwd_value, &env, &tokens));
 
+        self.apply_env_files(&self.config, &mut env, &tokens)?;
+        self.apply_env(&self.config, &mut env, &tokens);
+        self.apply_path(&self.config, &mut env, &tokens);
         self.apply_env_files(config, &mut env, &tokens)?;
         self.apply_env(config, &mut env, &tokens);
         self.apply_path(config, &mut env, &tokens);
@@ -92,7 +189,15 @@ impl ContextRegistry {
         self.run_setup(name, config, &cwd, &env, &tokens)?;
 
         let settings = ContextSettings { cwd, env };
-        self.cache.insert(cache_key, settings.clone());
+        self.cache.insert(
+            cache_key.clone(),
+            ContextScope {
+                name: name.to_string(),
+                settings: settings.clone(),
+                tokens,
+            },
+        );
+        self.touched.insert(cache_key);
         Ok(settings)
     }
 
@@ -202,26 +307,98 @@ impl ContextRegistry {
         env: &HashMap<String, String>,
         tokens: &HashMap<&'static str, String>,
     ) -> Result<(), String> {
-        let timeout = config
-            .get("setup_timeout")
-            .and_then(Value::as_integer)
-            .and_then(|value| u64::try_from(value).ok())
-            .unwrap_or(120);
-        for command in string_list(config.get("setup")) {
-            let command = expand(&command, env, tokens);
-            if command.trim().is_empty() {
-                continue;
-            }
-            let result = run_bash(&command, cwd, env, timeout)
-                .map_err(|err| format!("context {name:?} setup command failed: {err}"))?;
-            if result.exit_code != 0 {
-                return Err(format!(
-                    "context {name:?} setup command failed\n{}{}",
-                    result.stdout, result.stderr
-                ));
-            }
+        let scope = HookScope {
+            cwd: cwd.to_path_buf(),
+            env: env.clone(),
+            tokens: tokens.clone(),
+        };
+        run_hook_commands(&format!("context {name:?}"), "setup", config, &scope)
+    }
+
+    fn run_context_teardown(&mut self, key: &str) -> Result<(), String> {
+        let Some(scope) = self.cache.remove(key) else {
+            return Ok(());
+        };
+        let config = self
+            .config
+            .get("contexts")
+            .and_then(|contexts| contexts.get(&scope.name))
+            .cloned()
+            .unwrap_or_else(|| Value::Table(Default::default()));
+        let hook = HookScope {
+            cwd: scope.settings.cwd,
+            env: scope.settings.env,
+            tokens: scope.tokens,
+        };
+        run_hook_commands(
+            &format!("context {:?}", scope.name),
+            "teardown",
+            &config,
+            &hook,
+        )
+    }
+
+    fn hook_scope(&mut self, config: &Value, default_cwd: &Path) -> Result<HookScope, String> {
+        let tmp = TempDir::new().map_err(|err| format!("failed to create tempdir: {err}"))?;
+        let tmp_path = tmp.path().to_path_buf();
+        self.tempdirs.push(tmp);
+        let mut env = process_env();
+        let tokens = tokens(&self.root, default_cwd, &tmp_path);
+        let cwd_value = config.get("cwd").and_then(Value::as_str).unwrap_or(".");
+        let cwd = resolve_path(&self.root, &expand(cwd_value, &env, &tokens));
+
+        self.apply_env_files(&self.config, &mut env, &tokens)?;
+        self.apply_env(&self.config, &mut env, &tokens);
+        self.apply_path(&self.config, &mut env, &tokens);
+        self.apply_env_files(config, &mut env, &tokens)?;
+        self.apply_env(config, &mut env, &tokens);
+        self.apply_path(config, &mut env, &tokens);
+
+        Ok(HookScope { cwd, env, tokens })
+    }
+}
+
+fn run_hook_commands(
+    label: &str,
+    phase: &str,
+    config: &Value,
+    scope: &HookScope,
+) -> Result<(), String> {
+    let timeout_key = format!("{phase}_timeout");
+    let timeout = config
+        .get(&timeout_key)
+        .or_else(|| config.get("timeout"))
+        .and_then(Value::as_integer)
+        .and_then(|value| u64::try_from(value).ok())
+        .unwrap_or(120);
+    for command in string_list(config.get(phase)) {
+        let command = expand(&command, &scope.env, &scope.tokens);
+        if command.trim().is_empty() {
+            continue;
         }
-        Ok(())
+        let result = run_bash(&command, &scope.cwd, &scope.env, timeout)
+            .map_err(|err| format!("{label} {phase} command failed: {err}"))?;
+        if result.exit_code != 0 {
+            return Err(format!(
+                "{label} {phase} command failed\n{}{}",
+                result.stdout, result.stderr
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn section_config(config: &Value, name: &str) -> Value {
+    config
+        .get(name)
+        .cloned()
+        .unwrap_or_else(|| Value::Table(Default::default()))
+}
+
+fn context_cache_key(name: &str, cache_scope: Option<&str>) -> String {
+    match cache_scope {
+        Some(scope) => format!("{name}@{scope}"),
+        None => name.to_string(),
     }
 }
 
