@@ -27,6 +27,17 @@ cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-pyproject
 passed"
 ```
 
+## Run lifecycle hooks from pyproject fallback
+
+A repository that keeps configuration in `[tool.mustmatch]` gets the same lifecycle hook behavior as `mustmatch.toml`. The fixture uses pyproject-owned suite, file, and context setup so fallback parsing cannot silently lag the new lifecycle schema.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-lifecycle-pyproject/setup-hooks.md | mustmatch like "PASS Pyproject suite setup runs
+PASS Pyproject file setup runs
+PASS Pyproject context setup runs
+passed"
+```
+
 ## Run bash table scenarios and outlines
 
 The Rust documentation runner can use Markdown tables as bash scenario data. Row placeholders substitute into commands and expected output, and verbose output names each row so a reader can identify which scenario ran.
@@ -92,8 +103,7 @@ passed"
 Suite and file teardowns clean up after the runner exits. The fixture writes suite and file body sentinels during a successful document run; after the command returns, neither sentinel should remain in the fixture directory.
 
 ```bash
-cargo run -q -p mustmatch-cli -- test ../tests/fixtures/rust-runner-lifecycle/after-run-teardown.md >/dev/null && \
-  ls ../tests/fixtures/rust-runner-lifecycle/suite-body.txt ../tests/fixtures/rust-runner-lifecycle/file-body.txt 2>/dev/null \
-  | mustmatch not like "suite-body.txt
+cargo run -q -p mustmatch-cli -- test ../tests/fixtures/rust-runner-lifecycle/after-run-teardown.md >/dev/null
+find ../tests/fixtures/rust-runner-lifecycle -maxdepth 1 \( -name suite-body.txt -o -name file-body.txt \) -print | mustmatch not like "suite-body.txt
 file-body.txt"
 ```

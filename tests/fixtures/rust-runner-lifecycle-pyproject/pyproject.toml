@@ -1,0 +1,16 @@
+[tool.mustmatch]
+path = ["{root}/../../../target/debug"]
+
+[tool.mustmatch.suite]
+setup = ["printf 'suite=pyproject\n' > {root}/suite-setup.txt"]
+teardown = ["rm -f {root}/suite-setup.txt"]
+
+[tool.mustmatch.file]
+setup = ["printf 'file=pyproject\n' > {root}/file-setup.txt"]
+teardown = ["rm -f {root}/file-setup.txt"]
+
+[tool.mustmatch.contexts.ephemeral]
+cwd = "{tmp}"
+path = ["{root}/../../../target/debug"]
+setup = ["printf 'context=pyproject\n' > {tmp}/context-setup.txt"]
+teardown = ["rm -f {tmp}/context-setup.txt"]
