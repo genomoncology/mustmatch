@@ -9,12 +9,11 @@ stable structured findings, and do not execute documentation examples.
 The lint command documents the spec path it inspects and the JSON/options a user
 can rely on from scripts.
 
-```console mustmatch
-$ cargo run -q -p mustmatch-cli -- lint --help
-mustmatch-cli lint
-SPEC
+```bash
+cargo run -q -p mustmatch-cli -- lint --help | mustmatch -i like "mustmatch-cli lint
+spec
 --min-like-len
---json
+--json"
 ```
 
 ## Lint reports assertion and shell findings
@@ -48,12 +47,11 @@ $ cargo run -q -p mustmatch-cli -- lint ../tests/fixtures/rust-quality/lint-clea
 The verify-matrix command documents the design file it inspects, the repo root
 used to resolve references, and the JSON output mode for automation.
 
-```console mustmatch
-$ cargo run -q -p mustmatch-cli -- verify-matrix --help
-mustmatch-cli verify-matrix
-DESIGN
+```bash
+cargo run -q -p mustmatch-cli -- verify-matrix --help | mustmatch -i like "mustmatch-cli verify-matrix
+design
 --repo-root
---json
+--json"
 ```
 
 ## Verify-matrix resolves only repo-like references
