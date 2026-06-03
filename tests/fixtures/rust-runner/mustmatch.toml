@@ -1,0 +1,10 @@
+path = ["{root}/../../../target/debug"]
+
+[contexts.demo]
+cwd = "{tmp}"
+path = ["{root}/bin", "{root}/../../../target/debug"]
+required_env = ["DOC_VALUE"]
+setup = ["printf 'state=ready\n' > {tmp}/state.txt"]
+
+[contexts.demo.env]
+DOC_VALUE = "example"
