@@ -1,14 +1,22 @@
 # Suppress directory messages
 MAKEFLAGS += --no-print-directory
 
-.PHONY: check build test coverage clean help publish
+.PHONY: check lint spec build test coverage clean help publish
 
-check:
-	@echo "Running checks..."
+check: lint
+
+lint:
+	@echo "Running lint..."
 	@uv sync --extra dev
 	@uv run ruff check --select I --fix src
 	@uv run ruff check src
-	@echo "✓ Checks passed"
+	@echo "✓ Lint passed"
+
+spec:
+	@echo "Running specs..."
+	@uv sync --extra dev --reinstall-package mustmatch
+	@uv run mustmatch test spec/
+	@echo "✓ Specs passed"
 
 build:
 	@echo "Building mustmatch..."
