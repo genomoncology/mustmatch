@@ -1,9 +1,6 @@
 # Standalone Documentation Runner
 
-`mustmatch test` runs documentation examples without pytest. It understands the
-same documentation-first shape as the pytest plugin: a command block can be named
-once, expected output can live in separate blocks, and later commands can reuse
-JSON fields from earlier runs without visible shell plumbing.
+`mustmatch test` runs documentation examples without pytest. The same runner surface now also ships in the transitional Rust binary as `mustmatch-cli test` while the installed `mustmatch` command name stays Python-owned. It understands the same documentation-first shape as the pytest plugin: a command block can be named once, expected output can live in separate blocks, and later commands can reuse JSON fields from earlier runs without visible shell plumbing.
 
 ## Console Examples Show Command And Output Together
 
@@ -61,10 +58,7 @@ Resource widget-123: Example Widget
 
 ## Project Contexts Hide Setup
 
-Projects can define named contexts in `pyproject.toml` to keep setup, temporary
-state, environment files, required environment variables, and PATH additions out
-of the user-facing example. The Markdown names the context, but the command stays
-focused on the behavior being documented.
+Projects can define named contexts in `mustmatch.toml` or, for existing Python-era projects, in `pyproject.toml` under `[tool.mustmatch]`. The Rust runner prefers `mustmatch.toml` when both files exist. Contexts keep setup, temporary state, environment files, required environment variables, and PATH additions out of the user-facing example. The Markdown names the context, but the command stays focused on the behavior being documented.
 
 ````toml
 [tool.mustmatch.contexts.demo]

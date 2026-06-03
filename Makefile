@@ -10,6 +10,8 @@ lint:
 	@uv sync --extra dev
 	@uv run ruff check --select I --fix src
 	@uv run ruff check src
+	@cargo fmt --check
+	@cargo clippy -- -D warnings
 	@echo "✓ Lint passed"
 
 spec:
@@ -27,7 +29,8 @@ build:
 test:
 	@echo "Running tests..."
 	@uv sync --extra dev --reinstall-package mustmatch
-	@uv run python -m pytest docs/ README.md tests -q
+	@uv run python -m pytest docs/ README.md tests -q --ignore=tests/fixtures
+	@cargo test
 	@echo "✓ Tests passed"
 
 coverage:
