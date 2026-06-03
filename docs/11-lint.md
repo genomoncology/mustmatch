@@ -1,6 +1,6 @@
 # Lint
 
-`mustmatch lint` reports assertion mistakes and shell syntax problems in markdown without executing the code blocks themselves. These examples cover help text, assertion findings, and directive-bearing shell fences.
+`mustmatch lint` reports assertion mistakes and shell syntax problems in markdown without executing the code blocks themselves. The transitional Rust binary now exposes the same static analysis as `mustmatch-cli lint`. These examples cover help text, assertion findings, and directive-bearing shell fences.
 
 ## Help
 

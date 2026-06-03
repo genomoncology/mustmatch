@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 mustmatch-core = { path = "../mustmatch-core" }
+regex = "1"
 serde_json = "1"
 tempfile = "3"
 toml = "0.8"

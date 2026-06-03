@@ -1,8 +1,10 @@
 mod context;
 mod expect;
+mod lint;
 mod named_runs;
 mod process;
 mod runner;
+mod verify_matrix;
 
 use std::io::{self, Read};
 
@@ -12,7 +14,7 @@ use mustmatch_core::{
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value or run Markdown docs.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n    mustmatch-cli test [OPTIONS] [PATHS...]\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n";
+const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value or run Markdown docs.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n    mustmatch-cli test [OPTIONS] [PATHS...]\n    mustmatch-cli verify-matrix [OPTIONS] DESIGN --repo-root ROOT\n    mustmatch-cli lint [OPTIONS] SPEC\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n\nCommands:\n    test                 Run code blocks in markdown files as tests\n    verify-matrix        Verify proof-matrix file references resolve inside a repo\n    lint                 Lint markdown spec assertions without executing them\n";
 
 #[derive(Debug, Clone)]
 struct MatchArgs {
@@ -221,6 +223,20 @@ fn main() {
     if args.first().map(String::as_str) == Some("test") {
         match runner::parse_test_args(&args[1..]) {
             Ok(parsed) => std::process::exit(runner::run(parsed)),
+            Err(exit_code) => std::process::exit(exit_code),
+        }
+    }
+
+    if args.first().map(String::as_str) == Some("lint") {
+        match lint::parse_args(&args[1..]) {
+            Ok(parsed) => std::process::exit(lint::run(parsed)),
+            Err(exit_code) => std::process::exit(exit_code),
+        }
+    }
+
+    if args.first().map(String::as_str) == Some("verify-matrix") {
+        match verify_matrix::parse_args(&args[1..]) {
+            Ok(parsed) => std::process::exit(verify_matrix::run(parsed)),
             Err(exit_code) => std::process::exit(exit_code),
         }
     }

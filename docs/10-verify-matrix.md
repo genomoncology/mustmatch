@@ -1,10 +1,10 @@
 # Verify Matrix
 
-`mustmatch verify-matrix` checks proof-matrix file references without needing the Rust extension at CLI import time. These examples cover help text, valid in-repo references, and invalid or missing references.
+`mustmatch verify-matrix` checks proof-matrix file references without needing the Rust extension at CLI import time. The transitional Rust binary now exposes the same static analysis as `mustmatch-cli verify-matrix`. These examples cover help text, valid in-repo references, and invalid or missing references.
 
 ## Import And Help
 
-This smoke test copies the pure-Python CLI package files into a temporary package without `_core` and imports `mustmatch.cli` from there.
+This smoke test keeps the installed Python command honest while the Rust binary carries the same command surface. It copies the pure-Python CLI package files into a temporary package without `_core` and imports `mustmatch.cli` from there.
 
 ```bash
 tmpdir="$(mktemp -d)"
