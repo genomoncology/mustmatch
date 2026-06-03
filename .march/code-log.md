@@ -2,25 +2,25 @@
 
 ## Execution Order
 1. Orientation, rebase, design/contract review, and red-state confirmation — done
-2. Inspect existing Rust CLI/core/parser patterns and local fixtures/config preconditions — done
-3. Implement minimal `mustmatch-cli test` runner modules/dispatch for landed fixture behavior — done
-4. Wire Rust gates/docs named by design and run focused/spec gates — done
+2. Inspect existing Rust runner/named-run/table code paths and verify local preconditions — done
+3. Implement minimal row planning/substitution, table selection, row labels, and row-sensitive run/expect behavior — done
+4. Update named docs/help/examples required by design and run focused/spec gates — done
 5. Diff audit, cleanup, and final proof recording — done
 
 ## Resume State
 - Last completed batch: Diff audit, cleanup, and final proof recording
-- Files edited so far: `.march/code-log.md`, `Cargo.lock`, `crates/mustmatch-cli/Cargo.toml`, `crates/mustmatch-cli/src/main.rs`, `crates/mustmatch-cli/src/process.rs`, `crates/mustmatch-cli/src/context.rs`, `crates/mustmatch-cli/src/expect.rs`, `crates/mustmatch-cli/src/named_runs.rs`, `crates/mustmatch-cli/src/runner.rs`, `Makefile`, `README.md`, `docs/13-standalone-doc-runner.md`, `spec/02-rust-runner.md`
-- Existing partial edits: preserve committed runtime/spec changes; `.march/code-log.md` remains unstaged artifact
-- Tests passing: yes — final `make spec && make test && make lint` is green
+- Files edited so far: `.march/code-log.md`, `crates/mustmatch-cli/src/runner.rs`, `crates/mustmatch-cli/src/named_runs.rs`, `docs/04-fixtures-and-tables.md`, `docs/12-named-runs.md`, `README.md`
+- Existing partial edits: preserve runtime/docs changes
+- Tests passing: yes — final `cargo fmt && make spec && make test && make lint` is green
 - Next concrete action: final response
 - Current blocker: none
 
 ## Out of Scope
 - Adding, relaxing, deleting, or changing shipped-contract assertions in `spec/*.md`
-- Python block execution beyond visible unsupported skips
-- Table scenarios, embedded files, lifecycle hooks, lint/verify-matrix, Python deletion, or binary rename
-- New abstractions beyond the runner modules named by design
-- Input validation or defensive behavior not required by landed assertions
+- Porting or changing Python `each_row`
+- Adding new CLI flags or parser syntax
+- Live-service or credential-backed verify behavior; `.march/contract-red-check.json` has no verify-lane entries
+- Defensive validation or abstractions not required by landed assertions/design
 
 ## Adjacent Fixes
 - (empty)
@@ -28,50 +28,45 @@
 ## Commands and Changes
 - `checkpoint status` — initial checklist 0/22
 - Read `AGENTS.md` and `CLAUDE.md`; located shipped specs under `spec/*.md`
-- `git fetch origin main && git rebase origin/main` — branch already up to date
-- Read `.march/design-final.md`, `.march/contract-red-check.json`, `.march/ticket.md`, and previous `.march/code-log.md`
-- `make spec` — red as expected: 3 passed, 2 failed
-- `uv run mustmatch test spec/ -v` — both `spec/02-rust-runner.md` check assertions fail with `Error: too many arguments`
-- Rewrote `.march/code-log.md` for current 03-code execution state
-- Read CLI/mustmatch/rust skills relevant to this implementation
-- Inspected `crates/mustmatch-cli/src/main.rs`, core parser/comparator exports, Python `doc_runner.py` parity, `Makefile`, `spec/02-rust-runner.md`, and Rust runner fixtures/configs
-- Verified local-only preconditions: fixture files exist, helper-tool is executable, and `cargo`/`uv` are available
-- Added Rust runner modules named by design: subprocess execution, context config, named runs/substitution, expectation comparison, and markdown dispatch
-- Extended `mustmatch-cli` dispatch so first token `test` runs the documentation runner while `-- test` remains an assertion expected value path
-- Added `serde_json`, `tempfile`, and `toml` dependencies for JSON substitution, `{tmp}` contexts, and config loading
-- `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner` — 12 passed, 1 skipped
-- `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner-pyproject` — 2 passed
-- Updated `Makefile` to include `cargo fmt --check`/`cargo clippy -- -D warnings` in `make lint` and `cargo test` in `make test`
-- Updated README and `docs/13-standalone-doc-runner.md` prose for `mustmatch-cli test`, Rust gates, and `mustmatch.toml` precedence
-- `make spec` initially still failed because spec execution cwd is `spec/`, making `tests/fixtures/...` resolve to a nonexistent path
-- Mechanical landed-assertion fix: changed fixture paths in `spec/02-rust-runner.md` to `../tests/fixtures/...`; expected output/behavior unchanged
-- `make spec` — 5 passed
-- `make test` initially failed because pytest collected Rust-runner fixture markdown under `tests/fixtures/`; updated `Makefile` pytest invocation with `--ignore=tests/fixtures` so fixture input data is not treated as Python-runner docs
-- `make test` — Python docs/README/tests 67 passed; `cargo test` 54 passed across Rust crates/doc-tests
-- `make lint` initially failed on a clippy `collapsible_if`; simplified the named-run index condition
-- `cargo fmt && make lint` — ruff, cargo fmt, and clippy all green
-- `printf 'test\n' | cargo run -q -p mustmatch-cli -- -- test` — confirmed `test` remains assertable via `--`
-- `git commit -m "code: fix mechanical bug in landed assertion (spec/02-rust-runner.md)"` — committed fixture path-only assertion fix
-- `git commit -m "code: implement rust documentation runner"` — committed Rust runner/runtime/docs/gate changes
-- Final `make spec && make test && make lint` — all green: specs 5 passed; Python tests 67 passed; Rust cargo test green; ruff/fmt/clippy green
-- `git status --short --branch` — only `.march/code-log.md` modified/unstaged as required runtime artifact
+- `git fetch origin main && git rebase origin/main` — branch already up to date, no conflicts
+- Read `.march/design-final.md`, `.march/contract-red-check.json`, `.march/ticket.md`, and prior `.march/code-log.md`
+- `make spec` — red as expected: `Run bash table scenarios and outlines` fails
+- `uv run mustmatch test spec/02-rust-runner.md -v` — focused verbose red matches contract-red details: bare row placeholders are treated as invalid named-run substitutions
+- Read mustmatch and rust-standards skills for spec/runtime boundaries and Rust quality rules
+- Searched existing code with `rg` for `each_row`, named-run templates, table helpers, `MarkdownRunner`, docs, and tests; existing extension points are `runner.rs`, `named_runs.rs`, and core `build_table_rows`/`get_table_for_block`
+- Read `crates/mustmatch-cli/src/{runner,named_runs,context,process,expect,main}.rs`, `crates/mustmatch-core/src/{fixture,parser,lib}.rs`, and `Cargo.toml`
+- Verified preconditions: table fixture/config files exist, helper-tool is executable, `cargo` and `uv` are available, and no verify-lane entries or external services are required
+- Implemented row-aware `mustmatch-cli test` fan-out in `runner.rs`: `each_row` cases select tables, build core `TableRowData`, append row labels, and pass row context into bash/run/expect execution
+- Implemented row-aware template substitution and row-sensitive named-run caching in `named_runs.rs`; bare `{{column}}` resolves against the current row and dotted `{{run.field}}` keeps the existing named-run lookup path
+- `cargo fmt && cargo check -p mustmatch-cli` — green after resolving one borrow of `selected_stream`
+- `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner/table-scenarios.md` — 8 passed with expected row labels
+- `make spec` — green, 6 passed
+- Updated `docs/04-fixtures-and-tables.md` from Python-first `each_row` to bash table scenarios, scenario outlines, table selection, coercion, and `str:` raw columns
+- Updated `docs/12-named-runs.md` with the bare row-column vs dotted named-run namespace split
+- Updated README `Executable Markdown` table example from Python `each_row` to bash `each_row`
+- `make test` — green: pytest docs/README/tests 63 passed; cargo tests green (5 CLI, 47 core, 2 python)
+- `make spec` — green after docs: 6 passed
+- `make lint` — green: ruff, cargo fmt --check, and cargo clippy -- -D warnings passed
+- Added a small explicit diagnostic for `expect=<id> each_row` without a matching row-aware run block, on the same scenario-outline code path
+- Final `cargo fmt && make spec && make test && make lint` — green: specs 6 passed; focused `make test` pytest 63 passed plus cargo tests green; lint green
+- `git status --short --branch` — only intended source/docs plus `.march/code-log.md` modified
+- `git diff --check` — clean
 
 Proof results:
-- Check-lane contract: `make spec` green, including both `spec/02-rust-runner.md` entries.
+- Check-lane contract: `make spec` green, including `spec/02-rust-runner.md::Run bash table scenarios and outlines`.
 - Focused profile: `.march/validation-profiles.toml` maps focused to `make test`; final `make test` green.
-- Full local lint gate: `make lint` green.
-- Verify lane: no verify entries in `.march/contract-red-check.json`.
+- Verify lane: no `lane: verify` entries in `.march/contract-red-check.json`.
 
 Over-edit audit:
-- Runtime modules are the design-named surfaces required for subprocess execution, context config, named runs/substitution, expectation comparison, and markdown dispatch.
-- Added dependencies are load-bearing: `toml` for config precedence/fallback, `tempfile` for `{tmp}` context lifetime, `serde_json` for `{{run.field}}` substitution.
-- Makefile pytest `--ignore=tests/fixtures` is load-bearing because Rust-runner fixture markdown is input data for the Rust contract, not Python-runner docs.
-- README/docs prose and CLI help changes are limited to changed shipped behavior and gate wiring.
-- No adjacent fixes were needed.
+- `runner.rs` changes are load-bearing for design-named row fan-out, table lookup/precedence, row labels, run/expect lockstep, expected-output row substitution, and row-scoped default cwd.
+- `named_runs.rs` changes are load-bearing for bare row-column substitution, preserving dotted named-run substitution, JSON scalar rendering, and row-sensitive result caching.
+- Docs/README edits are the design-required public documentation updates for bash table scenarios and the row-vs-run namespace split.
+- No off-path refactors, parser syntax changes, Python `each_row` changes, or new CLI flags were included.
 
 Diff-size audit:
-- The implementation is larger than the direct fixture happy path because design explicitly required addressable runner modules and gate/docs wiring.
-- Most apparent size is `Cargo.lock` transitive dependency resolution plus the new module files; no off-path refactors or reformat-only source rewrites were included.
+- Runtime diff is larger than the narrow happy-path fixture because row fan-out crosses case planning, bash block execution, named-run caching, output comparison, table lookup, and labels; those are all named by `.march/design-final.md`.
+- Documentation changes are confined to the three files named by design.
+- No adjacent fixes were needed.
 
 ## Deviations from Design
 - None

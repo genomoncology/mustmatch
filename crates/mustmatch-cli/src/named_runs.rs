@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use mustmatch_core::Block;
+use mustmatch_core::{Block, TableRowData};
 use serde_json::Value;
 
 use crate::context::ContextRegistry;
@@ -42,7 +42,19 @@ impl NamedRuns {
         default_cwd: &Path,
         default_timeout: u64,
     ) -> Result<ProcessResult, String> {
-        if let Some(result) = self.results.get(ident) {
+        self.run_with_row(ident, None, contexts, default_cwd, default_timeout)
+    }
+
+    pub(crate) fn run_with_row(
+        &mut self,
+        ident: &str,
+        row: Option<(&str, &TableRowData)>,
+        contexts: &mut ContextRegistry,
+        default_cwd: &Path,
+        default_timeout: u64,
+    ) -> Result<ProcessResult, String> {
+        let key = cache_key(ident, row.map(|(key, _)| key));
+        if let Some(result) = self.results.get(&key) {
             return Ok(result.clone());
         }
         let block = self
@@ -50,13 +62,13 @@ impl NamedRuns {
             .get(ident)
             .cloned()
             .ok_or_else(|| format!("unknown run id {ident:?}"))?;
-        if let Some(position) = self.active.iter().position(|item| item == ident) {
+        if let Some(position) = self.active.iter().position(|item| item == &key) {
             let mut cycle = self.active[position..].to_vec();
-            cycle.push(ident.to_string());
+            cycle.push(key.clone());
             return Err(format!("cyclic run dependency: {}", cycle.join(" -> ")));
         }
 
-        self.active.push(ident.to_string());
+        self.active.push(key.clone());
         let outcome = (|| -> Result<ProcessResult, String> {
             for dependency in uses(&block) {
                 self.run(&dependency, contexts, default_cwd, default_timeout)?;
@@ -64,8 +76,13 @@ impl NamedRuns {
 
             let context_name = directive(&block, "context");
             let settings = contexts.resolve(context_name.as_deref(), default_cwd)?;
-            let content =
-                self.substitute(&block.content, contexts, default_cwd, default_timeout)?;
+            let content = self.substitute_with_row(
+                &block.content,
+                row.map(|(_, row)| row),
+                contexts,
+                default_cwd,
+                default_timeout,
+            )?;
             let timeout = timeout_for(&block, default_timeout);
             let result = run_bash(&content, &settings.cwd, &settings.env, timeout)
                 .map_err(|err| format!("run {ident:?} failed to start: {err}"))?;
@@ -80,7 +97,7 @@ impl NamedRuns {
                     result.exit_code
                 ));
             }
-            self.results.insert(ident.to_string(), result.clone());
+            self.results.insert(key, result.clone());
             Ok(result)
         })();
         self.active.pop();
@@ -90,6 +107,17 @@ impl NamedRuns {
     pub(crate) fn substitute(
         &mut self,
         text: &str,
+        contexts: &mut ContextRegistry,
+        default_cwd: &Path,
+        default_timeout: u64,
+    ) -> Result<String, String> {
+        self.substitute_with_row(text, None, contexts, default_cwd, default_timeout)
+    }
+
+    pub(crate) fn substitute_with_row(
+        &mut self,
+        text: &str,
+        row: Option<&TableRowData>,
         contexts: &mut ContextRegistry,
         default_cwd: &Path,
         default_timeout: u64,
@@ -104,7 +132,7 @@ impl NamedRuns {
                 return Ok(out);
             };
             let expr = after[..end].trim();
-            out.push_str(&self.lookup(expr, contexts, default_cwd, default_timeout)?);
+            out.push_str(&self.lookup(expr, row, contexts, default_cwd, default_timeout)?);
             rest = &after[end + 2..];
         }
         out.push_str(rest);
@@ -114,22 +142,33 @@ impl NamedRuns {
     fn lookup(
         &mut self,
         expr: &str,
+        row: Option<&TableRowData>,
         contexts: &mut ContextRegistry,
         default_cwd: &Path,
         default_timeout: u64,
     ) -> Result<String, String> {
         let parts: Vec<&str> = expr.split('.').collect();
         if parts.len() < 2 {
+            if let Some(row) = row {
+                let value = row
+                    .get(expr)
+                    .ok_or_else(|| format!("unknown row column {expr:?}"))?;
+                return Ok(render_value(&value));
+            }
             return Err(format!("template {{{{{expr}}}}} must reference run.field"));
         }
         let result = self.run(parts[0], contexts, default_cwd, default_timeout)?;
         let json: Value = serde_json::from_str(&result.stdout)
             .map_err(|err| format!("run {:?} did not produce JSON stdout: {err}", parts[0]))?;
         let value = json_path(&json, &parts[1..])?;
-        Ok(match value {
-            Value::String(item) => item.clone(),
-            _ => value.to_string(),
-        })
+        Ok(render_value(value))
+    }
+}
+
+pub(crate) fn render_value(value: &Value) -> String {
+    match value {
+        Value::String(item) => item.clone(),
+        _ => value.to_string(),
     }
 }
 
@@ -229,7 +268,7 @@ fn uses(block: &Block) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn normalize_lookup(value: &str) -> String {
+pub(crate) fn normalize_lookup(value: &str) -> String {
     let mut normalized = String::new();
     let mut prev_underscore = false;
     for ch in value.to_lowercase().chars() {
@@ -242,6 +281,13 @@ fn normalize_lookup(value: &str) -> String {
         }
     }
     normalized.trim_matches('_').to_string()
+}
+
+fn cache_key(ident: &str, row_key: Option<&str>) -> String {
+    match row_key {
+        Some(row_key) => format!("{ident}@{row_key}"),
+        None => ident.to_string(),
+    }
 }
 
 fn json_path<'a>(value: &'a Value, path: &[&str]) -> Result<&'a Value, String> {

@@ -54,21 +54,19 @@ mytool get {{version-json.name}}
 ```
 ````
 
-Tables can also drive per-row Python checks with `each_row` when Python is the clearest way to express fixture logic.
+Tables can also drive per-row bash scenarios with `each_row`. Bare `{{column}}` placeholders come from the current row.
 
 ````markdown
 # Math Behavior
 
 ## Double Values
 
-| input | output |
-|-------|--------|
-| 2     | 4      |
+| input | output | str:label |
+|-------|--------|-----------|
+| 2     | 4      | double-two |
 
-```python each_row
-doubled = row.input * 2
-result = {"input": row.input, "output": doubled}
-row_label = f"row-{row_index}"
+```bash each_row="Double Values"
+expr {{input}} '*' 2 | mustmatch like '{{output}}'
 ```
 ````
 
