@@ -105,10 +105,21 @@ impl ContextRegistry {
                 }
             }
         }
-        match first_error {
-            Some(err) => Err(err),
-            None => Ok(()),
+        result_from_first_error(first_error)
+    }
+
+    pub(crate) fn finish_all_contexts(&mut self) -> Result<(), String> {
+        self.remaining_uses.clear();
+        self.touched.clear();
+        let mut keys: Vec<String> = self.cache.keys().cloned().collect();
+        keys.sort();
+        let mut first_error = None;
+        for key in keys {
+            if let Err(err) = self.run_context_teardown(&key) {
+                first_error.get_or_insert(err);
+            }
         }
+        result_from_first_error(first_error)
     }
 
     pub(crate) fn run_suite_setup(&mut self) -> Result<(), String> {
@@ -399,6 +410,13 @@ fn context_cache_key(name: &str, cache_scope: Option<&str>) -> String {
     match cache_scope {
         Some(scope) => format!("{name}@{scope}"),
         None => name.to_string(),
+    }
+}
+
+fn result_from_first_error(first_error: Option<String>) -> Result<(), String> {
+    match first_error {
+        Some(err) => Err(err),
+        None => Ok(()),
     }
 }
 

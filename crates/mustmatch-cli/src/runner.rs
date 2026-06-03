@@ -132,10 +132,7 @@ pub(crate) fn run(args: TestArgs) -> i32 {
             if !args.quiet {
                 eprintln!("FAIL {}: {message}", file.display());
             }
-            if args.fail_fast {
-                break;
-            }
-            continue;
+            break;
         }
         let cases = match runner.cases() {
             Ok(cases) => cases,
@@ -156,10 +153,7 @@ pub(crate) fn run(args: TestArgs) -> i32 {
             if !args.quiet {
                 eprintln!("FAIL {}: {message}", file.display());
             }
-            if args.fail_fast {
-                break;
-            }
-            continue;
+            break;
         }
         let mut file_failed = false;
         for case in cases {
@@ -205,15 +199,27 @@ pub(crate) fn run(args: TestArgs) -> i32 {
                 }
             }
         }
-        if let Err(message) = runner.run_file_teardown()
-            && !file_failed
-        {
-            summary.failed += 1;
+        if let Err(message) = runner.finish_contexts() {
+            if !args.quiet {
+                eprintln!("FAIL {} context teardown: {message}", file.display());
+            }
+            if !file_failed {
+                summary.failed += 1;
+                file_failed = true;
+                if args.fail_fast {
+                    stop = true;
+                }
+            }
+        }
+        if let Err(message) = runner.run_file_teardown() {
             if !args.quiet {
                 eprintln!("FAIL {} teardown: {message}", file.display());
             }
-            if args.fail_fast {
-                stop = true;
+            if !file_failed {
+                summary.failed += 1;
+                if args.fail_fast {
+                    stop = true;
+                }
             }
         }
         if stop {
@@ -222,12 +228,12 @@ pub(crate) fn run(args: TestArgs) -> i32 {
     }
     let had_failure = summary.failed > 0;
     for suite in suites.iter_mut().rev() {
-        if let Err(message) = suite.contexts.run_suite_teardown()
-            && !had_failure
-        {
-            summary.failed += 1;
+        if let Err(message) = suite.contexts.run_suite_teardown() {
             if !args.quiet {
                 eprintln!("FAIL suite teardown: {message}");
+            }
+            if !had_failure {
+                summary.failed += 1;
             }
         }
     }
@@ -385,6 +391,10 @@ impl MarkdownRunner {
 
     fn finish_case(&mut self) -> Result<(), String> {
         self.contexts.finish_case()
+    }
+
+    fn finish_contexts(&mut self) -> Result<(), String> {
+        self.contexts.finish_all_contexts()
     }
 
     fn run_block(
@@ -1260,6 +1270,93 @@ printf ok | mustmatch like ok
             fs::read_to_string(dir.path().join("lifecycle.log")).expect("read log"),
             "STST"
         );
+    }
+
+    #[test]
+    fn context_teardown_runs_when_fail_fast_stops_before_later_use() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[contexts.cleanup]
+            cwd = "."
+            setup = ["printf state > {root}/state.txt"]
+            teardown = ["rm -f {root}/state.txt"]
+            "#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Fails
+
+```bash context=cleanup
+cat state.txt >/dev/null
+mustmatch() { grep -q expected; }
+printf wrong | mustmatch "expected"
+```
+
+## Would Reuse Context
+
+```bash context=cleanup
+cat state.txt | mustmatch like state
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: true,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!dir.path().join("state.txt").exists());
+    }
+
+    #[test]
+    fn suite_setup_failure_stops_later_files() {
+        let dir = tempdir().expect("tempdir");
+        let first = dir.path().join("first");
+        let second = dir.path().join("second");
+        fs::create_dir_all(&first).expect("first dir");
+        fs::create_dir_all(&second).expect("second dir");
+        fs::write(
+            first.join("mustmatch.toml"),
+            r#"[suite]
+            setup = ["exit 9"]
+            "#,
+        )
+        .expect("write failing config");
+        fs::write(second.join("mustmatch.toml"), "").expect("write second config");
+        let first_doc = write_markdown(&first, "# First\n");
+        let second_doc = write_markdown(
+            &second,
+            r#"# Second
+
+## Should Not Run
+
+```bash
+printf ran > ran.txt
+cat ran.txt | mustmatch like ran
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![first_doc, second_doc],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!second.join("ran.txt").exists());
     }
 
     #[test]
