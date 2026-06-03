@@ -1,6 +1,6 @@
 # Directives
 
-Directives add behavior to code fences without extra framework code. They are declared in the fence info string and parsed alongside language tags. This file covers `setup`, `expect_error`, and `timeout`.
+Directives add behavior to code fences without extra framework code. They are declared in the fence info string and parsed alongside language tags. This file covers `setup`, `expect_error`, `timeout`, table selection, and embedded `file=` fixture blocks.
 
 ## Setup
 
@@ -59,3 +59,21 @@ assert len(scenarios) == 1
 assert scenarios[0].text == "BRAF mutation"
 assert scenarios[0].expected == "BRAF"
 ```
+
+## Embedded File Fixtures
+
+In the Rust documentation runner, `file=<relative/path>` on a fenced block writes that block's content into the consuming block's working directory. The file block is setup only: it is not executed, asserted, or reported as a PASS line.
+
+````markdown
+```json file=config.json
+{"status":"active"}
+```
+
+```bash
+cat config.json | mustmatch like '"status":"active"'
+```
+````
+
+Paths must be relative and stay under the fixture cwd. Absolute paths, Windows drive or UNC prefixes, and `..` traversal are rejected. A `file=` block cannot also carry `run`, `mustmatch-run`, `expect`, `for`, `output`, or `mustmatch-output`.
+
+File fixtures share the current H2 section's working directory. Row-scoped file blocks can use `each_row=<table>` and render bare `{{column}}` placeholders from the current row; context-backed blocks materialize files after the context cwd is resolved. See `docs/15-embedded-files.md` for the before/after pattern and row examples.

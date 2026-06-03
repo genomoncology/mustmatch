@@ -43,3 +43,25 @@ PASS Table selection and coercion use the named case table
 [row-2]
 passed"
 ```
+
+## Run embedded fixture files
+
+The Rust documentation runner can materialize named file blocks into the working directory for a section. The command examples read ordinary relative paths, while the document shows the file content directly instead of hiding setup in heredocs.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner/embedded-files.md | mustmatch like "PASS Embedded JSON files become local inputs
+PASS Section fixture files are shared by later commands
+PASS New sections get fresh fixture directories
+PASS Row fixtures render table values
+[row-alpha]
+[row-beta]
+PASS Context fixture files land in context cwd
+passed"
+```
+
+The fixture run must complete without failed blocks; this guards against a false green where setup-only fixture blocks are reported but later consuming commands fail.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner/embedded-files.md 2>&1 | mustmatch not like "FAIL
+failed"
+```

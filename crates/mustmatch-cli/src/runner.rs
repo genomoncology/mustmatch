@@ -1,12 +1,13 @@
+use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use mustmatch_core::{
     Block, ParseResult, Table, TableRowData, build_table_rows, get_table_for_block, parse_markdown,
 };
 use tempfile::TempDir;
 
-use crate::context::ContextRegistry;
+use crate::context::{ContextRegistry, ContextSettings};
 use crate::expect::{assert_output_matches, mode as expect_mode};
 use crate::named_runs::{
     NamedRuns, block_id, expect_target, expected_exit, is_output_block, is_run_block,
@@ -191,6 +192,8 @@ struct MarkdownRunner {
     parsed: ParseResult,
     contexts: ContextRegistry,
     named_runs: NamedRuns,
+    section_roots: HashMap<String, TempDir>,
+    transient_roots: Vec<TempDir>,
 }
 
 impl MarkdownRunner {
@@ -207,10 +210,21 @@ impl MarkdownRunner {
             parsed,
             contexts,
             named_runs,
+            section_roots: HashMap::new(),
+            transient_roots: Vec::new(),
         })
     }
 
     fn cases(&self) -> Result<Vec<Case>, String> {
+        for block in self
+            .parsed
+            .blocks
+            .iter()
+            .filter(|block| is_file_block(block))
+        {
+            validate_file_block(block)?;
+        }
+
         let mut cases = Vec::new();
         for block in self
             .parsed
@@ -247,6 +261,9 @@ impl MarkdownRunner {
     }
 
     fn include_block(&self, block: &Block) -> bool {
+        if is_file_block(block) {
+            return false;
+        }
         if self.lang != "all"
             && block.language != self.lang
             && !(self.lang == "bash" && (is_output_block(block) || is_console_block(block)))
@@ -275,7 +292,8 @@ impl MarkdownRunner {
         if is_run_block(block) {
             let ident =
                 block_id(block).ok_or_else(|| "run blocks require id=<name>".to_string())?;
-            let (default_cwd, _tmp) = self.default_cwd_for(row)?;
+            let default_cwd = self.default_cwd_for(block, row)?;
+            self.prepare_block_cwd(block, row, &default_cwd)?;
             self.named_runs.run_with_row(
                 &ident,
                 row.map(|row| (row.key.as_str(), &row.row)),
@@ -303,13 +321,11 @@ impl MarkdownRunner {
     }
 
     fn run_console(&mut self, block: &Block) -> Result<(), String> {
-        let context_name = block.directives.get("context").map(String::as_str);
-        let default_cwd = self.default_cwd();
-        let settings = self.contexts.resolve(context_name, &default_cwd)?;
+        let default_cwd = self.default_cwd_for(block, None)?;
+        let settings = self.prepare_block_cwd(block, None, &default_cwd)?;
         let expected_code = expected_exit(block)?;
         let stream = selected_stream(block)?;
         for (command, expected) in parse_console_examples(&block.content)? {
-            let default_cwd = self.default_cwd();
             let command = self.named_runs.substitute(
                 &command,
                 &mut self.contexts,
@@ -365,7 +381,10 @@ impl MarkdownRunner {
                 ));
             }
         }
-        let (default_cwd, _tmp) = self.default_cwd_for(row)?;
+        let default_cwd = self.default_cwd_for(block, row)?;
+        if let Some(run_block) = self.named_runs.block(target).cloned() {
+            self.prepare_block_cwd(&run_block, row, &default_cwd)?;
+        }
         let result = self.named_runs.run_with_row(
             target,
             row.map(|row| (row.key.as_str(), &row.row)),
@@ -398,13 +417,8 @@ impl MarkdownRunner {
     }
 
     fn run_bash_block(&mut self, block: &Block, row: Option<&RowContext>) -> Result<(), String> {
-        let context_name = block.directives.get("context").map(String::as_str);
-        let (default_cwd, _tmp) = self.default_cwd_for(row)?;
-        let settings = self.contexts.resolve_scoped(
-            context_name,
-            &default_cwd,
-            row.map(|row| row.key.as_str()),
-        )?;
+        let default_cwd = self.default_cwd_for(block, row)?;
+        let settings = self.prepare_block_cwd(block, row, &default_cwd)?;
         let content = self.named_runs.substitute_with_row(
             &block.content,
             row.map(|row| &row.row),
@@ -474,16 +488,132 @@ impl MarkdownRunner {
             .to_path_buf()
     }
 
-    fn default_cwd_for(
-        &self,
-        row: Option<&RowContext>,
-    ) -> Result<(PathBuf, Option<TempDir>), String> {
-        if row.is_some() {
+    fn section_root_for(&mut self, block: &Block) -> Result<PathBuf, String> {
+        let key = section_key(block);
+        if !self.section_roots.contains_key(&key) {
             let tmp = TempDir::new().map_err(|err| format!("failed to create tempdir: {err}"))?;
-            Ok((tmp.path().to_path_buf(), Some(tmp)))
-        } else {
-            Ok((self.default_cwd(), None))
+            self.section_roots.insert(key.clone(), tmp);
         }
+        self.section_roots
+            .get(&key)
+            .map(|tmp| tmp.path().to_path_buf())
+            .ok_or_else(|| "failed to create section tempdir".to_string())
+    }
+
+    fn section_has_file_blocks(&self, block: &Block) -> bool {
+        let key = section_key(block);
+        self.parsed
+            .blocks
+            .iter()
+            .any(|candidate| is_file_block(candidate) && section_key(candidate) == key)
+    }
+
+    fn default_cwd_for(
+        &mut self,
+        block: &Block,
+        row: Option<&RowContext>,
+    ) -> Result<PathBuf, String> {
+        if !self.section_has_file_blocks(block) {
+            if row.is_some() {
+                let tmp =
+                    TempDir::new().map_err(|err| format!("failed to create row tempdir: {err}"))?;
+                let path = tmp.path().to_path_buf();
+                self.transient_roots.push(tmp);
+                return Ok(path);
+            }
+            return Ok(self.default_cwd());
+        }
+
+        let section_root = self.section_root_for(block)?;
+        let Some(row) = row else {
+            return Ok(section_root);
+        };
+        let row_root = section_root
+            .join(".mustmatch-rows")
+            .join(normalize_lookup(&row.key));
+        fs::create_dir_all(&row_root).map_err(|err| {
+            format!(
+                "failed to create row fixture dir {}: {err}",
+                row_root.display()
+            )
+        })?;
+        Ok(row_root)
+    }
+
+    fn prepare_block_cwd(
+        &mut self,
+        block: &Block,
+        row: Option<&RowContext>,
+        default_cwd: &Path,
+    ) -> Result<ContextSettings, String> {
+        let context_name = block.directives.get("context").map(String::as_str);
+        let settings = self.contexts.resolve_scoped(
+            context_name,
+            default_cwd,
+            row.map(|row| row.key.as_str()),
+        )?;
+        self.materialize_applicable_files(block, row, &settings.cwd)?;
+        Ok(settings)
+    }
+
+    fn materialize_applicable_files(
+        &mut self,
+        consumer: &Block,
+        row: Option<&RowContext>,
+        cwd: &Path,
+    ) -> Result<(), String> {
+        let consumer_section = section_key(consumer);
+        let files: Vec<Block> = self
+            .parsed
+            .blocks
+            .iter()
+            .filter(|block| {
+                is_file_block(block)
+                    && block.line_start < consumer.line_start
+                    && section_key(block) == consumer_section
+            })
+            .cloned()
+            .collect();
+
+        for file_block in files {
+            if is_row_block(&file_block) {
+                let Some(row) = row else {
+                    continue;
+                };
+                let (table_key, _) = self.rows_for(&file_block)?;
+                if table_key != row.table_key {
+                    continue;
+                }
+                self.materialize_file(&file_block, Some(row), cwd)?;
+            } else {
+                self.materialize_file(&file_block, row, cwd)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn materialize_file(
+        &mut self,
+        block: &Block,
+        row: Option<&RowContext>,
+        cwd: &Path,
+    ) -> Result<(), String> {
+        let relative = fixture_relative_path(block)?;
+        let target = cwd.join(&relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|err| {
+                format!("failed to create fixture dir {}: {err}", parent.display())
+            })?;
+        }
+        let content = self.named_runs.substitute_with_row(
+            &block.content,
+            row.map(|row| &row.row),
+            &mut self.contexts,
+            cwd,
+            self.timeout,
+        )?;
+        fs::write(&target, content)
+            .map_err(|err| format!("failed to write fixture file {}: {err}", target.display()))
     }
 }
 
@@ -521,6 +651,69 @@ fn is_console_block(block: &Block) -> bool {
 
 fn is_row_block(block: &Block) -> bool {
     block.directives.contains_key("each_row")
+}
+
+fn is_file_block(block: &Block) -> bool {
+    block.directives.contains_key("file")
+}
+
+fn validate_file_block(block: &Block) -> Result<(), String> {
+    fixture_relative_path(block)?;
+    for directive in [
+        "run",
+        "mustmatch-run",
+        "expect",
+        "for",
+        "output",
+        "mustmatch-output",
+    ] {
+        if block.directives.contains_key(directive) {
+            return Err(format!(
+                "file blocks cannot also use {directive}= (line {})",
+                block.line_start
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn fixture_relative_path(block: &Block) -> Result<PathBuf, String> {
+    let value = non_empty_directive(block, "file").ok_or_else(|| {
+        format!(
+            "file directive requires a relative path (line {})",
+            block.line_start
+        )
+    })?;
+    if value.starts_with('\\') || value.as_bytes().get(1).copied() == Some(b':') {
+        return Err(format!(
+            "file path {value:?} must be relative and stay under the fixture cwd"
+        ));
+    }
+    let path = PathBuf::from(value);
+    if path.is_absolute() {
+        return Err(format!(
+            "file path {value:?} must be relative and stay under the fixture cwd"
+        ));
+    }
+    for component in path.components() {
+        match component {
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(format!(
+                    "file path {value:?} must be relative and stay under the fixture cwd"
+                ));
+            }
+        }
+    }
+    Ok(path)
+}
+
+fn section_key(block: &Block) -> String {
+    match block.context_lines.as_slice() {
+        [_, h2, ..] => format!("section:{h2}"),
+        [] => "section:document".to_string(),
+        lines => format!("section:{}", lines[lines.len() - 1]),
+    }
 }
 
 fn non_empty_directive<'a>(block: &'a Block, key: &str) -> Option<&'a str> {
@@ -667,6 +860,64 @@ mod tests {
         match result {
             Ok(_) => panic!("expected error"),
             Err(err) => err,
+        }
+    }
+
+    #[test]
+    fn sections_without_file_blocks_keep_document_cwd() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(dir.path().join("sidecar.txt"), "sidecar-ready\n").expect("write sidecar");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Reads local sidecar
+
+```bash
+mustmatch() { grep -q sidecar-ready; }
+cat sidecar.txt | mustmatch like 'sidecar-ready'
+```
+"#,
+        );
+        let mut runner = MarkdownRunner::new(&path, "all", 5).expect("runner");
+        let cases = runner.cases().expect("cases");
+
+        assert_eq!(cases.len(), 1);
+        runner
+            .run_block(&cases[0].block, None)
+            .expect("plain sections should run from the markdown directory");
+    }
+
+    #[test]
+    fn file_blocks_reject_unsafe_paths_and_conflicts() {
+        let dir = tempdir().expect("tempdir");
+        for (name, fence, expected) in [
+            (
+                "empty.md",
+                "```json file=\n{}\n```\n",
+                "file directive requires a relative path",
+            ),
+            (
+                "parent.md",
+                "```json file=../escape.json\n{}\n```\n",
+                "must be relative and stay under the fixture cwd",
+            ),
+            (
+                "absolute.md",
+                "```json file=/tmp/escape.json\n{}\n```\n",
+                "must be relative and stay under the fixture cwd",
+            ),
+            (
+                "conflict.md",
+                "```json file=config.json expect=run-output\n{}\n```\n",
+                "file blocks cannot also use expect=",
+            ),
+        ] {
+            let path = dir.path().join(name);
+            fs::write(&path, format!("# Doc\n\n{fence}")).expect("write markdown fixture");
+            let runner = MarkdownRunner::new(&path, "all", 5).expect("runner");
+            let err = unwrap_err(runner.cases());
+            assert!(err.contains(expected), "{err}");
         }
     }
 

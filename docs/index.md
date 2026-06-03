@@ -1,6 +1,6 @@
 # Documentation Index
 
-This folder is the executable specification for mustmatch. Read and run the files in numeric order to learn behavior progressively. Each document is both user documentation and a validation target.
+This folder is executable documentation for mustmatch. Read and run the files in numeric order to learn behavior progressively. Each document is both user documentation and a validation target.
 
 ## Learning Path
 
@@ -20,3 +20,4 @@ The numbered docs are intended to be read sequentially. Later files assume the c
 12. `12-named-runs.md`
 13. `13-standalone-doc-runner.md`
 14. `14-good-executable-docs.md`
+15. `15-embedded-files.md`

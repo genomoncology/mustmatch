@@ -3,41 +3,44 @@ Operator verify pending: no
 
 ## Checkpoint Summary
 
-- Read AGENTS.md/CLAUDE.md and located the repo contract surface: `spec/*.md`, especially `spec/02-rust-runner.md` for the Rust runner.
-- Preflight confirmed all ticket files are staged in the main-relative diff and there are no untracked ticket files.
-- Rebased onto `origin/main` at start and before sign-off; branch was up to date.
+- Read `AGENTS.md` and `CLAUDE.md`; repo contract surface is `spec/*.md`, with this ticket covered in `spec/02-rust-runner.md`.
+- Read ticket/design/code/review artifacts, `.march/contract-red-check.json`, checkpoint state, and `planning/mustmatch/faq.md`.
+- Rebases onto `origin/main` at start and before sign-off were clean/up to date.
+- Preflight found no untracked ticket files; staged work products are updated before sign-off.
 
 ## Planning/FAQ Watch Results — relevant watching/answered entries probed
 
-- Relevant watching entry: mustmatch's possible divergence from the workspace `AGENTS.md` + `spec/*.md` standard.
-- Probe result: this worktree has `AGENTS.md` naming `spec/*.md` / `make spec` as the behavioral contract, but `.march/validation-profiles.toml` still maps `spec-only` to `make test` and `full-blocking` to `make check && make test`. Filed `~/workspace/planning/mustmatch/issues/007-validation-profiles-omit-spec-contract.md`.
-- Docs probe: README still called `docs/` the executable specification. Fixed the touched README wording to say executable documentation, preserving `spec/*.md` as contract truth.
+- Relevant watching entry: mustmatch's potential divergence from the workspace `AGENTS.md` + `spec/*.md` standard.
+- Probe result: this worktree's AGENTS names `spec/*.md` / `make spec` as contract truth; the ticket uses that surface. `docs/index.md` still called `docs/` the executable specification, so verify fixed it to say executable documentation.
+- `.march/validation-profiles.toml` still maps `spec-only`/`full-blocking` away from `make spec`; this is already filed as `~/workspace/planning/mustmatch/issues/007-validation-profiles-omit-spec-contract.md`, so no duplicate issue was opened.
+- Security/safety probe: malicious `file=` paths using `..` and absolute paths fail before file writes with clear diagnostics.
 - Planning lint: `/home/ian/workspace/scripts/lint-planning.sh mustmatch` passed.
 
 ## Exercise Results — ran, inputs, observations
 
-- `cargo run -q -p mustmatch-cli -- test --help` showed the expected `test` usage/options; no new CLI flags were added.
-- `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner/table-scenarios.md` passed 8 row-expanded cases with labels `[double-two]`, `[double-three]`, `[alpha-case]`, `[beta-case]`, `[row-1]`, and `[row-2]`.
-- Temporary adversarial fixtures verified diagnostics for missing row columns, unknown tables, conflicting `each_row`/`table`, mismatched run/expect outline tables, and row context cwd isolation.
-- `mustmatch-cli test /tmp/mustmatch-no-such-file-007` exited 0 with `No markdown files found`; filed as a UX issue because an explicit missing path can hide typos.
+- `cargo run -q -p mustmatch-cli -- test --help` showed expected `test` options; no new CLI flags were added.
+- `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner/embedded-files.md` passed all embedded-file behaviors: JSON fixture, section reuse, fresh H2 cwd, row fixtures, and context cwd.
+- Verified file blocks are silent setup: verbose output only reports consuming bash blocks, not `file=` blocks.
+- Adversarial temporary fixtures for parent traversal, absolute path, directive conflict, and missing row placeholder all failed with user-repairable diagnostics.
+- Regression probe for a non-fixture markdown sidecar file passed, preserving document-directory cwd outside fixture-capable sections.
 
 ## Edge Cases Tested — specific cases, results
 
-- Missing row column: non-zero; diagnostic included row label and `unknown row column "missing"`.
-- Missing named table: non-zero; diagnostic included `unknown table "Missing Rows"` before command execution.
-- Conflicting `each_row="Rows" table="Other Rows"`: non-zero; clear conflict diagnostic.
-- Scenario outline with different run/expect tables: non-zero; diagnostic named the table mismatch.
-- Named context with `cwd = "{tmp}"` across two rows: passed; each row got an isolated cwd.
-- Explicit missing path: exited 0; filed issue.
+- `file=../escape.txt`: non-zero; diagnostic says path must be relative and stay under fixture cwd.
+- `file=/tmp/escape.txt`: non-zero; same confinement diagnostic.
+- `file=config.json expect=run-output`: non-zero; diagnostic says file blocks cannot also use `expect=`.
+- Row-scoped file content with `{{missing}}`: non-zero; diagnostic includes `unknown row column "missing"` and row label.
+- Context-backed fixture (`context=demo`, `cwd={tmp}`): passed; relative file path is materialized in the resolved context cwd.
+- Section isolation: fixture contract's new H2 cannot see prior section's `state/status.txt`.
 
 ## Contract Audit — contracts reviewed, gaps found, counts before/after, spec-only result
 
-- Reviewed `spec/01-cli-assertions.md` and `spec/02-rust-runner.md`.
-- `make spec` passed: 6 passed.
-- `uv run mustmatch verify-matrix .march/design-final.md --repo-root .` found the proof-matrix references.
-- `uv run mustmatch lint spec/02-rust-runner.md` had 0 findings for the changed spec. `spec/01-cli-assertions.md` still has a pre-existing short-like finding outside this ticket's changed surface.
-- Gap found: the new table-scenarios contract can be satisfied by failed runner output because the pipeline does not use pipefail and the assertion checks unordered substrings. A temporary intentionally failing outline fixture still made the outer `mustmatch like` exit 0. Filed `~/workspace/planning/mustmatch/issues/007-rust-runner-pipeline-failure-masked-by-contract.md` for design to rewrite behaviorally.
-- Counts before/after: no shipped-contract assertions were added, removed, tightened, or relaxed during verify.
+- Reviewed `spec/02-rust-runner.md` and the new fixture `tests/fixtures/rust-runner/embedded-files.md` for the changed surface.
+- `make spec` passed: 8 passed, including both check-lane entries from `.march/contract-red-check.json`.
+- `uv run mustmatch verify-matrix .march/design-final.md --repo-root .` found the proof-matrix spec reference.
+- `uv run mustmatch lint spec/02-rust-runner.md` reported 0 findings.
+- Assertion-strength audit: positive landmarks cover distinct user-visible behaviors, row labels prove both row copies, and the separate `not like "FAIL\nfailed"` guard catches failed blocks. A direct guard probe failed as expected on output containing `failed`.
+- Counts before/after: verify added no shipped-contract assertions and relaxed no shipped-contract assertions. No contract gap found for 008.
 
 ## Verify Lane — `lane: verify` entries exercised
 
@@ -45,41 +48,38 @@ No `lane: verify` entries exist in `.march/contract-red-check.json`; operator ve
 
 ## Regression Results — existing features verified
 
-- `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner` passed existing Rust-runner fixture behavior plus the new table fixture: 20 passed, 1 skipped.
+- `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner` passed: 27 passed, 1 skipped.
 - `cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner-pyproject` passed: 2 passed.
-- Basic installed CLI assertions still worked for text contains, JSON subset, and `not like` checks.
+- Basic installed CLI assertions passed for text `like`, JSON subset `like`, and `not like`.
 
 ## Test Suite — full-blocking result
 
-- Ran the full-blocking profile exactly once as `make check && make test`.
-- Result: green. Lint passed; Python docs/README/tests passed 63 tests; cargo tests passed 9 CLI tests, 47 core tests, 2 Python-binding tests, and doc-tests.
+- Ran the configured full-blocking profile exactly once: `make check && make test`.
+- Result: green. Lint passed; pytest passed 63 tests; cargo tests passed 11 CLI tests, 48 core tests, and 2 Python-binding tests.
+- Separately ran the contract gate `make spec`: green, 8 passed.
 
 ## Documentation — parity audit of docs/help/examples
 
-- Audited README, `docs/04-fixtures-and-tables.md`, `docs/12-named-runs.md`, and `mustmatch-cli test --help`.
-- Fixed README wording from executable specification to executable documentation for `docs/`.
-- Fixed `docs/04-fixtures-and-tables.md` scenario-outline example so the expected column matches the shown `printf` output.
-- Help text needed no change because the feature uses existing directives, not a new CLI flag.
+- Audited README, `docs/05-directives.md`, `docs/15-embedded-files.md`, `docs/index.md`, the fixture docs, and `mustmatch-cli test --help`.
+- Fixed `docs/index.md` wording from executable specification to executable documentation to keep `spec/*.md` as contract truth.
+- Help text needed no change because `file=` is a fence directive, not a CLI option.
 
 ## Issues Found and Fixed — fixes + proof
 
-- Fixed README/docs wording and the `docs/04` scenario-outline example mismatch.
-- Proof: `make check && make test` green; `make spec` green; manual table fixture run green.
+- Fixed `docs/index.md` contract-wording drift.
+- Proof: `make check && make test` green; `make spec` green; docs/help audit passed.
 
 ## Issues Filed — list with paths
 
-1. `~/workspace/planning/mustmatch/issues/007-rust-runner-pipeline-failure-masked-by-contract.md`
-2. `~/workspace/planning/mustmatch/issues/007-missing-test-path-exits-zero.md`
-3. `~/workspace/planning/mustmatch/issues/007-validation-profiles-omit-spec-contract.md`
+None.
 
 ## Planning Updates — concrete issues filed or FAQ watching proposal
 
-Filed the three concrete issues above. No FAQ edit was made; the validation-profile issue is the actionable ratchet for the relevant watching entry.
+No new planning issue was needed. The only recurring planning concern observed here is already tracked by `~/workspace/planning/mustmatch/issues/007-validation-profiles-omit-spec-contract.md`.
 
 ## UX Quality — CLI/UI assessment
 
-- New row labels are readable in verbose output and identify failing rows.
-- Error diagnostics for bad row/table directives are clear enough for a user to repair the Markdown.
-- Existing missing-path behavior is weak UX and was filed as a follow-up.
+- Verbose output names the consuming behavior sections and row labels; `file=` setup blocks do not create misleading PASS lines.
+- Error messages for unsafe paths, directive conflicts, and missing row placeholders are clear enough for a user to repair the Markdown.
 
-Issues filed: 3
+Issues filed: 0

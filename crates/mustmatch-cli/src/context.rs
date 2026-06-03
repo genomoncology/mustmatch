@@ -48,14 +48,6 @@ impl ContextRegistry {
         })
     }
 
-    pub(crate) fn resolve(
-        &mut self,
-        name: Option<&str>,
-        default_cwd: &Path,
-    ) -> Result<ContextSettings, String> {
-        self.resolve_scoped(name, default_cwd, None)
-    }
-
     pub(crate) fn resolve_scoped(
         &mut self,
         name: Option<&str>,
