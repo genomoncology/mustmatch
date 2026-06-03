@@ -65,3 +65,35 @@ The fixture run must complete without failed blocks; this guards against a false
 cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner/embedded-files.md 2>&1 | mustmatch not like "FAIL
 failed"
 ```
+
+## Run lifecycle setup hooks
+
+Lifecycle setup hooks prepare the runner scopes before user examples execute. The fixture reads one suite sentinel, one file sentinel, and one context sentinel from normal documented commands.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-lifecycle/setup-hooks.md | mustmatch like "PASS Suite setup runs before document blocks
+PASS File setup runs before document blocks
+PASS Context setup remains visible
+passed"
+```
+
+## Run context teardown after last use
+
+A context teardown runs after the final block using that context, before later no-context blocks in the same document. The fixture writes a context body sentinel inside the context and then proves the sentinel is absent in the following block.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-lifecycle/context-teardown.md | mustmatch like "PASS Context body can use setup state
+PASS Context teardown removes body sentinel
+passed"
+```
+
+## Run suite and file teardowns after exit
+
+Suite and file teardowns clean up after the runner exits. The fixture writes suite and file body sentinels during a successful document run; after the command returns, neither sentinel should remain in the fixture directory.
+
+```bash
+cargo run -q -p mustmatch-cli -- test ../tests/fixtures/rust-runner-lifecycle/after-run-teardown.md >/dev/null && \
+  ls ../tests/fixtures/rust-runner-lifecycle/suite-body.txt ../tests/fixtures/rust-runner-lifecycle/file-body.txt 2>/dev/null \
+  | mustmatch not like "suite-body.txt
+file-body.txt"
+```
