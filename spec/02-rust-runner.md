@@ -7,7 +7,7 @@
 A documentation directory can mix bash assertion blocks, console examples, named runs, expected exits, contexts, and unsupported Python blocks. The Rust runner reports the supported blocks as passing and makes unsupported Python blocks visible as skips.
 
 ```bash
-cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner | mustmatch like "PASS Bash assertion blocks run
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner | mustmatch like "PASS Bash assertion blocks run
 PASS Console examples execute visible commands
 PASS Named runs reuse JSON fields
 PASS Named runs honor dependencies
@@ -23,6 +23,6 @@ skipped"
 A repository without `mustmatch.toml` can still use the existing `[tool.mustmatch]` context configuration in `pyproject.toml`. The Rust runner keeps that compatibility while preferring `mustmatch.toml` when both files are present.
 
 ```bash
-cargo run -q -p mustmatch-cli -- test -v tests/fixtures/rust-runner-pyproject | mustmatch like "PASS Pyproject contexts still work
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-pyproject | mustmatch like "PASS Pyproject contexts still work
 passed"
 ```
