@@ -26,3 +26,20 @@ A repository without `mustmatch.toml` can still use the existing `[tool.mustmatc
 cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-pyproject | mustmatch like "PASS Pyproject contexts still work
 passed"
 ```
+
+## Run bash table scenarios and outlines
+
+The Rust documentation runner can use Markdown tables as bash scenario data. Row placeholders substitute into commands and expected output, and verbose output names each row so a reader can identify which scenario ran.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner/table-scenarios.md | mustmatch like "PASS Bash each_row substitutes table columns
+[double-two]
+[double-three]
+PASS Scenario outlines substitute inputs and outputs
+[alpha-case]
+[beta-case]
+PASS Table selection and coercion use the named case table
+[row-1]
+[row-2]
+passed"
+```

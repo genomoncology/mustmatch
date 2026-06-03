@@ -1,48 +1,67 @@
 # Fixtures And Tables
 
-Markdown tables are first-class fixture data for Python blocks. Rows can be coerced into typed values, and `each_row` executes one test per row. The `md` fixture also exposes document structure for context-aware assertions.
+Markdown tables are first-class fixture data for executable documentation. In the Rust documentation runner, `bash each_row` turns rows into scenario data: bare `{{column}}` placeholders come from the current row, while dotted `{{run-id.field}}` placeholders still come from named-run JSON output.
 
-## Using Each Row
+## Bash Table Scenarios
 
-This table drives an `each_row` block. Numeric columns are auto-coerced while `str:` headers stay as raw strings.
+A bash block with `each_row=<table>` runs once per row of the named table. Numeric columns are coerced before substitution, while `str:` headers are exposed without the prefix and keep their raw string value.
+
+````markdown
+## Double Values
 
 | input | output | str:label |
 |-------|--------|-----------|
-| 2     | 4      | row-a     |
-| 3     | 6      | row-b     |
+| 2     | 4      | double-two |
+| 3     | 6      | double-three |
 
-```python each_row
-doubled = row.input * 2
-result = {"input": row.input, "output": doubled, "label": row.label}
-label_copy = row.label
+```bash each_row="Double Values"
+expr {{input}} '*' 2 | mustmatch like '{{output}}'
+```
+````
+
+The `str:label` column is optional. When it is present, verbose output uses it as the row label; otherwise rows are reported as `row-1`, `row-2`, and so on.
+
+## Scenario Outlines
+
+A named `bash run id=<id> each_row=<table>` block and a matching `expect=<id> each_row=<table>` block form a scenario outline. The command and expected output are templated from the same row and compared in lockstep.
+
+````markdown
+## Status Lines
+
+| name  | status       | expected           | str:label |
+|-------|--------------|--------------------|-----------|
+| alpha | status=ready | alpha status=ready | alpha-case |
+| beta  | status=done  | beta status=done   | beta-case |
+
+```bash run id=status-line each_row="Status Lines"
+printf '{{name}} {{status}}\n'
 ```
 
-## Scenarios Fixture
-
-When a Python block follows a table, that table is available as `scenarios`.
-This gives concise access to typed `TableRow` values without hard-coding a table slug.
-
-| sample | expected_hits |
-|--------|---------------|
-| BRAF   | 1             |
-| EGFR   | 2             |
-
-```python
-assert len(scenarios) == 2
-assert scenarios[0].sample == "BRAF"
-assert scenarios[1].expected_hits == 2
-
-counts = {row.sample: row.expected_hits for row in scenarios}
-assert counts["BRAF"] == 1
-assert counts["EGFR"] == 2
+```text expect=status-line each_row="Status Lines" contains
+{{expected}}
 ```
+````
+
+Both fences name the same table so the runner can execute and compare each row independently.
+
+## Selecting A Table
+
+When multiple tables are in scope, `table=<name>` selects the intended rows. A non-empty `each_row=<name>` also selects a table; if both `each_row=<name>` and `table=<name>` are present, they must refer to the same table.
+
+````markdown
+## Selected Rows
+
+| value | str:code | expected |
+|-------|----------|----------|
+| 007   | 007      | numeric=7 raw=007 |
+
+```bash each_row table="Selected Rows"
+printf 'numeric={{value}} raw={{code}}\n' | mustmatch like '{{expected}}'
+```
+````
+
+Here `value` renders as the coerced number `7`, while `code` renders as the raw string `007` because its header is `str:code`.
 
 ## Document Fixture
 
-`md` exposes collected sections and tables. This lets blocks validate document wiring as part of executable docs.
-
-```python
-first_table = md.tables[0]
-assert first_table.name == "Using Each Row"
-assert md.current_section.title == "Document Fixture"
-```
+The Python pytest plugin still exposes `md`, `scenarios`, and typed `TableRow` values for legacy Python documentation tests. New table-driven documentation should prefer the bash forms above so it also works with `mustmatch-cli test`.

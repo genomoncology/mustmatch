@@ -89,6 +89,20 @@ printf 'Identity: {{resource-summary.resource_id}} {{resource-summary.label}}\n'
 Identity: widget-123 Example Widget
 ```
 
+## Row Columns Use Bare Placeholders
+
+Table-driven bash scenarios use the same braces with a separate namespace: bare `{{column}}` placeholders resolve against the current `each_row` table row, while dotted `{{run-id.field}}` placeholders resolve against named-run JSON output. This keeps scenario data readable without hiding `jq`, temporary files, or shell variables in the document.
+
+````markdown
+| input | output |
+|-------|--------|
+| 2     | 4      |
+
+```bash each_row
+expr {{input}} '*' 2 | mustmatch like '{{output}}'
+```
+````
+
 ## Leak Checks Stay Separate
 
 Absence assertions can list one forbidden string per line. Keep them separate
