@@ -11,6 +11,7 @@ use crate::process::{ProcessResult, run_bash};
 pub(crate) struct NamedRuns {
     blocks: HashMap<String, Block>,
     results: HashMap<String, ProcessResult>,
+    active: Vec<String>,
 }
 
 impl NamedRuns {
@@ -49,30 +50,41 @@ impl NamedRuns {
             .get(ident)
             .cloned()
             .ok_or_else(|| format!("unknown run id {ident:?}"))?;
-
-        for dependency in uses(&block) {
-            self.run(&dependency, contexts, default_cwd, default_timeout)?;
+        if let Some(position) = self.active.iter().position(|item| item == ident) {
+            let mut cycle = self.active[position..].to_vec();
+            cycle.push(ident.to_string());
+            return Err(format!("cyclic run dependency: {}", cycle.join(" -> ")));
         }
 
-        let context_name = directive(&block, "context");
-        let settings = contexts.resolve(context_name.as_deref(), default_cwd)?;
-        let content = self.substitute(&block.content, contexts, default_cwd, default_timeout)?;
-        let timeout = timeout_for(&block, default_timeout);
-        let result = run_bash(&content, &settings.cwd, &settings.env, timeout)
-            .map_err(|err| format!("run {ident:?} failed to start: {err}"))?;
-        if result.timed_out {
-            return Err(format!("run {ident:?} timed out after {timeout} seconds"));
-        }
-        let expected = expected_exit(&block)?;
-        let stream = selected_stream(&block)?;
-        if result.exit_code != expected {
-            return Err(format!(
-                "run {ident:?} expected exit {expected}, actual exit {}, selected stream {stream}",
-                result.exit_code
-            ));
-        }
-        self.results.insert(ident.to_string(), result.clone());
-        Ok(result)
+        self.active.push(ident.to_string());
+        let outcome = (|| -> Result<ProcessResult, String> {
+            for dependency in uses(&block) {
+                self.run(&dependency, contexts, default_cwd, default_timeout)?;
+            }
+
+            let context_name = directive(&block, "context");
+            let settings = contexts.resolve(context_name.as_deref(), default_cwd)?;
+            let content =
+                self.substitute(&block.content, contexts, default_cwd, default_timeout)?;
+            let timeout = timeout_for(&block, default_timeout);
+            let result = run_bash(&content, &settings.cwd, &settings.env, timeout)
+                .map_err(|err| format!("run {ident:?} failed to start: {err}"))?;
+            if result.timed_out {
+                return Err(format!("run {ident:?} timed out after {timeout} seconds"));
+            }
+            let expected = expected_exit(&block)?;
+            let stream = selected_stream(&block)?;
+            if result.exit_code != expected {
+                return Err(format!(
+                    "run {ident:?} expected exit {expected}, actual exit {}, selected stream {stream}",
+                    result.exit_code
+                ));
+            }
+            self.results.insert(ident.to_string(), result.clone());
+            Ok(result)
+        })();
+        self.active.pop();
+        outcome
     }
 
     pub(crate) fn substitute(

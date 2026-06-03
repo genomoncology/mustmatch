@@ -65,6 +65,10 @@ pub(crate) fn parse_test_args(args: &[String]) -> Result<TestArgs, i32> {
                     eprintln!("Error: --lang requires a value");
                     return Err(2);
                 };
+                if value != "all" && value != "bash" {
+                    eprintln!("Error: --lang must be all or bash");
+                    return Err(2);
+                }
                 lang = value.clone();
             }
             value if value.starts_with('-') => {
@@ -375,9 +379,38 @@ fn is_console_block(block: &Block) -> bool {
 
 fn bash_block_has_mustmatch_pipe(script: &str) -> bool {
     script.lines().any(|line| {
-        let code = line.split('#').next().unwrap_or("");
+        let code = code_before_shell_comment(line);
         code.contains("| mustmatch") || code.contains("|mustmatch")
     })
+}
+
+fn code_before_shell_comment(line: &str) -> &str {
+    let mut single_quoted = false;
+    let mut double_quoted = false;
+    let mut escaped = false;
+
+    for (index, ch) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if double_quoted && ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        match ch {
+            '\'' if !double_quoted => single_quoted = !single_quoted,
+            '"' if !single_quoted => double_quoted = !double_quoted,
+            '#' if !single_quoted
+                && !double_quoted
+                && (index == 0 || line[..index].ends_with(char::is_whitespace)) =>
+            {
+                return &line[..index];
+            }
+            _ => {}
+        }
+    }
+    line
 }
 
 fn parse_console_examples(content: &str) -> Result<Vec<(String, String)>, String> {

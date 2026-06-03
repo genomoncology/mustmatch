@@ -72,12 +72,12 @@ row_label = f"row-{row_index}"
 ```
 ````
 
-Run docs directly with the installed Python command, or exercise the transitional Rust runner as `mustmatch-cli test`:
+Run docs directly with the installed Python command, or exercise a Rust-compatible document with the transitional `mustmatch-cli test` runner:
 
 ```bash
 uv sync --extra dev --reinstall-package mustmatch
 uv run mustmatch test docs/ -v
-cargo run -q -p mustmatch-cli -- test docs/ -v
+cargo run -q -p mustmatch-cli -- test docs/13-standalone-doc-runner.md -v
 ```
 
 Or collect them through pytest when a project already uses pytest:

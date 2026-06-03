@@ -211,7 +211,7 @@ impl ContextRegistry {
                 .map_err(|err| format!("context {name:?} setup command failed: {err}"))?;
             if result.exit_code != 0 {
                 return Err(format!(
-                    "context {name:?} setup command failed: {command}\n{}{}",
+                    "context {name:?} setup command failed\n{}{}",
                     result.stdout, result.stderr
                 ));
             }

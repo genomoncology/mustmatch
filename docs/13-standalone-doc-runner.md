@@ -60,13 +60,17 @@ Resource widget-123: Example Widget
 
 Projects can define named contexts in `mustmatch.toml` or, for existing Python-era projects, in `pyproject.toml` under `[tool.mustmatch]`. The Rust runner prefers `mustmatch.toml` when both files exist. Contexts keep setup, temporary state, environment files, required environment variables, and PATH additions out of the user-facing example. The Markdown names the context, but the command stays focused on the behavior being documented.
 
+In `mustmatch.toml`, context tables are top-level:
+
 ````toml
-[tool.mustmatch.contexts.demo]
+[contexts.demo]
 cwd = "{tmp}"
 path = ["{root}/target/debug"]
 required_env = ["DEMO_TOKEN"]
 setup = ["mytool server add demo --url $DEMO_URL"]
 ````
+
+Existing `pyproject.toml` files keep the same shape under `[tool.mustmatch.contexts.demo]`.
 
 ````markdown
 ```bash run id=demo-status context=demo
