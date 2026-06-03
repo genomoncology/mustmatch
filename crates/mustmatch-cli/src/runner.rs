@@ -186,12 +186,14 @@ enum BlockOutcome {
 }
 
 struct MarkdownRunner {
+    path: PathBuf,
     lang: String,
     timeout: u64,
     parsed: ParseResult,
     contexts: ContextRegistry,
     named_runs: NamedRuns,
     section_roots: HashMap<String, TempDir>,
+    transient_roots: Vec<TempDir>,
 }
 
 impl MarkdownRunner {
@@ -202,12 +204,14 @@ impl MarkdownRunner {
         let contexts = ContextRegistry::new(path)?;
         let named_runs = NamedRuns::new(&parsed.blocks);
         Ok(Self {
+            path: path.to_path_buf(),
             lang: lang.to_string(),
             timeout,
             parsed,
             contexts,
             named_runs,
             section_roots: HashMap::new(),
+            transient_roots: Vec::new(),
         })
     }
 
@@ -477,6 +481,13 @@ impl MarkdownRunner {
             .ok_or_else(|| format!("unknown table {name:?}"))
     }
 
+    fn default_cwd(&self) -> PathBuf {
+        self.path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf()
+    }
+
     fn section_root_for(&mut self, block: &Block) -> Result<PathBuf, String> {
         let key = section_key(block);
         if !self.section_roots.contains_key(&key) {
@@ -489,11 +500,30 @@ impl MarkdownRunner {
             .ok_or_else(|| "failed to create section tempdir".to_string())
     }
 
+    fn section_has_file_blocks(&self, block: &Block) -> bool {
+        let key = section_key(block);
+        self.parsed
+            .blocks
+            .iter()
+            .any(|candidate| is_file_block(candidate) && section_key(candidate) == key)
+    }
+
     fn default_cwd_for(
         &mut self,
         block: &Block,
         row: Option<&RowContext>,
     ) -> Result<PathBuf, String> {
+        if !self.section_has_file_blocks(block) {
+            if row.is_some() {
+                let tmp =
+                    TempDir::new().map_err(|err| format!("failed to create row tempdir: {err}"))?;
+                let path = tmp.path().to_path_buf();
+                self.transient_roots.push(tmp);
+                return Ok(path);
+            }
+            return Ok(self.default_cwd());
+        }
+
         let section_root = self.section_root_for(block)?;
         let Some(row) = row else {
             return Ok(section_root);
@@ -831,6 +861,31 @@ mod tests {
             Ok(_) => panic!("expected error"),
             Err(err) => err,
         }
+    }
+
+    #[test]
+    fn sections_without_file_blocks_keep_document_cwd() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(dir.path().join("sidecar.txt"), "sidecar-ready\n").expect("write sidecar");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Reads local sidecar
+
+```bash
+mustmatch() { grep -q sidecar-ready; }
+cat sidecar.txt | mustmatch like 'sidecar-ready'
+```
+"#,
+        );
+        let mut runner = MarkdownRunner::new(&path, "all", 5).expect("runner");
+        let cases = runner.cases().expect("cases");
+
+        assert_eq!(cases.len(), 1);
+        runner
+            .run_block(&cases[0].block, None)
+            .expect("plain sections should run from the markdown directory");
     }
 
     #[test]
