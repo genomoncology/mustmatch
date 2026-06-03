@@ -55,5 +55,13 @@ PASS New sections get fresh fixture directories
 PASS Row fixtures render table values
 [row-alpha]
 [row-beta]
+PASS Context fixture files land in context cwd
 passed"
+```
+
+The fixture run must complete without failed blocks; this guards against a false green where setup-only fixture blocks are reported but later consuming commands fail.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner/embedded-files.md 2>&1 | mustmatch not like "FAIL
+failed"
 ```

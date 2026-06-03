@@ -27,7 +27,7 @@ cat state/status.txt | mustmatch like 'ready'
 ```
 
 ```bash
-grep -n ready state/status.txt | mustmatch like '1:ready'
+grep ready state/status.txt | mustmatch like 'ready'
 ```
 
 ## New sections get fresh fixture directories
@@ -53,4 +53,16 @@ Fixture content can use the same row placeholders as bash scenario blocks. Each 
 
 ```bash each_row="Row fixtures render table values"
 cat row.txt | mustmatch like '{{expected}}'
+```
+
+## Context fixture files land in context cwd
+
+Fixture files compose with configured contexts. When a context runs commands from its own `{tmp}` cwd, the embedded file is still available at the documented relative path.
+
+```text file=context/input.txt
+context-ready
+```
+
+```bash context=demo
+cat context/input.txt | mustmatch like 'context-ready'
 ```
