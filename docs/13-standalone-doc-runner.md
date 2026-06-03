@@ -58,7 +58,7 @@ Resource widget-123: Example Widget
 
 ## Project Contexts Hide Setup
 
-Projects can define named contexts in `mustmatch.toml` or, for existing Python-era projects, in `pyproject.toml` under `[tool.mustmatch]`. The Rust runner prefers `mustmatch.toml` when both files exist. Contexts keep setup, temporary state, environment files, required environment variables, and PATH additions out of the user-facing example. The Markdown names the context, but the command stays focused on the behavior being documented.
+Projects can define named contexts in `mustmatch.toml` or, for existing Python-era projects, in `pyproject.toml` under `[tool.mustmatch]`. The Rust runner prefers `mustmatch.toml` when both files exist. Contexts keep setup, teardown, temporary state, environment files, required environment variables, and PATH additions out of the user-facing example. Suite and file lifecycle hooks use the same configuration style for broader setup and cleanup. The Markdown names the context, but the command stays focused on the behavior being documented.
 
 In `mustmatch.toml`, context tables are top-level:
 
@@ -68,6 +68,7 @@ cwd = "{tmp}"
 path = ["{root}/target/debug"]
 required_env = ["DEMO_TOKEN"]
 setup = ["mytool server add demo --url $DEMO_URL"]
+teardown = ["mytool server remove demo"]
 ````
 
 Existing `pyproject.toml` files keep the same shape under `[tool.mustmatch.contexts.demo]`.

@@ -27,6 +27,17 @@ cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-pyproject
 passed"
 ```
 
+## Run lifecycle hooks from pyproject fallback
+
+A repository that keeps configuration in `[tool.mustmatch]` gets the same lifecycle hook behavior as `mustmatch.toml`. The fixture uses pyproject-owned suite, file, and context setup so fallback parsing cannot silently lag the new lifecycle schema.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-lifecycle-pyproject/setup-hooks.md | mustmatch like "PASS Pyproject suite setup runs
+PASS Pyproject file setup runs
+PASS Pyproject context setup runs
+passed"
+```
+
 ## Run bash table scenarios and outlines
 
 The Rust documentation runner can use Markdown tables as bash scenario data. Row placeholders substitute into commands and expected output, and verbose output names each row so a reader can identify which scenario ran.
@@ -64,4 +75,35 @@ The fixture run must complete without failed blocks; this guards against a false
 ```bash
 cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner/embedded-files.md 2>&1 | mustmatch not like "FAIL
 failed"
+```
+
+## Run lifecycle setup hooks
+
+Lifecycle setup hooks prepare the runner scopes before user examples execute. The fixture reads one suite sentinel, one file sentinel, and one context sentinel from normal documented commands.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-lifecycle/setup-hooks.md | mustmatch like "PASS Suite setup runs before document blocks
+PASS File setup runs before document blocks
+PASS Context setup remains visible
+passed"
+```
+
+## Run context teardown after last use
+
+A context teardown runs after the final block using that context, before later no-context blocks in the same document. The fixture writes a context body sentinel inside the context and then proves the sentinel is absent in the following block.
+
+```bash
+cargo run -q -p mustmatch-cli -- test -v ../tests/fixtures/rust-runner-lifecycle/context-teardown.md | mustmatch like "PASS Context body can use setup state
+PASS Context teardown removes body sentinel
+passed"
+```
+
+## Run suite and file teardowns after exit
+
+Suite and file teardowns clean up after the runner exits. The fixture writes suite and file body sentinels during a successful document run; after the command returns, neither sentinel should remain in the fixture directory.
+
+```bash
+cargo run -q -p mustmatch-cli -- test ../tests/fixtures/rust-runner-lifecycle/after-run-teardown.md >/dev/null
+find ../tests/fixtures/rust-runner-lifecycle -maxdepth 1 \( -name suite-body.txt -o -name file-body.txt \) -print | mustmatch not like "suite-body.txt
+file-body.txt"
 ```

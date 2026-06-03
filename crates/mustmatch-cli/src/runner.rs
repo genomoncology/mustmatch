@@ -7,7 +7,7 @@ use mustmatch_core::{
 };
 use tempfile::TempDir;
 
-use crate::context::{ContextRegistry, ContextSettings};
+use crate::context::{ConfigKey, ContextRegistry, ContextSettings};
 use crate::expect::{assert_output_matches, mode as expect_mode};
 use crate::named_runs::{
     NamedRuns, block_id, expect_target, expected_exit, is_output_block, is_run_block,
@@ -30,6 +30,11 @@ struct Summary {
     passed: usize,
     failed: usize,
     skipped: usize,
+}
+
+struct SuiteLifecycle {
+    key: ConfigKey,
+    contexts: ContextRegistry,
 }
 
 pub(crate) fn parse_test_args(args: &[String]) -> Result<TestArgs, i32> {
@@ -106,6 +111,8 @@ pub(crate) fn run(args: TestArgs) -> i32 {
     }
 
     let mut summary = Summary::default();
+    let mut suites: Vec<SuiteLifecycle> = Vec::new();
+    let mut stop = false;
     for file in files {
         let mut runner = match MarkdownRunner::new(&file, &args.lang, args.timeout) {
             Ok(runner) => runner,
@@ -120,6 +127,13 @@ pub(crate) fn run(args: TestArgs) -> i32 {
                 continue;
             }
         };
+        if let Err(message) = ensure_suite_started(&mut suites, &file, &runner.contexts) {
+            summary.failed += 1;
+            if !args.quiet {
+                eprintln!("FAIL {}: {message}", file.display());
+            }
+            break;
+        }
         let cases = match runner.cases() {
             Ok(cases) => cases,
             Err(message) => {
@@ -133,35 +147,116 @@ pub(crate) fn run(args: TestArgs) -> i32 {
                 continue;
             }
         };
+        runner.register_context_uses(&cases);
+        if let Err(message) = runner.run_file_setup() {
+            summary.failed += 1;
+            if !args.quiet {
+                eprintln!("FAIL {}: {message}", file.display());
+            }
+            break;
+        }
+        let mut file_failed = false;
         for case in cases {
-            match runner.run_block(&case.block, case.row.as_ref()) {
-                Ok(BlockOutcome::Passed) => {
+            let outcome = runner.run_block(&case.block, case.row.as_ref());
+            let teardown = runner.finish_case();
+            match (outcome, teardown) {
+                (Ok(BlockOutcome::Passed), Ok(())) => {
                     summary.passed += 1;
                     if args.verbose {
                         println!("PASS {}", case.label);
                     }
                 }
-                Ok(BlockOutcome::Skipped) => {
+                (Ok(BlockOutcome::Skipped), Ok(())) => {
                     summary.skipped += 1;
                     if args.verbose {
                         println!("SKIP {}", case.label);
                     }
                 }
-                Err(message) => {
+                (Ok(_), Err(message)) => {
                     summary.failed += 1;
+                    file_failed = true;
                     if !args.quiet {
                         eprintln!("FAIL {}: {message}", case.label);
                     }
                     if args.fail_fast {
-                        print_summary(&summary, args.quiet);
-                        return 1;
+                        stop = true;
+                        break;
                     }
                 }
+                (Err(message), teardown_result) => {
+                    summary.failed += 1;
+                    file_failed = true;
+                    if !args.quiet {
+                        eprintln!("FAIL {}: {message}", case.label);
+                        if let Err(teardown_message) = teardown_result {
+                            eprintln!("FAIL {} teardown: {teardown_message}", case.label);
+                        }
+                    }
+                    if args.fail_fast {
+                        stop = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if let Err(message) = runner.finish_contexts() {
+            if !args.quiet {
+                eprintln!("FAIL {} context teardown: {message}", file.display());
+            }
+            if !file_failed {
+                summary.failed += 1;
+                file_failed = true;
+                if args.fail_fast {
+                    stop = true;
+                }
+            }
+        }
+        if let Err(message) = runner.run_file_teardown() {
+            if !args.quiet {
+                eprintln!("FAIL {} teardown: {message}", file.display());
+            }
+            if !file_failed {
+                summary.failed += 1;
+                if args.fail_fast {
+                    stop = true;
+                }
+            }
+        }
+        if stop {
+            break;
+        }
+    }
+    let had_failure = summary.failed > 0;
+    for suite in suites.iter_mut().rev() {
+        if let Err(message) = suite.contexts.run_suite_teardown() {
+            if !args.quiet {
+                eprintln!("FAIL suite teardown: {message}");
+            }
+            if !had_failure {
+                summary.failed += 1;
             }
         }
     }
     print_summary(&summary, args.quiet);
     if summary.failed == 0 { 0 } else { 1 }
+}
+
+fn ensure_suite_started(
+    suites: &mut Vec<SuiteLifecycle>,
+    file: &Path,
+    contexts: &ContextRegistry,
+) -> Result<(), String> {
+    let key = contexts.config_key();
+    if suites.iter().any(|suite| suite.key == key) {
+        return Ok(());
+    }
+    let mut suite_contexts = ContextRegistry::new(file)?;
+    suite_contexts.run_suite_setup()?;
+    suites.push(SuiteLifecycle {
+        key,
+        contexts: suite_contexts,
+    });
+    Ok(())
 }
 
 const TEST_HELP: &str = "mustmatch-cli test - Run code blocks in markdown files as tests.\n\nUsage:\n    mustmatch-cli test [OPTIONS] [PATHS...]\n\nOptions:\n    -v, --verbose        Show each block result\n    -q, --quiet          Suppress summary and failure diagnostics\n    -x, --fail-fast      Stop after the first failure\n    --timeout SECONDS    Per-block timeout (default: 30)\n    --lang LANG          Language filter: all or bash\n    -h, --help           Show this help";
@@ -275,6 +370,31 @@ impl MarkdownRunner {
             || is_output_block(block)
             || block.language == "bash"
             || block.language == "python"
+    }
+
+    fn register_context_uses(&mut self, cases: &[Case]) {
+        for case in cases {
+            if let Some(context) = context_name(&case.block) {
+                self.contexts
+                    .register_context_use(context, case.row.as_ref().map(|row| row.key.as_str()));
+            }
+        }
+    }
+
+    fn run_file_setup(&mut self) -> Result<(), String> {
+        self.contexts.run_file_setup(&self.default_cwd())
+    }
+
+    fn run_file_teardown(&mut self) -> Result<(), String> {
+        self.contexts.run_file_teardown()
+    }
+
+    fn finish_case(&mut self) -> Result<(), String> {
+        self.contexts.finish_case()
+    }
+
+    fn finish_contexts(&mut self) -> Result<(), String> {
+        self.contexts.finish_all_contexts()
     }
 
     fn run_block(
@@ -546,9 +666,8 @@ impl MarkdownRunner {
         row: Option<&RowContext>,
         default_cwd: &Path,
     ) -> Result<ContextSettings, String> {
-        let context_name = block.directives.get("context").map(String::as_str);
         let settings = self.contexts.resolve_scoped(
-            context_name,
+            context_name(block),
             default_cwd,
             row.map(|row| row.key.as_str()),
         )?;
@@ -725,6 +844,10 @@ fn non_empty_directive<'a>(block: &'a Block, key: &str) -> Option<&'a str> {
         .filter(|value| !value.is_empty())
 }
 
+fn context_name(block: &Block) -> Option<&str> {
+    non_empty_directive(block, "context")
+}
+
 fn table_name(table: &Table) -> String {
     table
         .context
@@ -848,7 +971,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::MarkdownRunner;
+    use super::{MarkdownRunner, TestArgs, run};
 
     fn write_markdown(dir: &Path, content: &str) -> std::path::PathBuf {
         let path = dir.join("doc.md");
@@ -1059,5 +1182,305 @@ touch leak
                 .run_block(&case.block, case.row.as_ref())
                 .expect("row cwd should be isolated");
         }
+    }
+
+    #[test]
+    fn suite_and_file_teardown_run_on_fail_fast_failure() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[suite]
+setup = ["printf suite > {root}/suite-body.txt"]
+teardown = ["rm -f {root}/suite-body.txt"]
+
+[file]
+setup = ["printf file > {root}/file-body.txt"]
+teardown = ["rm -f {root}/file-body.txt"]
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Fails
+
+```bash
+mustmatch() { grep -q expected; }
+printf wrong | mustmatch "expected"
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: true,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!dir.path().join("suite-body.txt").exists());
+        assert!(!dir.path().join("file-body.txt").exists());
+    }
+
+    #[test]
+    fn row_context_teardown_runs_for_each_row_scope() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[contexts.rowtmp]
+cwd = "{tmp}"
+setup = ["printf S >> {root}/lifecycle.log"]
+teardown = ["printf T >> {root}/lifecycle.log"]
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Rows
+
+| str:label |
+|-----------|
+| first     |
+| second    |
+
+```bash each_row="Rows" context=rowtmp
+mustmatch() { grep -q ok; }
+printf ok | mustmatch like ok
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 0);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("lifecycle.log")).expect("read log"),
+            "STST"
+        );
+    }
+
+    #[test]
+    fn context_teardown_runs_when_fail_fast_stops_before_later_use() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[contexts.cleanup]
+            cwd = "."
+            setup = ["printf state > {root}/state.txt"]
+            teardown = ["rm -f {root}/state.txt"]
+            "#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Fails
+
+```bash context=cleanup
+cat state.txt >/dev/null
+mustmatch() { grep -q expected; }
+printf wrong | mustmatch "expected"
+```
+
+## Would Reuse Context
+
+```bash context=cleanup
+cat state.txt | mustmatch like state
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: true,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!dir.path().join("state.txt").exists());
+    }
+
+    #[test]
+    fn suite_setup_failure_stops_later_files() {
+        let dir = tempdir().expect("tempdir");
+        let first = dir.path().join("first");
+        let second = dir.path().join("second");
+        fs::create_dir_all(&first).expect("first dir");
+        fs::create_dir_all(&second).expect("second dir");
+        fs::write(
+            first.join("mustmatch.toml"),
+            r#"[suite]
+            setup = ["printf state > {root}/state.txt; exit 9"]
+            teardown = ["rm -f {root}/state.txt"]
+            "#,
+        )
+        .expect("write failing config");
+        fs::write(second.join("mustmatch.toml"), "").expect("write second config");
+        let first_doc = write_markdown(&first, "# First\n");
+        let second_doc = write_markdown(
+            &second,
+            r#"# Second
+
+## Should Not Run
+
+```bash
+printf ran > ran.txt
+cat ran.txt | mustmatch like ran
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![first_doc, second_doc],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!first.join("state.txt").exists());
+        assert!(!second.join("ran.txt").exists());
+    }
+
+    #[test]
+    fn file_setup_failure_runs_file_teardown() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[file]
+setup = ["printf state > {root}/state.txt; exit 9"]
+teardown = ["rm -f {root}/state.txt"]
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Should Not Run
+
+```bash
+printf ok | mustmatch like ok
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!dir.path().join("state.txt").exists());
+    }
+
+    #[test]
+    fn context_setup_failure_runs_context_teardown() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[contexts.cleanup]
+cwd = "."
+setup = ["printf state > {root}/state.txt; exit 9"]
+teardown = ["rm -f {root}/state.txt"]
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Context Fails During Setup
+
+```bash context=cleanup
+printf ok | mustmatch like ok
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!dir.path().join("state.txt").exists());
+    }
+
+    #[test]
+    fn named_run_context_teardown_runs_after_cached_run_use() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[contexts.cleanup]
+cwd = "."
+setup = ["printf state > {root}/state.txt"]
+teardown = ["rm -f {root}/state.txt {root}/body.txt"]
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Context Run
+
+```bash run id=context-json context=cleanup
+cat state.txt >/dev/null
+printf body > body.txt
+printf '{"status":"ok"}\n'
+```
+
+```json expect=context-json contains
+{"status":"ok"}
+```
+
+## Cleanup Visible
+
+```bash
+mustmatch() { ! grep -q body.txt; }
+ls body.txt 2>/dev/null | mustmatch not like body.txt
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 0);
+        assert!(!dir.path().join("body.txt").exists());
     }
 }

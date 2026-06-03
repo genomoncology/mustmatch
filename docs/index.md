@@ -21,3 +21,4 @@ The numbered docs are intended to be read sequentially. Later files assume the c
 13. `13-standalone-doc-runner.md`
 14. `14-good-executable-docs.md`
 15. `15-embedded-files.md`
+16. `16-lifecycle-hooks.md`

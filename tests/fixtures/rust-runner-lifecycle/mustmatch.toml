@@ -1,0 +1,21 @@
+path = ["{root}/../../../target/debug"]
+
+[suite]
+setup = ["printf 'suite=ready\n' > {root}/suite-setup.txt"]
+teardown = ["rm -f {root}/suite-setup.txt {root}/suite-body.txt"]
+
+[file]
+setup = ["printf 'file=ready\n' > {root}/file-setup.txt"]
+teardown = ["rm -f {root}/file-setup.txt {root}/file-body.txt"]
+
+[contexts.ephemeral]
+cwd = "{tmp}"
+path = ["{root}/../../../target/debug"]
+setup = ["printf 'context=ready\n' > {tmp}/context-setup.txt"]
+teardown = ["rm -f {tmp}/context-setup.txt"]
+
+[contexts.cleanup]
+cwd = "."
+path = ["{root}/../../../target/debug"]
+setup = ["printf 'context=ready\n' > {root}/context-setup.txt"]
+teardown = ["rm -f {root}/context-setup.txt {root}/context-body.txt"]

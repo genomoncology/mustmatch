@@ -62,6 +62,10 @@ else
 fi | mustmatch "module-only automation"
 ```
 
+## Rust Runner Lifecycle Configuration
+
+The Rust `mustmatch-cli test` runner also reads suite, file, and context lifecycle hooks from `mustmatch.toml` or from the `[tool.mustmatch]` fallback in `pyproject.toml`. `suite.setup`/`suite.teardown` run around a config root, `file.setup`/`file.teardown` run around each Markdown document, and `contexts.<name>.teardown` runs after the final use of that context scope. See `16-lifecycle-hooks.md` for the full hook model.
+
 ## Public Core API
 
 The Rust-backed public helpers are importable from `mustmatch._core`. These checks validate mode detection and table coercion behavior.
