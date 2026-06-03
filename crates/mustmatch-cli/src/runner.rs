@@ -400,7 +400,11 @@ impl MarkdownRunner {
     fn run_bash_block(&mut self, block: &Block, row: Option<&RowContext>) -> Result<(), String> {
         let context_name = block.directives.get("context").map(String::as_str);
         let (default_cwd, _tmp) = self.default_cwd_for(row)?;
-        let settings = self.contexts.resolve(context_name, &default_cwd)?;
+        let settings = self.contexts.resolve_scoped(
+            context_name,
+            &default_cwd,
+            row.map(|row| row.key.as_str()),
+        )?;
         let content = self.named_runs.substitute_with_row(
             &block.content,
             row.map(|row| &row.row),
@@ -642,4 +646,167 @@ fn print_summary(summary: &Summary, quiet: bool) {
             parts.join(", ")
         }
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use tempfile::tempdir;
+
+    use super::MarkdownRunner;
+
+    fn write_markdown(dir: &Path, content: &str) -> std::path::PathBuf {
+        let path = dir.join("doc.md");
+        fs::write(&path, content).expect("write markdown fixture");
+        path
+    }
+
+    fn unwrap_err(result: Result<impl Sized, String>) -> String {
+        match result {
+            Ok(_) => panic!("expected error"),
+            Err(err) => err,
+        }
+    }
+
+    #[test]
+    fn row_template_errors_name_missing_columns() {
+        let dir = tempdir().expect("tempdir");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Rows
+
+| input | str:label |
+|-------|-----------|
+| 2     | bad-row   |
+
+```bash run id=missing each_row="Rows"
+printf '{{missing}}\n'
+```
+"#,
+        );
+        let mut runner = MarkdownRunner::new(&path, "all", 5).expect("runner");
+        let cases = runner.cases().expect("cases");
+
+        assert!(cases[0].label.contains("[bad-row]"));
+        let err = unwrap_err(runner.run_block(&cases[0].block, cases[0].row.as_ref()));
+        assert!(err.contains("unknown row column \"missing\""));
+    }
+
+    #[test]
+    fn each_row_reports_unknown_or_conflicting_tables_before_execution() {
+        let dir = tempdir().expect("tempdir");
+        let missing_path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+```bash run id=missing-table each_row="Missing Rows"
+echo never
+```
+"#,
+        );
+        let missing_runner = MarkdownRunner::new(&missing_path, "all", 5).expect("runner");
+        let err = unwrap_err(missing_runner.cases());
+        assert!(err.contains("unknown table \"Missing Rows\""));
+
+        let conflict_path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Rows
+
+| input |
+|-------|
+| 1     |
+
+```bash run id=conflict each_row="Rows" table="Other Rows"
+echo never
+```
+"#,
+        );
+        let conflict_runner = MarkdownRunner::new(&conflict_path, "all", 5).expect("runner");
+        let err = unwrap_err(conflict_runner.cases());
+        assert!(err.contains("each_row table \"Rows\" conflicts with table=\"Other Rows\""));
+    }
+
+    #[test]
+    fn scenario_outline_rejects_mismatched_run_and_expect_tables() {
+        let dir = tempdir().expect("tempdir");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Input Rows
+
+| value |
+|-------|
+| one   |
+
+```bash run id=item each_row="Input Rows"
+printf '{{value}}\n'
+```
+
+## Output Rows
+
+| value |
+|-------|
+| two   |
+
+```text expect=item each_row="Output Rows" contains
+{{value}}
+```
+"#,
+        );
+        let mut runner = MarkdownRunner::new(&path, "all", 5).expect("runner");
+        let cases = runner.cases().expect("cases");
+
+        runner
+            .run_block(&cases[0].block, cases[0].row.as_ref())
+            .expect("run row should pass");
+        let err = unwrap_err(runner.run_block(&cases[1].block, cases[1].row.as_ref()));
+        assert!(err.contains("expect=item table does not match run table"));
+    }
+
+    #[test]
+    fn row_contexts_use_fresh_context_cwds() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[contexts.rowtmp]
+cwd = "{tmp}"
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Rows
+
+| str:label |
+|-----------|
+| first     |
+| second    |
+
+```bash run id=leak-check each_row="Rows" context=rowtmp
+if [ -e leak ]; then
+  exit 7
+fi
+touch leak
+```
+"#,
+        );
+        let mut runner = MarkdownRunner::new(&path, "all", 5).expect("runner");
+        let cases = runner.cases().expect("cases");
+
+        assert_eq!(cases.len(), 2);
+        for case in &cases {
+            runner
+                .run_block(&case.block, case.row.as_ref())
+                .expect("row cwd should be isolated");
+        }
+    }
 }

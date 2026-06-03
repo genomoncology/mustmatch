@@ -75,7 +75,11 @@ impl NamedRuns {
             }
 
             let context_name = directive(&block, "context");
-            let settings = contexts.resolve(context_name.as_deref(), default_cwd)?;
+            let settings = contexts.resolve_scoped(
+                context_name.as_deref(),
+                default_cwd,
+                row.map(|(key, _)| key),
+            )?;
             let content = self.substitute_with_row(
                 &block.content,
                 row.map(|(_, row)| row),

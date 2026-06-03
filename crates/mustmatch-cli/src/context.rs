@@ -53,10 +53,23 @@ impl ContextRegistry {
         name: Option<&str>,
         default_cwd: &Path,
     ) -> Result<ContextSettings, String> {
+        self.resolve_scoped(name, default_cwd, None)
+    }
+
+    pub(crate) fn resolve_scoped(
+        &mut self,
+        name: Option<&str>,
+        default_cwd: &Path,
+        cache_scope: Option<&str>,
+    ) -> Result<ContextSettings, String> {
         let Some(name) = name.filter(|value| !value.trim().is_empty()) else {
             return Ok(self.base_settings(default_cwd));
         };
-        if let Some(settings) = self.cache.get(name) {
+        let cache_key = match cache_scope {
+            Some(scope) => format!("{name}@{scope}"),
+            None => name.to_string(),
+        };
+        if let Some(settings) = self.cache.get(&cache_key) {
             return Ok(settings.clone());
         }
 
@@ -87,7 +100,7 @@ impl ContextRegistry {
         self.run_setup(name, config, &cwd, &env, &tokens)?;
 
         let settings = ContextSettings { cwd, env };
-        self.cache.insert(name.to_string(), settings.clone());
+        self.cache.insert(cache_key, settings.clone());
         Ok(settings)
     }
 
