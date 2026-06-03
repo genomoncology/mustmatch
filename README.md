@@ -1,6 +1,6 @@
 # mustmatch
 
-`mustmatch` provides executable documentation tools for command-line projects. It asserts CLI output in shell pipelines, runs Markdown examples as documentation tests, and supports documentation-first named runs where commands and expected output are separate readable blocks. The Rust core handles parsing, normalization, comparison, and the transitional `mustmatch-cli test` documentation runner while Python keeps the installed `mustmatch` command.
+`mustmatch` provides executable documentation tools for command-line projects. It asserts CLI output in shell pipelines, runs Markdown examples as documentation tests, and supports documentation-first named runs where commands and expected output are separate readable blocks. The Rust core handles parsing, normalization, comparison, the transitional `mustmatch-cli test` documentation runner, and Rust implementations of the static `lint` and `verify-matrix` quality commands while Python keeps the installed `mustmatch` command.
 
 ## Install
 
@@ -103,7 +103,7 @@ See `docs/14-good-executable-docs.md` for the full guidance.
 
 ## Quality Checks
 
-Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint markdown specs without executing their fences. Local gates also run the Rust toolchain: `make lint` includes `cargo fmt --check` and `cargo clippy -- -D warnings`; `make test` includes `cargo test`.
+Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint markdown specs without executing their fences. The transitional Rust binary exposes the same quality checks as `mustmatch-cli verify-matrix` and `mustmatch-cli lint`. Local gates also run the Rust toolchain: `make lint` includes `cargo fmt --check` and `cargo clippy -- -D warnings`; `make test` includes `cargo test`.
 
 - `mustmatch verify-matrix .march/design-final.md --repo-root .`
 - `mustmatch lint docs/02-cli-assertions.md`
