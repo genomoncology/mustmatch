@@ -1,0 +1,11 @@
+[tool.mustmatch]
+path = ["{root}/../../../target/debug"]
+
+[tool.mustmatch.contexts.demo]
+cwd = "{tmp}"
+path = ["{root}/bin", "{root}/../../../target/debug"]
+required_env = ["DOC_VALUE"]
+setup = ["printf 'state=wrong\n' > {tmp}/state.txt"]
+
+[tool.mustmatch.contexts.demo.env]
+DOC_VALUE = "wrong"

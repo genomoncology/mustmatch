@@ -1,6 +1,6 @@
 # mustmatch
 
-`mustmatch` provides executable documentation tools for command-line projects. It asserts CLI output in shell pipelines, runs Markdown examples as documentation tests, and supports documentation-first named runs where commands and expected output are separate readable blocks. The Rust core handles parsing, normalization, and comparison while Python keeps runtime orchestration.
+`mustmatch` provides executable documentation tools for command-line projects. It asserts CLI output in shell pipelines, runs Markdown examples as documentation tests, and supports documentation-first named runs where commands and expected output are separate readable blocks. The Rust core handles parsing, normalization, comparison, and the transitional `mustmatch-cli test` documentation runner while Python keeps the installed `mustmatch` command.
 
 ## Install
 
@@ -72,11 +72,12 @@ row_label = f"row-{row_index}"
 ```
 ````
 
-Run docs directly:
+Run docs directly with the installed Python command, or exercise a Rust-compatible document with the transitional `mustmatch-cli test` runner:
 
 ```bash
 uv sync --extra dev --reinstall-package mustmatch
 uv run mustmatch test docs/ -v
+cargo run -q -p mustmatch-cli -- test docs/13-standalone-doc-runner.md -v
 ```
 
 Or collect them through pytest when a project already uses pytest:
@@ -104,7 +105,7 @@ See `docs/14-good-executable-docs.md` for the full guidance.
 
 ## Quality Checks
 
-Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint markdown specs without executing their fences.
+Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint markdown specs without executing their fences. Local gates also run the Rust toolchain: `make lint` includes `cargo fmt --check` and `cargo clippy -- -D warnings`; `make test` includes `cargo test`.
 
 - `mustmatch verify-matrix .march/design-final.md --repo-root .`
 - `mustmatch lint docs/02-cli-assertions.md`

@@ -1,3 +1,9 @@
+mod context;
+mod expect;
+mod named_runs;
+mod process;
+mod runner;
+
 use std::io::{self, Read};
 
 use mustmatch_core::{
@@ -6,7 +12,7 @@ use mustmatch_core::{
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n";
+const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value or run Markdown docs.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n    mustmatch-cli test [OPTIONS] [PATHS...]\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n";
 
 #[derive(Debug, Clone)]
 struct MatchArgs {
@@ -211,6 +217,13 @@ fn run_match(args: MatchArgs) -> i32 {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if args.first().map(String::as_str) == Some("test") {
+        match runner::parse_test_args(&args[1..]) {
+            Ok(parsed) => std::process::exit(runner::run(parsed)),
+            Err(exit_code) => std::process::exit(exit_code),
+        }
+    }
 
     if args.len() == 1 {
         if args[0] == "-h" || args[0] == "--help" {
