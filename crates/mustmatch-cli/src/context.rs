@@ -126,7 +126,7 @@ impl ContextRegistry {
         let config = section_config(&self.config, "suite");
         let root = self.root.clone();
         let scope = self.hook_scope(&config, &root)?;
-        run_hook_commands("suite", "setup", &config, &scope)?;
+        run_setup_with_teardown_on_failure("suite", &config, &scope)?;
         self.suite_scope = Some(scope);
         Ok(())
     }
@@ -142,7 +142,7 @@ impl ContextRegistry {
     pub(crate) fn run_file_setup(&mut self, default_cwd: &Path) -> Result<(), String> {
         let config = section_config(&self.config, "file");
         let scope = self.hook_scope(&config, default_cwd)?;
-        run_hook_commands("file", "setup", &config, &scope)?;
+        run_setup_with_teardown_on_failure("file", &config, &scope)?;
         self.file_scope = Some(scope);
         Ok(())
     }
@@ -323,7 +323,7 @@ impl ContextRegistry {
             env: env.clone(),
             tokens: tokens.clone(),
         };
-        run_hook_commands(&format!("context {name:?}"), "setup", config, &scope)
+        run_setup_with_teardown_on_failure(&format!("context {name:?}"), config, &scope)
     }
 
     fn run_context_teardown(&mut self, key: &str) -> Result<(), String> {
@@ -397,6 +397,22 @@ fn run_hook_commands(
         }
     }
     Ok(())
+}
+
+fn run_setup_with_teardown_on_failure(
+    label: &str,
+    config: &Value,
+    scope: &HookScope,
+) -> Result<(), String> {
+    match run_hook_commands(label, "setup", config, scope) {
+        Ok(()) => Ok(()),
+        Err(setup_error) => match run_hook_commands(label, "teardown", config, scope) {
+            Ok(()) => Err(setup_error),
+            Err(teardown_error) => Err(format!(
+                "{setup_error}\n{label} teardown after setup failure failed\n{teardown_error}"
+            )),
+        },
+    }
 }
 
 fn section_config(config: &Value, name: &str) -> Value {

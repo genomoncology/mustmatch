@@ -1327,7 +1327,8 @@ cat state.txt | mustmatch like state
         fs::write(
             first.join("mustmatch.toml"),
             r#"[suite]
-            setup = ["exit 9"]
+            setup = ["printf state > {root}/state.txt; exit 9"]
+            teardown = ["rm -f {root}/state.txt"]
             "#,
         )
         .expect("write failing config");
@@ -1356,7 +1357,81 @@ cat ran.txt | mustmatch like ran
         });
 
         assert_eq!(code, 1);
+        assert!(!first.join("state.txt").exists());
         assert!(!second.join("ran.txt").exists());
+    }
+
+    #[test]
+    fn file_setup_failure_runs_file_teardown() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[file]
+setup = ["printf state > {root}/state.txt; exit 9"]
+teardown = ["rm -f {root}/state.txt"]
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Should Not Run
+
+```bash
+printf ok | mustmatch like ok
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!dir.path().join("state.txt").exists());
+    }
+
+    #[test]
+    fn context_setup_failure_runs_context_teardown() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("mustmatch.toml"),
+            r#"[contexts.cleanup]
+cwd = "."
+setup = ["printf state > {root}/state.txt; exit 9"]
+teardown = ["rm -f {root}/state.txt"]
+"#,
+        )
+        .expect("write config");
+        let path = write_markdown(
+            dir.path(),
+            r#"# Doc
+
+## Context Fails During Setup
+
+```bash context=cleanup
+printf ok | mustmatch like ok
+```
+"#,
+        );
+
+        let code = run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        });
+
+        assert_eq!(code, 1);
+        assert!(!dir.path().join("state.txt").exists());
     }
 
     #[test]
