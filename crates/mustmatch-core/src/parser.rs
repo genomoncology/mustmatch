@@ -194,8 +194,13 @@ pub fn parse_markdown(content: &str) -> ParseResult {
                 || directives.contains_key("for")
                 || directives.contains_key("mustmatch-output")
                 || directives.contains_key("output");
+            let is_file_fixture = directives.contains_key("file");
 
-            if is_executable_language || is_console_mustmatch || is_output_expectation {
+            if is_executable_language
+                || is_console_mustmatch
+                || is_output_expectation
+                || is_file_fixture
+            {
                 let mut content = code_lines.join("\n");
                 if !content.is_empty() {
                     content.push('\n');
@@ -344,6 +349,19 @@ result = {"input": row.input, "output": row.input * 2}
         let parsed = parse_markdown(source);
         assert_eq!(parsed.blocks.len(), 1);
         assert_eq!(parsed.blocks[0].language, "bash");
+    }
+
+    #[test]
+    fn retains_file_fixture_blocks_in_text_languages() {
+        let source = "## Fixture\n\n```json file=config.json\n{\"status\":\"ready\"}\n```\n";
+        let parsed = parse_markdown(source);
+        assert_eq!(parsed.blocks.len(), 1);
+        assert_eq!(parsed.blocks[0].language, "json");
+        assert_eq!(
+            parsed.blocks[0].directives.get("file").map(String::as_str),
+            Some("config.json")
+        );
+        assert_eq!(parsed.blocks[0].content, "{\"status\":\"ready\"}\n");
     }
 
     #[test]
