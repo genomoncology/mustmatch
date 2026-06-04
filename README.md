@@ -60,6 +60,7 @@ The full, runnable guide lives in [`spec/`](spec/), one feature per file:
 | Linting specs | `spec/12-lint.md` |
 | Verifying a proof matrix | `spec/13-verify-matrix.md` |
 | Authoring guide & runner self-test | `spec/14-authoring-and-self-test.md` |
+| Release smoke gate | `spec/15-release-smoke.md` |
 
 ## Quality commands
 
@@ -76,11 +77,14 @@ backticked file references resolve inside the repo.
 make lint
 make test
 make spec
+make smoke
 ```
 
 `make spec` builds the binary and runs both the runner and every inline
 assertion against the build under test, so CI always exercises the current
-source.
+source. `make smoke` builds or selects a wheel, installs it into an isolated
+environment, and runs the package smoke document through the installed
+`mustmatch` entry point before release.
 
 ## License
 

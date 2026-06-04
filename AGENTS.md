@@ -24,6 +24,8 @@ by the Rust binary.
 - `make test` — unit tests: `cargo test`.
 - `make spec` — outside-in behavioral contract: `mustmatch test spec/` through the
   Rust binary.
+- `make smoke` — release/package gate: install the wheel into an isolated
+  environment and run the installed-binary smoke document.
 
 ## Layout & conventions
 
@@ -31,6 +33,7 @@ by the Rust binary.
 - `crates/mustmatch-cli` — standalone Rust `mustmatch` binary (`match` / `test` /
   `lint` / `verify-matrix`).
 - `spec/` — the behavioral contract.
+- `tests/smoke/` — installed-wheel release smoke input.
 - Public repo, published to PyPI (MIT): no domain content, no absolute local paths.
 
 ## How work arrives
