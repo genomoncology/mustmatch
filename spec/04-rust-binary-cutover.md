@@ -9,9 +9,8 @@ The Rust binary owns the public command name and documents the subcommands users
 invoke from terminals and automation.
 
 ```bash
-cargo run -q -p mustmatch-cli --bin mustmatch -- --help | mustmatch like "mustmatch - Assert stdin output matches expected value or run Markdown docs.
-Usage:
-    command | mustmatch [not] [like]
+cargo run -q -p mustmatch-cli --bin mustmatch -- --help | mustmatch like "Usage:
+    command | mustmatch
     mustmatch test
     mustmatch verify-matrix
     mustmatch lint"
@@ -26,13 +25,23 @@ without going through pytest or the transitional binary name.
 cargo run -q -p mustmatch-cli --bin mustmatch -- test -v ../spec/01-cli-assertions.md | mustmatch like "PASS Exact match
 PASS Substring match with `like`
 PASS Regex match
-3 passed"
+passed"
+```
+
+## Spec gate invokes the Rust runner
+
+`make spec` dogfoods the Rust runner directly. A dry run of the gate shows the
+Cargo-built public binary running the repository specs.
+
+```bash
+make -n -C .. spec | mustmatch like "cargo run
+--bin mustmatch
+test spec/"
 ```
 
 ## Spec gate avoids the Python runner
 
-`make spec` dogfoods the Rust runner directly. A dry run of the gate should not
-show Python package or pytest runner plumbing.
+The spec gate no longer shells through Python package or pytest runner plumbing.
 
 ```bash
 make -n -C .. spec | mustmatch not like "uv run
@@ -48,6 +57,29 @@ of the release graph.
 ```bash
 cargo metadata --no-deps --format-version 1 | mustmatch not like "mustmatch-python
 pyo3"
+```
+
+## PyPI packaging points at the Rust binary
+
+The PyPI build metadata keeps the existing install path while building the Rust
+command-line binary instead of a Python extension module.
+
+```bash
+awk '/manifest-path|bindings/ { print }' ../pyproject.toml | mustmatch like "manifest-path = \"crates/mustmatch-cli/Cargo.toml\"
+bindings = \"bin\""
+```
+
+## PyPI packaging has no Python runtime entry points
+
+The wheel metadata does not expose the deleted Python CLI or pytest plugin as
+runtime entry points.
+
+```bash
+awk '/mustmatch[.]cli|mustmatch[.]pytest_plugin|module-name|python-source|crates[/]mustmatch-python/ { print }' ../pyproject.toml | mustmatch not like "mustmatch.cli
+mustmatch.pytest_plugin
+module-name
+python-source
+crates/mustmatch-python"
 ```
 
 ## Runtime Python package paths are absent
