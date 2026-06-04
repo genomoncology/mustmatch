@@ -369,7 +369,6 @@ impl MarkdownRunner {
             || is_run_block(block)
             || is_output_block(block)
             || block.language == "bash"
-            || block.language == "python"
     }
 
     fn register_context_uses(&mut self, cases: &[Case]) {
@@ -433,9 +432,6 @@ impl MarkdownRunner {
             }
             self.run_bash_block(block, row)?;
             return Ok(BlockOutcome::Passed);
-        }
-        if block.language == "python" {
-            return Ok(BlockOutcome::Skipped);
         }
         Ok(BlockOutcome::Skipped)
     }

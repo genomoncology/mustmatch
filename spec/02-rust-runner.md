@@ -1,10 +1,10 @@
 # Rust Documentation Runner
 
-`mustmatch test` runs executable Markdown without going through pytest. This contract invokes the Rust binary through Cargo and asks it to run generic documentation fixtures.
+`mustmatch test` runs executable Markdown through the Rust CLI. This contract invokes the binary through Cargo and asks it to run generic documentation fixtures.
 
 ## Run a documentation fixture
 
-A documentation directory can mix bash assertion blocks, console examples, named runs, expected exits, contexts, and unsupported Python blocks. The Rust runner reports the supported blocks as passing and makes unsupported Python blocks visible as skips.
+A documentation directory can mix bash assertion blocks, console examples, named runs, expected exits, contexts, and ordinary documentation-only fences. The runner reports supported blocks as passing and leaves documentation-only fences out of the executed case list.
 
 ```bash
 cargo run -q -p mustmatch-cli --bin mustmatch -- test -v ../tests/fixtures/rust-runner | mustmatch like "PASS Bash assertion blocks run
@@ -13,9 +13,22 @@ PASS Named runs reuse JSON fields
 PASS Named runs honor dependencies
 PASS Expected exits and stderr streams
 PASS Contexts hide setup
-SKIP Unsupported Python blocks are visible
-passed
+passed"
+```
+
+The same happy-path fixture includes a documentation-only fenced example. Runnable examples appear as passes; documentation-only examples do not appear as skipped cases in the user-visible output.
+
+```bash
+cargo run -q -p mustmatch-cli --bin mustmatch -- test -v ../tests/fixtures/rust-runner | mustmatch not like "SKIP
 skipped"
+```
+
+## Tracked Markdown describes current behavior
+
+Release docs, specs, and fixtures describe the current CLI directly. A tracked Markdown grep should not find old release-archaeology terms.
+
+```bash
+git -C .. grep -inE 'py''thon|py''test|pyo''3|remo''ved|cut''over|trans''itional|mig''rat' -- '*.md' spec/ | mustmatch ""
 ```
 
 ## Run a pyproject fallback fixture

@@ -187,7 +187,7 @@ pub fn parse_markdown(content: &str) -> ParseResult {
                 language = "bash".to_string();
             }
 
-            let is_executable_language = language == "bash" || language == "python";
+            let is_executable_language = language == "bash";
             let is_console_mustmatch =
                 language == "console" && directives.contains_key("mustmatch");
             let is_output_expectation = directives.contains_key("expect")
@@ -302,8 +302,8 @@ mod tests {
 |-------|--------|
 | 2     | 4      |
 
-```python each_row timeout=5
-result = {"input": row.input, "output": row.input * 2}
+```bash each_row timeout=5
+printf '{{input}} -> {{output}}\n'
 ```
 "#;
 
@@ -312,7 +312,7 @@ result = {"input": row.input, "output": row.input * 2}
         assert_eq!(parsed.tables.len(), 1);
 
         let block = &parsed.blocks[0];
-        assert_eq!(block.language, "python");
+        assert_eq!(block.language, "bash");
         assert_eq!(
             block.context,
             vec!["Root".to_string(), "Section A".to_string()]
