@@ -1,6 +1,6 @@
 # Rust Runner Table Scenarios And Outlines
 
-Bash table scenarios let fixture rows drive executable documentation without a Python block. Bare `{{column}}` placeholders come from the current table row, while dotted `{{run-id.field}}` placeholders still come from named run JSON output.
+Bash table scenarios let fixture rows drive executable documentation. Bare `{{column}}` placeholders come from the current table row, while dotted `{{run-id.field}}` placeholders still come from named run JSON output.
 
 ## Bash each_row substitutes table columns
 

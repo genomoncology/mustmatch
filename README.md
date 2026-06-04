@@ -4,7 +4,7 @@
 
 ## Install
 
-PyPI packages ship the Rust binary so existing tool installs keep producing a `mustmatch` command:
+Install the package to get the `mustmatch` command:
 
 ```bash skip
 uv tool install mustmatch

@@ -1,6 +1,6 @@
 # Rust Runner Fixture
 
-This fixture is intentionally generic. It gives the Rust documentation runner one small example of each block class that ticket 006 supports.
+This fixture is intentionally generic. It gives the Rust documentation runner one small example of each supported block class.
 
 ## Bash assertion blocks run
 
@@ -80,10 +80,11 @@ helper=ready
 DOC_VALUE=example
 ```
 
-## Unsupported Python blocks are visible
+## Static reference text stays as documentation
 
-Python execution is intentionally not part of the Rust runner. During the transition, unsupported Python blocks are reported as skipped instead of silently disappearing.
+A plain fenced example can show reference data for readers without becoming an executed case.
 
-```python
-print("rust runner reports this block as unsupported")
+```text
+resource_id: widget-123
+status: active
 ```

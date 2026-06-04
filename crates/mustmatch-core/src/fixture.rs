@@ -288,8 +288,8 @@ mod tests {
 |-------|--------|
 | 2     | 4      |
 
-```python
-print("ok")
+```bash
+printf 'ok\n' | mustmatch like ok
 ```
 "#;
 
