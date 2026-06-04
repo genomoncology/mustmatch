@@ -1,13 +1,19 @@
 # mustmatch
 
-`mustmatch` provides executable documentation tools for command-line projects. It asserts CLI output in shell pipelines, runs Markdown examples as documentation tests, and supports documentation-first named runs where commands and expected output are separate readable blocks. The Rust core handles parsing, normalization, comparison, the transitional `mustmatch-cli test` documentation runner, and Rust implementations of the static `lint` and `verify-matrix` quality commands while Python keeps the installed `mustmatch` command.
+`mustmatch` is a single Rust CLI for assertion pipelines and executable Markdown specs. It compares stdin against expected text/JSON/regex contracts, runs documentation-first Markdown examples with `mustmatch test`, and provides static quality commands for spec linting and proof-matrix references.
 
 ## Install
 
-Use a normal Python virtual environment and install with pip. This snippet is documentation-only and intentionally skipped during executable doc runs.
+PyPI packages ship the Rust binary so existing tool installs keep producing a `mustmatch` command:
 
 ```bash skip
-pip install mustmatch
+uv tool install mustmatch
+```
+
+For repo-local development, run the binary through Cargo:
+
+```bash
+cargo run -q -p mustmatch-cli --bin mustmatch -- --help
 ```
 
 ## CLI Assertions
@@ -23,7 +29,13 @@ echo '{"status":"ok","count":42}' | mustmatch like '{"status":"ok"}'
 
 ## Executable Markdown
 
-Markdown documents can be run directly with `mustmatch test` or collected by pytest. Prefer documentation-first examples: show the command a user would type and the output they should expect.
+Markdown documents run directly with the Rust binary:
+
+```bash
+mustmatch test spec/
+```
+
+Prefer documentation-first examples: show the command a user would type and the output they should expect.
 
 ````markdown
 ```console mustmatch
@@ -46,100 +58,26 @@ mytool --json version
 ```
 ````
 
-Later commands can reuse JSON fields from earlier runs without visible `jq`, Python one-liners, or temporary files:
-
-````markdown
-```bash run id=detail uses=version-json
-mytool get {{version-json.name}}
-```
-````
-
-Tables can also drive per-row bash scenarios with `each_row`. Bare `{{column}}` placeholders come from the current row. Embedded `file=<relative/path>` blocks can show input files directly and materialize them before later Rust-runner bash blocks in the same section. Rust-runner lifecycle hooks can keep suite, file, and context setup/teardown in configuration instead of Markdown.
-
-````markdown
-# Math Behavior
-
-## Double Values
-
-| input | output | str:label |
-|-------|--------|-----------|
-| 2     | 4      | double-two |
-
-```bash each_row="Double Values"
-expr {{input}} '*' 2 | mustmatch like '{{output}}'
-```
-````
-
-Run docs directly with the installed Python command, or exercise a Rust-compatible document with the transitional `mustmatch-cli test` runner:
-
-```bash
-uv sync --extra dev --reinstall-package mustmatch
-uv run mustmatch test docs/ -v
-cargo run -q -p mustmatch-cli -- test docs/13-standalone-doc-runner.md -v
-```
-
-Or collect them through pytest when a project already uses pytest:
-
-```bash
-uv run python -m pytest docs/ -v
-```
-
-## Principles for Good Executable Docs
-
-Good executable docs should teach first and test second:
-
-1. Documentation first, test second — a reader should learn the product without noticing the harness.
-2. Show the real user command, not extraction plumbing.
-3. Hide setup in contexts or fixtures, but name the context clearly.
-4. Assert meaningful multiline fragments or JSON subsets instead of one-word smoke checks.
-5. Keep positive behavior assertions separate from leak and safety assertions.
-6. Test stable contracts, not incidental formatting trivia.
-7. Keep framework examples generic; put domain-specific examples in the domain project.
-8. Make live dependencies explicit: deterministic by default, clearly required or opt-in when live.
-9. Keep one behavior per section.
-10. Prefer progressive disclosure: common path first, advanced harness features later.
-
-See `docs/14-good-executable-docs.md` for the full guidance.
+Tables can drive per-row bash scenarios with `each_row`, embedded `file=<relative/path>` blocks can materialize fixtures, and lifecycle hooks can keep suite, file, and context setup/teardown in configuration instead of Markdown.
 
 ## Quality Checks
 
-Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint markdown specs without executing their fences. The transitional Rust binary exposes the same quality checks as `mustmatch-cli verify-matrix` and `mustmatch-cli lint`. Local gates also run the Rust toolchain: `make lint` includes `cargo fmt --check` and `cargo clippy -- -D warnings`; `make test` includes `cargo test`.
+Use `mustmatch verify-matrix` to confirm proof-matrix references stay inside the repo, and `mustmatch lint` to lint Markdown specs without executing their fences.
 
 - `mustmatch verify-matrix .march/design-final.md --repo-root .`
-- `mustmatch lint docs/02-cli-assertions.md`
+- `mustmatch lint spec/01-cli-assertions.md`
 
-## Documentation Map
-
-The executable documentation is in `docs/`:
-
-1. `docs/01-overview.md`
-2. `docs/02-cli-assertions.md`
-3. `docs/03-executable-documents.md`
-4. `docs/04-fixtures-and-tables.md`
-5. `docs/05-directives.md`
-6. `docs/06-comparison-modes.md`
-7. `docs/07-normalization.md`
-8. `docs/08-configuration.md`
-9. `docs/09-examples.md`
-10. `docs/10-verify-matrix.md`
-11. `docs/11-lint.md`
-12. `docs/12-named-runs.md`
-13. `docs/13-standalone-doc-runner.md`
-14. `docs/14-good-executable-docs.md`
-15. `docs/15-embedded-files.md`
-16. `docs/16-lifecycle-hooks.md`
-
-## CLI Bench Plan
-
-Benchmark commands are tracked in `bench/clibench-commands.txt` so Python and Rust paths can be compared with the same tag set.
+The repo gates are Rust-only:
 
 ```bash
-# Python baseline
-CLIBENCH_PROJECT=mustmatch-cli uv run --script /home/ian/workspace/.codex/skills/clibench/clibench.py batch bench/clibench-commands.txt
-
-# Compare prefixes
-CLIBENCH_PROJECT=mustmatch-cli uv run --script /home/ian/workspace/.codex/skills/clibench/clibench.py compare python rust
+make lint
+make test
+make spec
 ```
+
+## Behavioral Contract
+
+The executable contract lives in `spec/*.md` and is run by `make spec` through the Rust binary. Unit tests live under the Rust crates and run with `cargo test` via `make test`.
 
 ## License
 

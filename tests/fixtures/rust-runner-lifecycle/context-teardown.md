@@ -8,7 +8,7 @@ The context block reads setup state and writes a body sentinel in the context cw
 
 ```bash context=cleanup
 printf 'context body ran\n' > context-body.txt
-cat context-setup.txt | mustmatch-cli like "context=ready"
+cat context-setup.txt | mustmatch like "context=ready"
 ```
 
 ## Context teardown removes body sentinel
@@ -16,5 +16,5 @@ cat context-setup.txt | mustmatch-cli like "context=ready"
 After the last `cleanup` context block, the teardown hook removes the body sentinel before ordinary no-context blocks continue.
 
 ```bash
-ls context-body.txt 2>/dev/null | mustmatch-cli not like "context-body.txt"
+ls context-body.txt 2>/dev/null | mustmatch not like "context-body.txt"
 ```

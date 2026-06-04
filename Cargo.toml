@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "crates/mustmatch-core",
-  "crates/mustmatch-python",
   "crates/mustmatch-cli",
 ]
 resolver = "2"

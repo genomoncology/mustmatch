@@ -7,7 +7,7 @@ This fixture shows that lifecycle hooks declared under `[tool.mustmatch]` behave
 The suite setup hook from `pyproject.toml` runs before the first document block.
 
 ```bash
-cat suite-setup.txt | mustmatch-cli like "suite=pyproject"
+cat suite-setup.txt | mustmatch like "suite=pyproject"
 ```
 
 ## Pyproject file setup runs
@@ -15,7 +15,7 @@ cat suite-setup.txt | mustmatch-cli like "suite=pyproject"
 The file setup hook from `pyproject.toml` runs before blocks in this Markdown document.
 
 ```bash
-cat file-setup.txt | mustmatch-cli like "file=pyproject"
+cat file-setup.txt | mustmatch like "file=pyproject"
 ```
 
 ## Pyproject context setup runs
@@ -23,5 +23,5 @@ cat file-setup.txt | mustmatch-cli like "file=pyproject"
 The context setup hook from `pyproject.toml` still prepares context-local state.
 
 ```bash context=ephemeral
-cat context-setup.txt | mustmatch-cli like "context=pyproject"
+cat context-setup.txt | mustmatch like "context=pyproject"
 ```

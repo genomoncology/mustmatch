@@ -14,7 +14,7 @@ use mustmatch_core::{
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const HELP: &str = "mustmatch-cli - Assert stdin output matches expected value or run Markdown docs.\n\nUsage:\n    command | mustmatch-cli [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n    mustmatch-cli test [OPTIONS] [PATHS...]\n    mustmatch-cli verify-matrix [OPTIONS] DESIGN --repo-root ROOT\n    mustmatch-cli lint [OPTIONS] SPEC\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n\nCommands:\n    test                 Run code blocks in markdown files as tests\n    verify-matrix        Verify proof-matrix file references resolve inside a repo\n    lint                 Lint markdown spec assertions without executing them\n";
+const HELP: &str = "mustmatch - Assert stdin output matches expected value or run Markdown docs.\n\nUsage:\n    command | mustmatch [not] [like] [-i|--ignore-case] [-q|--quiet] [--] EXPECTED\n    mustmatch test [OPTIONS] [PATHS...]\n    mustmatch verify-matrix [OPTIONS] DESIGN --repo-root ROOT\n    mustmatch lint [OPTIONS] SPEC\n\nOptions:\n    -i, --ignore-case    Case-insensitive comparison\n    -q, --quiet          Suppress mismatch output\n    -h, --help           Show this help\n    --version            Show version\n\nCommands:\n    test                 Run code blocks in markdown files as tests\n    verify-matrix        Verify proof-matrix file references resolve inside a repo\n    lint                 Lint markdown spec assertions without executing them\n";
 
 #[derive(Debug, Clone)]
 struct MatchArgs {
@@ -47,7 +47,7 @@ fn parse_match_args(args: &[String]) -> Result<MatchArgs, i32> {
             println!("{HELP}");
             return Err(0);
         } else if arg == "--version" {
-            println!("mustmatch-cli {VERSION}");
+            println!("mustmatch {VERSION}");
             return Err(0);
         } else if arg == "--" {
             expected_separator = Some(positional.len());
@@ -247,7 +247,7 @@ fn main() {
             std::process::exit(0);
         }
         if args[0] == "--version" {
-            println!("mustmatch-cli {VERSION}");
+            println!("mustmatch {VERSION}");
             std::process::exit(0);
         }
     }

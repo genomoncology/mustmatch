@@ -18,11 +18,6 @@ classifiers = [
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Testing",
   "Topic :: Documentation",
 ]
@@ -32,68 +27,9 @@ dependencies = []
 Homepage = "https://github.com/genomoncology/mustmatch"
 Repository = "https://github.com/genomoncology/mustmatch"
 
-[project.scripts]
-mustmatch = "mustmatch.cli:cli"
-
-[project.entry-points."pytest11"]
-mustmatch = "mustmatch.pytest_plugin"
-
-[project.optional-dependencies]
-dev = [
-  "pytest>=7.0",
-  "pytest-cov>=4.0",
-  "ruff>=0.1.0",
-]
-
 [tool.maturin]
-manifest-path = "crates/mustmatch-python/Cargo.toml"
-module-name = "mustmatch._core"
-python-source = "src"
+manifest-path = "crates/mustmatch-cli/Cargo.toml"
+bindings = "bin"
 
 [tool.mustmatch]
 auto_imports = []
-
-[tool.pytest.ini_options]
-addopts = ["-p", "no:mustmatch", "-p", "mustmatch.pytest_plugin"]
-testpaths = ["docs", "tests"]
-pythonpath = ["src"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-
-[tool.ruff]
-line-length = 88
-target-version = "py310"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "W"]
-
-[tool.coverage.run]
-source = ["mustmatch"]
-branch = true
-parallel = true
-omit = [
-  "*/src/mustmatch/__main__.py",
-  "*/src/mustmatch/version.py",
-  "*/src/mustmatch/pytest_plugin.py",
-  "*/src/mustmatch/cli.py",
-]
-
-[tool.coverage.paths]
-mustmatch = [
-  "src/mustmatch",
-  "/tmp/tmp*/mustmatch",
-]
-
-[tool.coverage.report]
-fail_under = 45
-omit = [
-  "*/src/mustmatch/__main__.py",
-  "*/src/mustmatch/version.py",
-  "*/src/mustmatch/pytest_plugin.py",
-  "*/src/mustmatch/cli.py",
-]
-exclude_lines = [
-  "pragma: no cover",
-  "if __name__ == .__main__.:",
-]

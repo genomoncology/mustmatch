@@ -1,53 +1,32 @@
 # Suppress directory messages
 MAKEFLAGS += --no-print-directory
 
-.PHONY: check lint spec build test coverage clean help publish
-
-check: lint
+.PHONY: lint spec build test clean help publish
 
 lint:
 	@echo "Running lint..."
-	@uv sync --extra dev
-	@uv run ruff check --select I --fix src
-	@uv run ruff check src
 	@cargo fmt --check
 	@cargo clippy -- -D warnings
 	@echo "✓ Lint passed"
 
 spec:
 	@echo "Running specs..."
-	@uv sync --extra dev --reinstall-package mustmatch
-	@uv run mustmatch test spec/
+	@cargo run -q -p mustmatch-cli --bin mustmatch -- test spec/
 	@echo "✓ Specs passed"
 
 build:
 	@echo "Building mustmatch..."
-	@uv sync --extra dev
 	@uv build
 	@echo "✓ Build complete"
 
 test:
 	@echo "Running tests..."
-	@uv sync --extra dev --reinstall-package mustmatch
-	@uv run python -m pytest docs/ README.md tests -q --ignore=tests/fixtures
 	@cargo test
 	@echo "✓ Tests passed"
 
-coverage:
-	@echo "Running coverage..."
-	@uv sync --extra dev --reinstall-package mustmatch
-	@rm -f .coverage .coverage.* docs/.coverage docs/.coverage.*
-	@COVERAGE_PROCESS_START="$(shell pwd)/pyproject.toml" COVERAGE_FILE="$(shell pwd)/.coverage" uv run python -m coverage run -m pytest docs/ README.md -q
-	@uv run python -m coverage combine --quiet . docs
-	@uv run python -m coverage report
-	@uv run python -m coverage html
-	@uv run python -m coverage xml
-	@echo "✓ Coverage: htmlcov/index.html"
-
 clean:
 	@rm -rf build dist *.egg-info
-	@rm -rf .coverage .coverage.* docs/.coverage docs/.coverage.* htmlcov coverage.xml
-	@rm -rf .pytest_cache .ruff_cache
+	@rm -rf .coverage .coverage.* htmlcov coverage.xml
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete
 	@echo "✓ Cleaned"
@@ -56,10 +35,10 @@ help:
 	@echo "mustmatch - CLI output assertion tool"
 	@echo ""
 	@echo "Targets:"
-	@echo "  check      Linting and code checks"
+	@echo "  lint       Run Rust lint gates"
+	@echo "  spec       Run executable specs"
 	@echo "  build      Build package"
-	@echo "  test       Run all tests"
-	@echo "  coverage   Generate coverage report"
+	@echo "  test       Run Rust tests"
 	@echo "  clean      Remove build artifacts"
 	@echo "  publish    Build and publish to PyPI"
 

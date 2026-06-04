@@ -15,7 +15,7 @@ static SHORT_LIKE_RE: LazyLock<Regex> = LazyLock::new(|| {
 static FENCE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^```(?P<info>.*)$").expect("valid regex"));
 
-pub(crate) const HELP: &str = "mustmatch-cli lint - Lint markdown spec assertions without executing them.\n\nUsage:\n    mustmatch-cli lint [OPTIONS] SPEC\n\nArguments:\n    SPEC                 Markdown spec file to inspect\n\nOptions:\n    --min-like-len N     Flag mustmatch like literals shorter than this length (default: 10)\n    --json               Emit structured JSON instead of human-readable lines\n    -h, --help           Show this help";
+pub(crate) const HELP: &str = "mustmatch lint - Lint markdown spec assertions without executing them.\n\nUsage:\n    mustmatch lint [OPTIONS] SPEC\n\nArguments:\n    SPEC                 Markdown spec file to inspect\n\nOptions:\n    --min-like-len N     Flag mustmatch like literals shorter than this length (default: 10)\n    --json               Emit structured JSON instead of human-readable lines\n    -h, --help           Show this help";
 
 #[derive(Debug, Clone)]
 pub(crate) struct LintArgs {

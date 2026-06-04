@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 
 [[bin]]
-name = "mustmatch-cli"
+name = "mustmatch"
 path = "src/main.rs"
 
 [dependencies]

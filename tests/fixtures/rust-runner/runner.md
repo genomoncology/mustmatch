@@ -7,7 +7,7 @@ This fixture is intentionally generic. It gives the Rust documentation runner on
 A bash block can pipe command output into the assertion binary.
 
 ```bash
-printf 'Runner status: active\n' | mustmatch-cli like "Runner status: active"
+printf 'Runner status: active\n' | mustmatch like "Runner status: active"
 ```
 
 ## Console examples execute visible commands
