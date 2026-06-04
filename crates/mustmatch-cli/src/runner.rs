@@ -598,10 +598,7 @@ impl MarkdownRunner {
     }
 
     fn default_cwd(&self) -> PathBuf {
-        self.path
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf()
+        doc_dir(&self.path)
     }
 
     fn section_root_for(&mut self, block: &Block) -> Result<PathBuf, String> {
@@ -823,6 +820,16 @@ fn fixture_relative_path(block: &Block) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Directory a markdown document's blocks run from. A bare filename
+/// (`demo.md`) has an empty-string parent, not `None`, so treat any empty
+/// parent as `.` — otherwise blocks spawn with an empty cwd and fail to start.
+fn doc_dir(path: &Path) -> PathBuf {
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+        _ => PathBuf::from("."),
+    }
+}
+
 fn section_key(block: &Block) -> String {
     match block.context_lines.as_slice() {
         [_, h2, ..] => format!("section:{h2}"),
@@ -967,7 +974,17 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::{MarkdownRunner, TestArgs, run};
+    use super::{MarkdownRunner, TestArgs, doc_dir, run};
+
+    #[test]
+    fn doc_dir_treats_bare_filename_as_dot() {
+        use std::path::PathBuf;
+        // A bare filename's parent is Some("") — must resolve to "." so blocks
+        // spawn with a valid cwd (`mustmatch test README.md`).
+        assert_eq!(doc_dir(Path::new("README.md")), PathBuf::from("."));
+        assert_eq!(doc_dir(Path::new("spec/doc.md")), PathBuf::from("spec"));
+        assert_eq!(doc_dir(Path::new("/abs/doc.md")), PathBuf::from("/abs"));
+    }
 
     fn write_markdown(dir: &Path, content: &str) -> std::path::PathBuf {
         let path = dir.join("doc.md");

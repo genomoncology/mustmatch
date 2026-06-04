@@ -1,0 +1,12 @@
+[suite]
+setup = ["printf 'suite=ready\n' > {root}/suite-setup.txt"]
+teardown = ["rm -f {root}/suite-setup.txt"]
+
+[file]
+setup = ["printf 'file=ready\n' > {root}/file-setup.txt"]
+teardown = ["rm -f {root}/file-setup.txt"]
+
+[contexts.cleanup]
+cwd = "."
+setup = ["printf 'context=ready\n' > {root}/context-setup.txt"]
+teardown = ["rm -f {root}/context-setup.txt {root}/context-body.txt"]

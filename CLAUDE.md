@@ -31,4 +31,4 @@ mustmatch/
 
 ## Version
 
-Current: **0.0.4**
+Current: **0.1.0**

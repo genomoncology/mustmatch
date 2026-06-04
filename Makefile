@@ -11,7 +11,8 @@ lint:
 
 spec:
 	@echo "Running specs..."
-	@cargo run -q -p mustmatch-cli --bin mustmatch -- test spec/
+	@cargo build -q -p mustmatch-cli --bin mustmatch
+	@PATH="$(CURDIR)/target/debug:$$PATH" ./target/debug/mustmatch test spec/ README.md
 	@echo "✓ Specs passed"
 
 build:

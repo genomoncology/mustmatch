@@ -1,0 +1,12 @@
+[contexts.demo]
+cwd = "{tmp}"
+required_env = ["DOC_VALUE"]
+path = ["{tmp}"]
+setup = [
+  "printf 'state=ready\n' > {tmp}/state.txt",
+  "printf '#!/bin/sh\necho helper-ran\n' > {tmp}/greet",
+  "chmod +x {tmp}/greet",
+]
+
+[contexts.demo.env]
+DOC_VALUE = "example"
