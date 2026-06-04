@@ -1,11 +1,11 @@
 [package]
 name = "mustmatch-cli"
-version = "0.0.2"
+version = "0.0.4"
 edition = "2024"
 license = "MIT"
 
 [[bin]]
-name = "mustmatch-cli"
+name = "mustmatch"
 path = "src/main.rs"
 
 [dependencies]

@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "crates/mustmatch-core",
-  "crates/mustmatch-python",
   "crates/mustmatch-cli",
 ]
 resolver = "2"
@@ -9,7 +8,7 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.0.2"
+version = "0.0.4"
 
 [workspace.dependencies]
 mustmatch-core = { path = "crates/mustmatch-core" }

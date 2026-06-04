@@ -9,5 +9,5 @@ The document body creates the files that suite and file teardown remove after th
 ```bash
 printf 'suite body ran\n' > suite-body.txt
 printf 'file body ran\n' > file-body.txt
-printf 'teardown sentinels written\n' | mustmatch-cli like "teardown sentinels written"
+printf 'teardown sentinels written\n' | mustmatch like "teardown sentinels written"
 ```

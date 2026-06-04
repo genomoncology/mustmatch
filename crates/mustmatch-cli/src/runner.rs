@@ -259,7 +259,7 @@ fn ensure_suite_started(
     Ok(())
 }
 
-const TEST_HELP: &str = "mustmatch-cli test - Run code blocks in markdown files as tests.\n\nUsage:\n    mustmatch-cli test [OPTIONS] [PATHS...]\n\nOptions:\n    -v, --verbose        Show each block result\n    -q, --quiet          Suppress summary and failure diagnostics\n    -x, --fail-fast      Stop after the first failure\n    --timeout SECONDS    Per-block timeout (default: 30)\n    --lang LANG          Language filter: all or bash\n    -h, --help           Show this help";
+const TEST_HELP: &str = "mustmatch test - Run code blocks in markdown files as tests.\n\nUsage:\n    mustmatch test [OPTIONS] [PATHS...]\n\nOptions:\n    -v, --verbose        Show each block result\n    -q, --quiet          Suppress summary and failure diagnostics\n    -x, --fail-fast      Stop after the first failure\n    --timeout SECONDS    Per-block timeout (default: 30)\n    --lang LANG          Language filter: all or bash\n    -h, --help           Show this help";
 
 #[derive(Clone)]
 struct Case {

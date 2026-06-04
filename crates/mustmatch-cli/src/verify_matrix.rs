@@ -27,7 +27,7 @@ const REPO_PATH_PREFIXES: &[&str] = &[
     ".march/", "bench/", "crates/", "docs/", "lib/", "scripts/", "spec/", "src/", "test/", "tests/",
 ];
 
-pub(crate) const HELP: &str = "mustmatch-cli verify-matrix - Verify proof-matrix file references resolve inside a repo.\n\nUsage:\n    mustmatch-cli verify-matrix [OPTIONS] DESIGN --repo-root ROOT\n\nArguments:\n    DESIGN               Markdown design file to inspect\n\nOptions:\n    --repo-root ROOT     Repo root used to resolve backticked file references\n    --json               Emit structured JSON instead of human-readable lines\n    -h, --help           Show this help";
+pub(crate) const HELP: &str = "mustmatch verify-matrix - Verify proof-matrix file references resolve inside a repo.\n\nUsage:\n    mustmatch verify-matrix [OPTIONS] DESIGN --repo-root ROOT\n\nArguments:\n    DESIGN               Markdown design file to inspect\n\nOptions:\n    --repo-root ROOT     Repo root used to resolve backticked file references\n    --json               Emit structured JSON instead of human-readable lines\n    -h, --help           Show this help";
 
 #[derive(Debug, Clone)]
 pub(crate) struct VerifyMatrixArgs {
