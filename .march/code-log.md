@@ -3,69 +3,71 @@
 ## Execution Order
 1. Orientation, rebase, design/contract review, and red-state confirmation — done
 2. Execution plan, precondition checks, and prior-art search — done
-3. Minimal docs/fixture/spec cleanup named by design — done
-4. Minimal parser/runner and internal unit-test update — done
-5. Gates, focused profile, hygiene grep, and diff audit — done
+3. Implement smoke document, Makefile target/help, release workflow gate, and docs surfaces — done
+4. Run smoke/spec/focused gates and fix minimal failures — done
+5. Hygiene, over-edit audit, final code-log proof — done
 
 ## Resume State
-- Last completed batch: Gates, focused profile, hygiene grep, and diff audit
-- Files edited so far: `.march/code-log.md`, `.march/verify-log.md`, `CHANGELOG.md`, `README.md`, the design-named deleted spec, `tests/fixtures/rust-runner/runner.md`, `tests/fixtures/rust-runner/table-scenarios.md`, `crates/mustmatch-core/src/parser.rs`, `crates/mustmatch-core/src/fixture.rs`, `crates/mustmatch-cli/src/runner.rs`
-- Existing partial edits: preserve current minimal edits
-- Tests passing: yes — `make lint`, `make test`, and `make spec` are green
+- Last completed batch: Hygiene, over-edit audit, final code-log proof
+- Files edited so far: `.march/code-log.md`, `tests/smoke/smoke.md`, `Makefile`, `.github/workflows/release.yml`, `AGENTS.md`, `README.md`
+- Existing partial edits: preserve current implementation edits; all non-`.march` implementation files are staged so the landed `git ls-files` assertion reflects tracked state
+- Tests passing: yes — `make lint`, `make test` (focused), `make spec`, default `make smoke`, and `SMOKE_WHEEL=... make smoke` are green
 - Next concrete action: final response
 - Current blocker: none
 
 ## Out of Scope
-- Adding or relaxing shipped-contract assertions beyond deleting the design-named obsolete spec file
-- Touching build tooling identifiers explicitly preserved by the design
-- New features, flags, validation, logging, helper modules, or broad refactors
-- Service or credential work; the contract file has no service-lane entries
+- Adding, relaxing, or deleting shipped-contract assertions
+- Changing Rust CLI runtime behavior; design calls for release/package infrastructure only
+- Running the full `spec/` suite from an installed wheel
+- Adding credentials, secrets, service integrations, or a broader release matrix
+- Refactoring unrelated Makefile or workflow structure beyond the smoke gate path
 
 ## Adjacent Fixes
 - (empty)
 
 ## Commands and Changes
 - `checkpoint status` — initial checklist read
-- Read `AGENTS.md` and `CLAUDE.md`; shipped contract specs are `spec/*.md`
+- Read `AGENTS.md` and `CLAUDE.md`; behavioral specs are `spec/*.md`
+- Read `.march/ticket.md`, `.march/design-final.md`, `.march/contract-red-check.json`, and stale seed `.march/code-log.md`
 - `git fetch origin main && git rebase origin/main` — branch already up to date
-- Read `.march/design-final.md`, `.march/contract-red-check.json`, `.march/ticket.md`, and seed `.march/code-log.md`
-- Read mustmatch skill guidance for executable documentation discipline
-- `spec-only` — unavailable on PATH; profile config maps it to `make spec`
-- `make spec` — red as expected before edits: `spec/02-rust-runner.md::Run a documentation fixture` and `spec/02-rust-runner.md::Tracked Markdown describes current behavior` failed; remaining spec cases passed
-- Preconditions checked: `cargo`, `uv`, `git`, `spec/02-rust-runner.md`, rust-runner fixture, README, and changelog are present; no service credentials are required
-- Prior-art search found existing selection in `parse_markdown`, case inclusion in `MarkdownRunner::include_block`, explicit directive skip handling in `run_block`, and parser/unit tests on the same path; no new helper/module needed
-- Edited current-state docs and fixtures: clean changelog capabilities entry, direct install wording, neutral documentation-only fixture fence, and the design-named spec file deletion
-- Cleaned tracked stage notes so the tracked Markdown hygiene assertion evaluates the repo rather than stale March notes
-- Updated parser selection to collect only supported runner block classes; updated runner inclusion to drop the language-named branch while leaving explicit skip directive and non-asserting bash behavior intact
-- Updated internal unit fixtures on the changed parse path from an ordinary language fence to supported shell examples
-- Hygiene grep with the landed term pattern over tracked Markdown/spec surfaces — no output after edits
+- `spec-only` — unavailable on PATH; `.march/validation-profiles.toml` maps `spec-only` to `make spec`
+- `make spec` — red as expected for all three check-lane entries in `spec/15-release-smoke.md`
+- Preconditions checked: `cargo`, `uv`, `make`, `pyproject.toml`, `Makefile`, `.github/workflows/release.yml`, and `tests/` exist; no service credentials are required
+- Prior-art search found existing `uv build`/publish targets, release artifact upload/download steps, and embedded fixture syntax; no new Rust helper/module is needed
+- Implemented `tests/smoke/smoke.md`, `make smoke`, release workflow smoke-before-publish wiring, and AGENTS/README docs
+- First `make spec` after edits was red only because the new smoke document needed to be staged for the landed `git ls-files` assertion; staged `tests/smoke/smoke.md` and `make spec` then passed
+- First `make smoke` found the embedded fixture was in a different section than the nested `mustmatch test`; rewrote the smoke document so fixture and smoke commands share one section
+- `make spec && make smoke` — green (`make spec`: 74 passed, 2 skipped; `make smoke`: installed wheel in throwaway venv and smoke document reported 2 passed)
+- Verify lane: `.march/contract-red-check.json` has no `lane: verify` entries, so no credentials/operator-only checks are outstanding
+- `make test` — focused profile green (`.march/validation-profiles.toml` maps focused to `make test`)
 - `make lint` — green
-- `make test` — green
-- `make spec` — green: 19 passed; both check-lane entries now pass
-- Final focused profile (`make test`) — green
-- Documentation fixture smoke: `cargo run -q -p mustmatch-cli --bin mustmatch -- test -v tests/fixtures/rust-runner` reports 27 passes and no skip lines
-- Reviewed README/changelog and reran hygiene grep; docs/examples match current behavior
-- `git diff --check` — clean
-- `git status --short --branch` — only intended tracked edits/deletion
-- Service lane: `.march/contract-red-check.json` has no entries requiring service credentials or operator-only exercise
+- `SMOKE_WHEEL="$(find target/wheels -maxdepth 1 -type f -name '*.whl' | sort | head -n 1)" make smoke` — explicit wheel override green, no rebuild path exercised
+- `git status --short --branch` — intended code/doc edits staged; `.march/code-log.md` modified but not staged
+- Reviewed `git diff`/`git diff --cached` for intended changes only
+- Structural smoke checks: smoke document contains `file=`, stdin `| mustmatch`, and `mustmatch test`; it has no `cargo`, `target/`, or parent-directory references; `make help` lists `smoke`
+- Final `make spec && git diff --check` — green/clean
+- `git diff --cached --check && git diff --check` — clean
+- Final staged diff: `.github/workflows/release.yml`, `AGENTS.md`, `Makefile`, `README.md`, and `tests/smoke/smoke.md`; `.march/code-log.md` remains unstaged runtime artifact
 
 Proof results:
-- Check-lane contract: `make spec` green, including both entries from `.march/contract-red-check.json`
-- Focused profile: `.march/validation-profiles.toml` maps focused to `make test`; final `make test` green
-- Lint: final `make lint` green
-- Service lane: none in `.march/contract-red-check.json`
+- Check-lane contract: `make spec` green, including all three entries from `.march/contract-red-check.json`
+- Focused profile: `make test` green
+- Release smoke: default `make smoke` green and explicit `SMOKE_WHEEL=... make smoke` green
+- Lint: `make lint` green
+- Verify lane: no entries in `.march/contract-red-check.json`
 
 Over-edit audit:
-- Parser and runner edits are exactly the named behavior change: ordinary non-runner fences stop entering the executed case list, while explicit skip and supported block handling remain intact
-- Docs/fixture edits are limited to named current-state surfaces and the neutral documentation-only fixture example required by design
-- Tracked stage-note cleanup is load-bearing for the landed tracked-Markdown hygiene assertion
-- Unit fixture edits are mechanical consequences of the parser selection change
-- No adjacent fixes were taken
+- `tests/smoke/smoke.md` is the design-named self-contained installed-binary smoke input and contains only the required embedded fixture, stdin assertion, and nested `mustmatch test`
+- `Makefile` edits are limited to `.PHONY`, `smoke`, and help; the PATH check is load-bearing to prevent fallback to a non-installed binary
+- Release workflow edits are limited to checkout/setup, artifact selection, and smoke-before-publish ordering required by design
+- AGENTS/README edits only document the new release/package gate
+- No Rust runtime, spec contract, or unrelated release logic was changed
 
 Diff-size audit:
-- Runtime code diff is five lines plus two internal fixture updates, matching the small behavior change
-- Larger text deletion is the design-named obsolete spec and stale tracked notes needed for hygiene
-- Docs and fixture prose edits are bounded to named surfaces
+- Runtime code diff is zero Rust lines; this ticket is release infrastructure only
+- Makefile target is longer than the smoke command itself because the design requires isolated install, optional `SMOKE_WHEEL`, missing-file validation, PATH precedence, and cleanup
+- Workflow additions are bounded to the required publish-job ordering and host-compatible wheel selection
+- No adjacent fixes were taken
 
 ## Deviations from Design
 - None
