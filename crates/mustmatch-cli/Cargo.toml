@@ -1,6 +1,6 @@
 [package]
 name = "mustmatch-cli"
-version = "0.0.2"
+version = "0.0.4"
 edition = "2024"
 license = "MIT"
 

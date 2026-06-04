@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "mustmatch-cli"
-version = "0.0.2"
+version = "0.0.4"
 dependencies = [
  "mustmatch-core",
  "regex",
@@ -197,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "mustmatch-core"
-version = "0.0.2"
+version = "0.0.4"
 dependencies = [
  "regex",
  "serde",
