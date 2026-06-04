@@ -77,3 +77,59 @@ help text lists them.
 ```bash
 mustmatch test --help | mustmatch like "--fail-fast"
 ```
+
+## Expected failures (`xfail`)
+
+A block marked `xfail` still runs, but its result is inverted for reporting: an
+expected **failure** is reported as `XFAIL` and keeps the suite green, while an
+unexpected **pass** is reported as `XPASS`. Use it to document behavior that is
+known-broken or not-yet-implemented without turning `make spec` red. Add a reason
+with `xfail="..."`, and `strict` to make an `XPASS` a real failure — so a
+fixed-but-still-marked example gets flagged for cleanup.
+
+The fixture below has one block that fails as expected and one that has started
+passing again. The run reports one `XFAIL` (with its reason) and one `XPASS`, and
+still exits `0`.
+
+````markdown file=xfail-demo.md
+# Demo
+
+## Known gap
+
+```bash xfail="ticket-123: not yet implemented"
+printf 'actual\n' | mustmatch like "desired output"
+```
+
+## Already fixed
+
+```bash xfail
+printf 'works\n' | mustmatch like "works"
+```
+````
+
+```bash
+mustmatch test -v xfail-demo.md | mustmatch like "XFAIL Known gap
+ticket-123: not yet implemented
+XPASS Already fixed
+1 xfailed, 1 xpassed"
+mustmatch test xfail-demo.md >/dev/null 2>&1 && code=0 || code=$?
+printf 'exit=%s\n' "$code" | mustmatch like "exit=0"
+```
+
+Under `strict`, an `XPASS` is a real failure, so the run exits non-zero and the
+stale marker gets noticed.
+
+````markdown file=xfail-strict.md
+# Strict
+
+## Should be unmarked now
+
+```bash xfail strict
+printf 'works\n' | mustmatch like "works"
+```
+````
+
+```bash
+mustmatch test xfail-strict.md >/dev/null 2>&1 && code=0 || code=$?
+printf 'exit=%s\n' "$code" | mustmatch like "exit=1"
+```

@@ -30,6 +30,40 @@ struct Summary {
     passed: usize,
     failed: usize,
     skipped: usize,
+    xfailed: usize,
+    xpassed: usize,
+}
+
+/// An `xfail` directive: the block is expected to fail. `reason` is the optional
+/// `xfail="..."` text; `strict` (a sibling `strict` directive) turns an
+/// unexpected pass (XPASS) into a real failure.
+struct Xfail {
+    reason: Option<String>,
+    strict: bool,
+}
+
+fn parse_xfail(block: &Block) -> Option<Xfail> {
+    if !block.directives.contains_key("xfail") {
+        return None;
+    }
+    let reason = block
+        .directives
+        .get("xfail")
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    Some(Xfail {
+        reason,
+        strict: block.directives.contains_key("strict"),
+    })
+}
+
+fn reason_suffix(spec: &Xfail) -> String {
+    match &spec.reason {
+        Some(reason) => format!(" ({reason})"),
+        None => String::new(),
+    }
 }
 
 struct SuiteLifecycle {
@@ -159,13 +193,37 @@ pub(crate) fn run(args: TestArgs) -> i32 {
         for case in cases {
             let outcome = runner.run_block(&case.block, case.row.as_ref());
             let teardown = runner.finish_case();
+            let xfail = parse_xfail(&case.block);
             match (outcome, teardown) {
-                (Ok(BlockOutcome::Passed), Ok(())) => {
-                    summary.passed += 1;
-                    if args.verbose {
-                        println!("PASS {}", case.label);
+                (Ok(BlockOutcome::Passed), Ok(())) => match &xfail {
+                    Some(spec) if spec.strict => {
+                        summary.failed += 1;
+                        file_failed = true;
+                        if !args.quiet {
+                            eprintln!(
+                                "FAIL {}: XPASS — block marked xfail strict passed unexpectedly{}",
+                                case.label,
+                                reason_suffix(spec)
+                            );
+                        }
+                        if args.fail_fast {
+                            stop = true;
+                            break;
+                        }
                     }
-                }
+                    Some(spec) => {
+                        summary.xpassed += 1;
+                        if args.verbose {
+                            println!("XPASS {}{}", case.label, reason_suffix(spec));
+                        }
+                    }
+                    None => {
+                        summary.passed += 1;
+                        if args.verbose {
+                            println!("PASS {}", case.label);
+                        }
+                    }
+                },
                 (Ok(BlockOutcome::Skipped), Ok(())) => {
                     summary.skipped += 1;
                     if args.verbose {
@@ -183,20 +241,39 @@ pub(crate) fn run(args: TestArgs) -> i32 {
                         break;
                     }
                 }
-                (Err(message), teardown_result) => {
-                    summary.failed += 1;
-                    file_failed = true;
-                    if !args.quiet {
-                        eprintln!("FAIL {}: {message}", case.label);
+                (Err(message), teardown_result) => match &xfail {
+                    Some(spec) => {
+                        summary.xfailed += 1;
+                        if args.verbose {
+                            println!("XFAIL {}{}", case.label, reason_suffix(spec));
+                        }
                         if let Err(teardown_message) = teardown_result {
-                            eprintln!("FAIL {} teardown: {teardown_message}", case.label);
+                            summary.failed += 1;
+                            file_failed = true;
+                            if !args.quiet {
+                                eprintln!("FAIL {} teardown: {teardown_message}", case.label);
+                            }
+                            if args.fail_fast {
+                                stop = true;
+                                break;
+                            }
                         }
                     }
-                    if args.fail_fast {
-                        stop = true;
-                        break;
+                    None => {
+                        summary.failed += 1;
+                        file_failed = true;
+                        if !args.quiet {
+                            eprintln!("FAIL {}: {message}", case.label);
+                            if let Err(teardown_message) = teardown_result {
+                                eprintln!("FAIL {} teardown: {teardown_message}", case.label);
+                            }
+                        }
+                        if args.fail_fast {
+                            stop = true;
+                            break;
+                        }
                     }
-                }
+                },
             }
         }
         if let Err(message) = runner.finish_contexts() {
@@ -957,6 +1034,12 @@ fn print_summary(summary: &Summary, quiet: bool) {
     if summary.skipped > 0 {
         parts.push(format!("{} skipped", summary.skipped));
     }
+    if summary.xfailed > 0 {
+        parts.push(format!("{} xfailed", summary.xfailed));
+    }
+    if summary.xpassed > 0 {
+        parts.push(format!("{} xpassed", summary.xpassed));
+    }
     println!(
         "{}",
         if parts.is_empty() {
@@ -984,6 +1067,47 @@ mod tests {
         assert_eq!(doc_dir(Path::new("README.md")), PathBuf::from("."));
         assert_eq!(doc_dir(Path::new("spec/doc.md")), PathBuf::from("spec"));
         assert_eq!(doc_dir(Path::new("/abs/doc.md")), PathBuf::from("/abs"));
+    }
+
+    fn run_quiet(path: std::path::PathBuf) -> i32 {
+        run(TestArgs {
+            paths: vec![path],
+            verbose: false,
+            quiet: true,
+            fail_fast: false,
+            timeout: 5,
+            lang: "all".to_string(),
+        })
+    }
+
+    #[test]
+    fn xfail_block_that_fails_keeps_suite_green() {
+        let dir = tempdir().expect("tempdir");
+        let path = write_markdown(
+            dir.path(),
+            "# Doc\n\n## Known gap\n\n```bash xfail\nmustmatch() { return 1; }\nprintf x | mustmatch like x\n```\n",
+        );
+        assert_eq!(run_quiet(path), 0);
+    }
+
+    #[test]
+    fn xfail_block_that_passes_is_xpass_and_stays_green() {
+        let dir = tempdir().expect("tempdir");
+        let path = write_markdown(
+            dir.path(),
+            "# Doc\n\n## Fixed\n\n```bash xfail\nmustmatch() { return 0; }\nprintf x | mustmatch like x\n```\n",
+        );
+        assert_eq!(run_quiet(path), 0);
+    }
+
+    #[test]
+    fn strict_xfail_block_that_passes_fails_the_suite() {
+        let dir = tempdir().expect("tempdir");
+        let path = write_markdown(
+            dir.path(),
+            "# Doc\n\n## Strict\n\n```bash xfail strict\nmustmatch() { return 0; }\nprintf x | mustmatch like x\n```\n",
+        );
+        assert_eq!(run_quiet(path), 1);
     }
 
     fn write_markdown(dir: &Path, content: &str) -> std::path::PathBuf {
