@@ -1,61 +1,49 @@
-# Code Log
-
 ## Execution Order
-1. Orientation, rebase, design/contract review, and baseline spec-only confirmation — done
-2. Preconditions and prior-art/scope search to confirm no runtime work is named or needed — done
-3. Preserve landed green-ratchet specs without shipped-spec edits; implement runtime only if an unexpected bug appears — done
-4. Run focused validation and final hygiene/audit — done
+1. Replace stale code log; record quickfix scope, exact files, and version targets.
+2. Bump only `.github/workflows/release.yml` action major tags to Node-24-capable releases while preserving jobs, permissions, environment, and artifact names/patterns.
+3. Run focused proof (`make spec`) and full repo gates (`make lint`, `make test`, `make spec`).
+4. Audit diff/status for scope creep and finalize this log for verify.
 
 ## Resume State
-- Last completed batch: Run focused validation and final hygiene/audit
-- Files edited so far: `.march/code-log.md`
-- Existing partial edits: none; no runtime/spec edits were needed
-- Tests passing: `make spec` green (82 passed, 2 skipped); `make test` green; `make lint` green
-- Next concrete action: final response
-- Current blocker: none
+- Last completed batch: Final diff/status audit completed.
+- Files changed so far: `.github/workflows/release.yml`, `.march/code-log.md`
+- Tests green: `make lint && make test && make spec` green; final spec count 82 passed, 2 skipped.
+- Next concrete action: ready for verify.
+- Current blocker: none.
 
-## Out of Scope
-- Runtime/runner semantic changes, including global bash `pipefail`
-- Changes to `crates/mustmatch-cli/src/process.rs`, runner internals, Makefile targets, release workflow ordering, or `tests/smoke/smoke.md`
-- Adding, relaxing, deleting, or changing landed shipped-spec assertions
-- New directives, helper scripts, fixtures outside the landed specs, abstractions, or speculative validation
-- Documentation/help changes unless an existing public document contradicts the already-landed behavior
-
-## Adjacent Fixes
-- (empty)
+## Scope Guardrails
+- Do not change workflow jobs, job order, triggers, `environment: release`, permissions, smoke/publish ordering, artifact names, artifact patterns, or paths.
+- Do not refactor YAML, publish logic, trusted-publisher configuration, Makefile, smoke target, specs, or docs unless a version-pinned assertion requires parity.
+- Do not change `.github/workflows/test.yml`; ticket is release workflow only.
 
 ## Commands and Changes
-- `checkpoint status` — initial checklist read
-- Read `AGENTS.md` and `CLAUDE.md`; repo behavioral contract is `spec/*.md`
-- `find . -maxdepth 2 \( -name CLAUDE.md -o -path './spec/*.md' \) -print | sort` — located shipped specs
-- `git fetch --all --prune && git rebase main` — branch already up to date, no conflicts
-- Read `.march/ticket.md`, `.march/design-final.md`, `.march/contract-red-check.json`, and mustmatch skill guidance
-- Contract-red entries: four `lane: check` rows, all `expected_kind: already-implemented` / `observed_status: green, ratchet`; no expected-red behavioral rows; no `lane: verify` rows
-- `make spec` — baseline green (82 passed, 2 skipped), matching all check-lane observed statuses
-- Preconditions checked: `spec/14-authoring-and-self-test.md`, `spec/15-release-smoke.md`, `tests/smoke/smoke.md`, `tests/fixtures/rust-runner/`, `Makefile`, `cargo`, `make`, and `mustmatch` are present; no external services, credentials, or data files are required
-- Confirmed landed anchors exist in specs: runner self-test absence check, `.march/**` archaeology-grep exclusion, quoted-hash section, and smoke self-containment section
-- Prior-art/scope search: inspected landed spec sections and smoke document; searched runner/process paths for bash execution and `| mustmatch` detection; `run_bash` still intentionally uses `set -e` without `pipefail`, while `code_before_shell_comment` already handles quoted `#` versus true shell comments
-- Implementation decision: made no runtime changes. `.march/contract-red-check.json` has no expected-red check entries, and baseline `make spec` proved all improved green ratchets already pass. There are no verify-lane assertions to implement or exercise.
-- Docs/scripts review: no public behavior changed in this code step, so README/help/examples/Makefile updates are not required
-- Shipped specs: no `spec/*.md`, public API output, CLI output, or docs assertions were added, relaxed, deleted, or changed in this code step
-- `make test` — focused profile green (31 CLI unit tests, 5 runner_error_paths integration tests, 48 core tests, doc-tests green)
-- `make spec` — final spec-only green (82 passed, 2 skipped)
-- `make lint` — green (`cargo fmt --check` + `cargo clippy -- -D warnings`)
-- `git diff --stat`, `git diff -- . ':(exclude).march/code-log.md'`, `git status --short --branch`, `git diff --cached --name-only`, `git ls-files --others --exclude-standard` — only `.march/code-log.md` changed; no runtime/spec diffs, no staged files, no untracked build artifacts
+- `checkpoint status` — initial checklist read.
+- Read `.march/ticket.md`, `.march/checkpoint.json`, and existing `.march/code-log.md`; existing log was stale from a different ticket and replaced.
+- Surveyed `.github/workflows/release.yml` and `spec/15-release-smoke.md`.
+- `grep` confirmed `spec/15-release-smoke.md` matches action names, not versions.
+- Remote action metadata checked with `git ls-remote` and `curl` against `action.yml`:
+  - `actions/checkout@v6` uses `node24`.
+  - `actions/upload-artifact@v7` uses `node24`.
+  - `actions/download-artifact@v8` uses `node24`.
+  - `PyO3/maturin-action@v1` already uses `node24`.
+  - `softprops/action-gh-release@v3` uses `node24`.
+  - `astral-sh/setup-uv@v7` uses `node24`.
+  - `pypa/gh-action-pypi-publish@release/v1` is composite, so no Node runtime pin.
+- Edited `.github/workflows/release.yml` only for action pins:
+  - `actions/checkout@v4` -> `@v6`.
+  - `actions/upload-artifact@v4` -> `@v7`.
+  - `actions/download-artifact@v4` -> `@v8`.
+  - `astral-sh/setup-uv@v5` -> `@v7`.
+  - `softprops/action-gh-release@v2` -> `@v3`.
+  - Left `PyO3/maturin-action@v1` and `pypa/gh-action-pypi-publish@release/v1` unchanged after runtime verification.
+- `grep -n "uses:" .github/workflows/release.yml` confirmed no remaining release-workflow `uses:` entry on a Node-20-only version.
+- `make spec` — green (82 passed, 2 skipped); `spec/15-release-smoke.md` release publish assertion still passes without spec edits because it matches action names, not versions.
+- `make lint && make test && make spec` — green (`cargo fmt --check`, `cargo clippy -- -D warnings`, 31 CLI unit tests, 5 runner error-path integration tests, 48 core tests, doc-tests, and 82 specs passed with 2 skipped).
+- `git diff --stat` / `git diff -- .github/workflows/release.yml .march/code-log.md` / `git status --short --branch` / `git ls-files --others --exclude-standard` — only `.github/workflows/release.yml` and `.march/code-log.md` changed; no untracked files. Workflow diff is version pins only.
 
-Proof results:
-- Check lane: all four check entries are improved green ratchets and remain green under `make spec`
-- Verify lane: no entries in `.march/contract-red-check.json`
-- Focused profile: `make test` green
-- Lint: `make lint` green
-
-Over-edit audit:
-- Runtime diff is empty; removing any potential runtime/code edit is exactly the intended minimal implementation for this already-green contract-hardening ticket
-- Required artifact diff is limited to replacing stale dependency-ticket code-log content with ticket 026 execution/proof state
-- No adjacent fixes were taken
-
-Diff-size audit:
-- Minimal runtime fix estimate is zero lines because every authored assertion is an already-implemented green ratchet; actual runtime/spec diff is zero lines, within the minimal-diff requirement
-
-## Deviations from Design
-- None
+## Final Verification
+- gate command: `make lint && make test && make spec`
+- gate result: green
+- files changed: `.github/workflows/release.yml`, `.march/code-log.md`
+- proof/docs/specs/help updated: no spec/doc/help text changes required; `spec/15-release-smoke.md` still passes because it asserts action names and release ordering, not versions.
+- Ready for verify: yes
