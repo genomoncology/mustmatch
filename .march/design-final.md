@@ -62,7 +62,7 @@ Do not change Rust code, `tests/smoke/smoke.md`, Makefile targets, README/help t
 - A failure anywhere in the canonical `tests/fixtures/rust-runner` nested run produces visible `FAIL` or `failed` output that makes the outer self-test fail.
 - A quoted `#` before `| mustmatch` is treated as executable command data and reports `PASS`; a true shell-comment line containing `| mustmatch` remains documentation and reports `SKIP`.
 - The release smoke self-containment check fails if the nested executable assertion pipe inside the embedded fixture is removed, even if prose inside that fixture mentions `| mustmatch`.
-- The release smoke self-containment check fails if the top-level executable `mustmatch test nested-smoke.md | mustmatch ...` command is removed, even if explanatory prose still mentions `mustmatch test`.
+- The release smoke self-containment check fails if the top-level executable nested-smoke test command in `tests/smoke/smoke.md` is removed, even if explanatory prose still mentions `mustmatch test`.
 - `spec-only` (`make spec`) is green after the contract repairs; final code-step gate remains `make lint && make test && make spec`.
 
 ## Proof Matrix
@@ -71,8 +71,8 @@ Do not change Rust code, `tests/smoke/smoke.md`, Makefile targets, README/help t
 |---|---|---|---|---|---|---|---|
 | `spec/14-authoring-and-self-test.md::Runner self-test` full-fixture absence block | The canonical runner self-test output contains no `FAIL` line and no `failed` summary, so a nested fixture failure cannot be hidden by a positive right-hand pipeline assertion. | structural | check | `spec-only` | already-implemented | green ratchet | `green, ratchet` after review `make spec` |
 | `spec/14-authoring-and-self-test.md::Quoted hash assertion detection` | A quoted `#` before `| mustmatch` runs as code and reports `PASS`, while a true shell-comment assertion line reports `SKIP`. | semantic | check | `spec-only` | already-implemented | green ratchet | `green, ratchet` after review `make spec` |
-| `spec/15-release-smoke.md::Smoke document is self-contained` embedded-fixture scan | The embedded `nested-smoke.md` fixture contains a nested executable bash fence with a non-comment `| mustmatch` assertion pipe; prose inside the fixture cannot satisfy it. | structural | check | `spec-only` | already-implemented | green ratchet | `green, ratchet` after review `make spec` |
-| `spec/15-release-smoke.md::Smoke document is self-contained` top-level executable scan | Top-level executable bash fences include both the installed stdin assertion and the executable nested `mustmatch test nested-smoke.md` command. | structural | check | `spec-only` | already-implemented | green ratchet | `green, ratchet` after review `make spec` |
+| `spec/15-release-smoke.md::Smoke document is self-contained` embedded-fixture scan | The embedded nested-smoke fixture in `tests/smoke/smoke.md` contains a nested executable bash fence with a non-comment `| mustmatch` assertion pipe; prose inside the fixture cannot satisfy it. | structural | check | `spec-only` | already-implemented | green ratchet | `green, ratchet` after review `make spec` |
+| `spec/15-release-smoke.md::Smoke document is self-contained` top-level executable scan | Top-level executable bash fences in `tests/smoke/smoke.md` include both the installed stdin assertion and the executable nested smoke test command. | structural | check | `spec-only` | already-implemented | green ratchet | `green, ratchet` after review `make spec` |
 
 There are no verify-lane rows and no expected-red behavior rows. These are improved green tests because the current runtime and smoke document already satisfy the strengthened contracts; the ticket closes proof gaps and false-negative risks.
 
