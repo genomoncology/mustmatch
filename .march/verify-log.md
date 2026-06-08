@@ -3,83 +3,92 @@ Operator verify pending: no
 
 ## Checkpoint Summary
 
-- Read `AGENTS.md` and `CLAUDE.md`; the repo contract is `spec/*.md` via `make spec`, with `make smoke` as the installed-wheel release/package gate.
-- Read `.march/ticket.md`, design draft/final, code and review logs, checkpoint state, `.march/contract-red-check.json`, and `planning/mustmatch/faq.md`.
-- Rebasing checks showed `main`/`origin/main` remain ancestors of this branch.
-- Preflight staged ticket work products; no untracked repo files remain.
+- Read `AGENTS.md` and `CLAUDE.md`; this repo's user-visible contract is `spec/*.md` via `make spec`.
+- Read `.march/ticket.md`, design draft/final, code log, code-review log, checkpoint state, `.march/contract-red-check.json`, and `planning/mustmatch/faq.md`.
+- Rebased at start and again before sign-off; branch remained up to date with `origin/main`.
+- Preflight status found no untracked worktree files. The branch diff against `main` is limited to `.march/code-log.md`, `crates/mustmatch-cli/src/verify_matrix.rs`, and `spec/13-verify-matrix.md`.
 
 ## Planning/FAQ Watch Results — relevant watching/answered entries probed
 
-- Relevant watching entry: whether mustmatch follows the workspace contract standard. This ticket keeps `AGENTS.md` naming `spec/*.md`, validation profiles map `spec-only` to `make spec`, and the release smoke input stays outside the normal source-tree contract as `tests/smoke/smoke.md`.
-- No relevant answered FAQ entries were weakened.
-- No security/safety boundary issue was found in repo planning memory; release smoke uses a temporary venv and no secrets.
+- No active `watching` entries were present in `planning/mustmatch/faq.md`.
+- Relevant answered memory says mustmatch's contract lives in `AGENTS.md` and `spec/*.md`; this ticket keeps that shape and documents the new author-facing `expected-missing` behavior in `spec/13-verify-matrix.md`.
+- Security/safety boundary probed: unescaped absolute/outside-root paths still report `invalid` and exit nonzero.
 
 ## Exercise Results — ran, inputs, observations
 
-- `make smoke`: green; built a wheel, installed it into a throwaway venv, and `mustmatch test tests/smoke/smoke.md` reported `2 passed`.
-- `SMOKE_WHEEL=/tmp/does-not-exist-mustmatch.whl make smoke`: failed loudly with `SMOKE_WHEEL does not exist`.
-- Explicit wheel override with a copied wheel in a path containing a space, while a fake earlier `mustmatch` was on `PATH`: green; the target still selected the throwaway venv binary first.
-- Structural probes confirmed `tests/smoke/smoke.md` has `file=`, stdin `| mustmatch`, and nested `mustmatch test` lines, and no `cargo`, `target/`, or `../` references.
-- Workflow probe confirmed publish-job ordering landmarks: checkout, wheel artifact download, `run: make smoke`, then PyPI publish.
+- Current source binary probe with `cargo run -q -p mustmatch-cli -- verify-matrix` on a temporary design containing `README.md` plus `expected-missing docs/none.md`: exited 0, JSON reported one checked reference, and omitted `docs/none.md`.
+- Same-cell binding probe: `expected-missing docs/escaped.md then docs/real.md` exited 1 and reported unmarked `docs/real.md` as `missing`.
+- Previous-cell probe: marker text in one cell did not escape a path in the next cell; command exited 1 and reported the path as `missing`.
+- Accidental suffix probe: `notexpected-missing docs/accidental.md` did not escape the path; command exited 1 and reported it as `missing`.
+- Non-table regression probe: prose backticks remained ignored and produced `references_checked: 0`.
+- Help and missing-prereq probes: `verify-matrix --help` remains concise; missing `--repo-root` target exits 2 with `Error: repo root not found`.
+
+## Exploratory Verification — change-aware probes tried; high-signal probes; noisy/not-worth-repeating probes; recommended improved tests (`spec`, `test`, `lint`, `gate`, `verify-group`, docs/help, FAQ watching, experiment/harness); agent/tool-cost friction if applicable
+
+- High-signal probes were the same-cell, previous-cell, suffix, and outside-root cases because the ticket's main risk is turning a local escape into a false-negative suppressor.
+- Regression probes covered adjacent collector behavior: non-table backticks, unescaped missing refs, invalid outside-root refs, and help/error paths.
+- Noisy probe: running `mustmatch test spec/13-verify-matrix.md -v` directly used the older installed `mustmatch` on `PATH`, not the source under test, and failed the new section. `make spec` is the authoritative source-tree contract gate and passed.
+- Recommended improved test: filed a `spec` issue for the pre-existing `short-like-pattern` lint finding in `spec/13-verify-matrix.md::Resolving references`.
+- Agent/tool-cost friction: no new CLI discovery friction; the marker is documented in the spec section where proof-matrix authors look.
 
 ## Edge Cases Tested — specific cases, results
 
-- Missing prerequisite: absent `SMOKE_WHEEL` path exits nonzero before install.
-- Path safety/quoting: explicit wheel path with a space installs and runs correctly.
-- PATH fallback: a fake earlier `mustmatch` on `PATH` does not get used; installed venv binary wins.
-- Self-contained smoke input: forbidden dev-tree dependency scan produced no output.
+- Empty/no table input: no references checked, pass.
+- Missing prerequisite: nonexistent repo root exits 2 before verification.
+- Malformed/wrong context marker: `notexpected-missing` is not accepted as an escape.
+- Boundary binding: repeated code spans in the same cell only skip the immediately marked span.
+- Security boundary: absolute path outside repo root remains `invalid` and fails.
+- Error recovery: all failing probes were independent temp files; rerunning after fixing the design input succeeds cleanly.
 
-## Contract Audit — contracts reviewed, gaps found, counts before/after, spec-only result
+## Spec Audit — specs reviewed, gaps found, counts before/after, spec-only result
 
-- Reviewed `spec/15-release-smoke.md`, `tests/smoke/smoke.md`, `Makefile`, `.github/workflows/release.yml`, `AGENTS.md`, and `README.md` against the proof matrix.
-- Proof locations exist for all three check-lane entries in `.march/contract-red-check.json`.
-- `mustmatch lint spec/15-release-smoke.md`: `findings=0`.
-- `make spec` spec-only result: green, `74 passed, 2 skipped`.
-- Contract gap filed: `planning/mustmatch/issues/020-release-smoke-contract-command-lines.md` because the smoke-doc structural assertion scans prose as well as executable lines. Runtime behavior is correct, but design should rewrite the assertion to target executable smoke structure.
-- Assertion-quality delta: no weak assertions relaxed in verify; one weak assertion escalated to design via the issue above; no syntactic red found.
+- Reviewed `spec/13-verify-matrix.md`, especially `Resolving references` and `Escaping expected-value paths`.
+- Proof matrix locations from `.march/contract-red-check.json` exist and both entries are `lane: check`.
+- New behavior has shipped contract coverage for JSON output and human output in `spec/13-verify-matrix.md::Escaping expected-value paths`.
+- `make spec` (spec-only) result: green, `80 passed, 2 skipped`.
+- Assertion-quality delta: 0 assertions relaxed in verify; 1 weak/pre-existing assertion escalated to design issue; no new shipped-spec assertions authored here.
 
-## Verify Lane — `lane: verify` entries exercised
+## Verify Group — `lane: verify` entries exercised (each: assertion, red_command, observed_status); operator-pending list explicit if credentials unavailable
 
 No `lane: verify` entries exist in `.march/contract-red-check.json`; operator-pending list is empty.
 
 ## Regression Results — existing features verified
 
-- CLI JSON-subset assertion through `./target/debug/mustmatch`: green.
-- Missing expected value in stdin assertion exits with usage status `2` and `Error: expected value required`.
-- Existing embedded-fixture spec `spec/09-embedded-files.md` in verbose mode: `6 passed`.
-- CLI help still exposes assertion mode, `test`, `verify-matrix`, and `lint`.
+- `cargo test -q -p mustmatch-cli verify_matrix -- --nocapture`: green, 7 tests passed.
+- `make spec`: green for the full shipped spec suite, including existing missing-reference behavior.
+- Existing true positives preserved by real CLI probes: unescaped missing references exit 1, outside-root references exit 1 with `invalid`, and non-table backticks are ignored.
 
 ## Test Suite — full-blocking result
 
 - Full-blocking profile run exactly once as `make lint && make test && make spec`: green.
-- `make lint`: green.
-- `make test`: green; Rust unit/doc tests green.
-- `make spec`: green, `74 passed, 2 skipped`.
+- `make lint`: green (`cargo fmt --check` + `cargo clippy -- -D warnings`).
+- `make test`: green (31 CLI tests, 48 core tests, doc-tests green).
+- `make spec`: green (`80 passed, 2 skipped`).
 
 ## Documentation — parity audit of docs/help/examples
 
-- `make help` lists `smoke` with the other targets.
-- `AGENTS.md` documents `make smoke` and `tests/smoke/`.
-- `README.md` Gates section documents `make smoke`.
-- Verify found and fixed one docs parity miss: the README spec table omitted new `spec/15-release-smoke.md`; added the `Release smoke gate` row.
-- Release workflow smoke-before-publish ordering is documented by the checked spec and visible in the workflow.
+- `spec/13-verify-matrix.md` documents the `expected-missing` marker and its JSON/human-output semantics.
+- `README.md` already points users to `spec/13-verify-matrix.md` for proof-matrix behavior; no separate README behavior prose needed.
+- `verify-matrix --help` remains accurate for command syntax; marker semantics are detailed authoring behavior, not a CLI option.
+- No stale architecture docs or examples were found for this behavior.
 
 ## Issues Found and Fixed — fixes + proof
 
-- Fixed README spec table omission by adding `Release smoke gate | spec/15-release-smoke.md`.
-- Proof after fix: `make spec` green and full-blocking green.
+- No bounded runtime or docs defects were found that required repair in verify.
+- Proof: targeted probes, `cargo test -p mustmatch-cli verify_matrix`, `make spec`, and full-blocking all passed.
 
 ## Issues Filed — list with paths
 
-- `/home/ian/workspace/planning/mustmatch/issues/020-release-smoke-contract-command-lines.md` — design-level contract rewrite so the smoke-doc assertion targets executable lines rather than prose.
+- `/home/ian/workspace/planning/mustmatch/issues/024-verify-matrix-exit-code-short-like.md` — design rewrite for pre-existing short `mustmatch like "exit=1"` assertion in `spec/13-verify-matrix.md::Resolving references`.
 
 ## Planning Updates — concrete issues filed or FAQ watching proposal (or "none")
 
-Filed the contract ratchet issue above. No FAQ edit proposed.
+Filed the spec issue above. No FAQ `watching` entry proposed.
 
 ## UX Quality — CLI/UI assessment (if applicable)
 
-- `make smoke` is discoverable in help, fails clearly when `SMOKE_WHEEL` is missing, and reports the installed-wheel smoke result concisely.
-- The release workflow gates publish before credentials are used by the PyPI publish action.
+- Human output for escaped expected paths lists only real checked references and omits the expected-missing fixture path, which matches the authoring mental model.
+- Error output for missing repo roots remains clear.
+- The source-tree workflow is efficient through `make spec`; direct `mustmatch test` can be noisy when the installed binary is stale, but that is not new to this ticket.
 
 Issues filed: 1
