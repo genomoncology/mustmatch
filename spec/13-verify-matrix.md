@@ -74,6 +74,10 @@ mustmatch verify-matrix escaped-design.md --repo-root . --json
 "status": "ok"
 ```
 
+```text expect=escaped-json not-contains
+docs/none.md
+```
+
 ```bash run id=escaped-human exit=0
 mustmatch verify-matrix escaped-design.md --repo-root .
 ```
