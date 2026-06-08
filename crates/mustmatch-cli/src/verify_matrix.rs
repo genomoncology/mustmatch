@@ -10,6 +10,8 @@ static TABLE_ROW_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\|(.+)\|\s*$").expect("valid regex"));
 static CODE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").expect("valid regex"));
 
+const EXPECTED_MISSING_MARKER: &str = "expected-missing";
+
 const REPO_ROOT_FILE_NAMES: &[&str] = &[
     "CLAUDE.md",
     "Cargo.lock",
@@ -201,10 +203,7 @@ fn collect_table_refs(text: &str) -> Vec<TableRef> {
                 let Some(span) = captures.get(0) else {
                     continue;
                 };
-                if cell[..span.start()]
-                    .trim_end()
-                    .ends_with("expected-missing")
-                {
+                if has_expected_missing_marker(&cell[..span.start()]) {
                     continue;
                 }
                 let Some(code) = captures.get(1) else {
@@ -220,6 +219,18 @@ fn collect_table_refs(text: &str) -> Vec<TableRef> {
         }
     }
     refs
+}
+
+fn has_expected_missing_marker(prefix: &str) -> bool {
+    let prefix = prefix.trim_end();
+    let Some(before_marker) = prefix.strip_suffix(EXPECTED_MISSING_MARKER) else {
+        return false;
+    };
+    before_marker.is_empty()
+        || before_marker
+            .chars()
+            .last()
+            .is_some_and(char::is_whitespace)
 }
 
 fn looks_like_repo_path(value: &str) -> bool {
@@ -361,13 +372,14 @@ mod tests {
 
     #[test]
     fn table_refs_skip_only_immediately_marked_expected_missing_path() {
-        let text = "| behavior | location | assertion |\n| --- | --- | --- |\n| present | `README.md` | expected-missing `docs/none.md` |\n| mixed | `docs/nope.md` | expected-missing `docs/escaped.md` then `docs/real.md` |\n";
+        let text = "| behavior | location | assertion |\n| --- | --- | --- |\n| present | `README.md` | expected-missing `docs/none.md` |\n| mixed | `docs/nope.md` | expected-missing `docs/escaped.md` then `docs/real.md` |\n| accidental | | notexpected-missing `docs/accidental.md` |\n";
         let refs = collect_table_refs(text);
 
-        assert_eq!(refs.len(), 3);
+        assert_eq!(refs.len(), 4);
         assert_eq!(refs[0].reference, "README.md");
         assert_eq!(refs[1].reference, "docs/nope.md");
         assert_eq!(refs[2].reference, "docs/real.md");
+        assert_eq!(refs[3].reference, "docs/accidental.md");
     }
 
     #[test]
