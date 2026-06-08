@@ -190,18 +190,32 @@ fn verify_matrix(design: &Path, repo_root: &Path) -> Result<Value, String> {
 fn collect_table_refs(text: &str) -> Vec<TableRef> {
     let mut refs = Vec::new();
     for (index, line) in text.lines().enumerate() {
-        if !TABLE_ROW_RE.is_match(line) {
+        let Some(row) = TABLE_ROW_RE.captures(line) else {
             continue;
-        }
-        for captures in CODE_RE.captures_iter(line) {
-            let Some(code) = captures.get(1) else {
-                continue;
-            };
-            if looks_like_repo_path(code.as_str()) {
-                refs.push(TableRef {
-                    line: index + 1,
-                    reference: code.as_str().to_string(),
-                });
+        };
+        let Some(row_body) = row.get(1) else {
+            continue;
+        };
+        for cell in row_body.as_str().split('|') {
+            for captures in CODE_RE.captures_iter(cell) {
+                let Some(span) = captures.get(0) else {
+                    continue;
+                };
+                if cell[..span.start()]
+                    .trim_end()
+                    .ends_with("expected-missing")
+                {
+                    continue;
+                }
+                let Some(code) = captures.get(1) else {
+                    continue;
+                };
+                if looks_like_repo_path(code.as_str()) {
+                    refs.push(TableRef {
+                        line: index + 1,
+                        reference: code.as_str().to_string(),
+                    });
+                }
             }
         }
     }
@@ -343,6 +357,37 @@ mod tests {
         assert_eq!(refs[0].line, 2);
         assert_eq!(refs[0].reference, "README.md");
         assert_eq!(refs[1].reference, "docs/nope.md");
+    }
+
+    #[test]
+    fn table_refs_skip_only_immediately_marked_expected_missing_path() {
+        let text = "| behavior | location | assertion |\n| --- | --- | --- |\n| present | `README.md` | expected-missing `docs/none.md` |\n| mixed | `docs/nope.md` | expected-missing `docs/escaped.md` then `docs/real.md` |\n";
+        let refs = collect_table_refs(text);
+
+        assert_eq!(refs.len(), 3);
+        assert_eq!(refs[0].reference, "README.md");
+        assert_eq!(refs[1].reference, "docs/nope.md");
+        assert_eq!(refs[2].reference, "docs/real.md");
+    }
+
+    #[test]
+    fn verify_matrix_still_reports_unescaped_missing_reference() {
+        let dir = tempdir().expect("tempdir");
+        let repo_root = dir.path().join("repo");
+        std::fs::create_dir_all(&repo_root).expect("repo root");
+        let design = dir.path().join("design.md");
+        std::fs::write(
+            &design,
+            "| behavior | location |\n| --- | --- |\n| missing | `docs/nope.md` |\n",
+        )
+        .expect("design");
+
+        let result = verify_matrix(&design, &repo_root).expect("verify result");
+
+        assert_eq!(result["references_checked"], 1);
+        assert_eq!(result["failure_count"], 1);
+        assert_eq!(result["results"][0]["reference"], "docs/nope.md");
+        assert_eq!(result["results"][0]["status"], "missing");
     }
 
     #[test]

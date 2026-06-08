@@ -3,24 +3,24 @@
 ## Execution Order
 1. Orientation, rebase, design/contract review, and red-state confirmation — done
 2. Execution plan, precondition checks, and prior-art search — done
-3. Implement smoke document, Makefile target/help, release workflow gate, and docs surfaces — done
-4. Run smoke/spec/focused gates and fix minimal failures — done
+3. Implement cell-aware `expected-missing` collection in `verify_matrix.rs` plus named unit tests — done
+4. Run spec-only/focused/lint/test gates and fix minimal failures — done
 5. Hygiene, over-edit audit, final code-log proof — done
 
 ## Resume State
 - Last completed batch: Hygiene, over-edit audit, final code-log proof
-- Files edited so far: `.march/code-log.md`, `tests/smoke/smoke.md`, `Makefile`, `.github/workflows/release.yml`, `AGENTS.md`, `README.md`
-- Existing partial edits: preserve current implementation edits; all non-`.march` implementation files are staged so the landed `git ls-files` assertion reflects tracked state
-- Tests passing: yes — `make lint`, `make test` (focused), `make spec`, default `make smoke`, and `SMOKE_WHEEL=... make smoke` are green
+- Files edited so far: `.march/code-log.md`, `crates/mustmatch-cli/src/verify_matrix.rs`
+- Existing partial edits: preserve current minimal collector/test edits; `.march/code-log.md` remains an unstaged runtime artifact
+- Tests passing: yes — `cargo test -p mustmatch-cli verify_matrix`, `make spec`, `make test` (focused), and `make lint` are green
 - Next concrete action: final response
 - Current blocker: none
 
 ## Out of Scope
-- Adding, relaxing, or deleting shipped-contract assertions
-- Changing Rust CLI runtime behavior; design calls for release/package infrastructure only
-- Running the full `spec/` suite from an installed wheel
-- Adding credentials, secrets, service integrations, or a broader release matrix
-- Refactoring unrelated Makefile or workflow structure beyond the smoke gate path
+- Adding, relaxing, deleting, or changing shipped-spec assertions
+- Redesigning verify-matrix output, JSON shape, CLI parsing, or path resolution
+- Changing non-table backtick scanning behavior
+- Broad Markdown table parsing beyond the minimal cell-aware collector named by design
+- Adding service integrations, credentials, or unrelated validation behavior
 
 ## Adjacent Fixes
 - (empty)
@@ -28,45 +28,40 @@
 ## Commands and Changes
 - `checkpoint status` — initial checklist read
 - Read `AGENTS.md` and `CLAUDE.md`; behavioral specs are `spec/*.md`
-- Read `.march/ticket.md`, `.march/design-final.md`, `.march/contract-red-check.json`, and stale seed `.march/code-log.md`
+- Read mustmatch build-step skill guidance
+- `find spec -maxdepth 2 -type f -name '*.md'` — located spec files
 - `git fetch origin main && git rebase origin/main` — branch already up to date
-- `spec-only` — unavailable on PATH; `.march/validation-profiles.toml` maps `spec-only` to `make spec`
-- `make spec` — red as expected for all three check-lane entries in `spec/15-release-smoke.md`
-- Preconditions checked: `cargo`, `uv`, `make`, `pyproject.toml`, `Makefile`, `.github/workflows/release.yml`, and `tests/` exist; no service credentials are required
-- Prior-art search found existing `uv build`/publish targets, release artifact upload/download steps, and embedded fixture syntax; no new Rust helper/module is needed
-- Implemented `tests/smoke/smoke.md`, `make smoke`, release workflow smoke-before-publish wiring, and AGENTS/README docs
-- First `make spec` after edits was red only because the new smoke document needed to be staged for the landed `git ls-files` assertion; staged `tests/smoke/smoke.md` and `make spec` then passed
-- First `make smoke` found the embedded fixture was in a different section than the nested `mustmatch test`; rewrote the smoke document so fixture and smoke commands share one section
-- `make spec && make smoke` — green (`make spec`: 74 passed, 2 skipped; `make smoke`: installed wheel in throwaway venv and smoke document reported 2 passed)
-- Verify lane: `.march/contract-red-check.json` has no `lane: verify` entries, so no credentials/operator-only checks are outstanding
-- `make test` — focused profile green (`.march/validation-profiles.toml` maps focused to `make test`)
-- `make lint` — green
-- `SMOKE_WHEEL="$(find target/wheels -maxdepth 1 -type f -name '*.whl' | sort | head -n 1)" make smoke` — explicit wheel override green, no rebuild path exercised
-- `git status --short --branch` — intended code/doc edits staged; `.march/code-log.md` modified but not staged
-- Reviewed `git diff`/`git diff --cached` for intended changes only
-- Structural smoke checks: smoke document contains `file=`, stdin `| mustmatch`, and `mustmatch test`; it has no `cargo`, `target/`, or parent-directory references; `make help` lists `smoke`
-- Final `make spec && git diff --check` — green/clean
-- `git diff --cached --check && git diff --check` — clean
-- Final staged diff: `.github/workflows/release.yml`, `AGENTS.md`, `Makefile`, `README.md`, and `tests/smoke/smoke.md`; `.march/code-log.md` remains unstaged runtime artifact
+- Read `.march/ticket.md`, `.march/design-final.md`, `.march/contract-red-check.json`, and replaced stale seed `.march/code-log.md`
+- `make spec` — red as expected for the two check-lane behavioral entries in `spec/13-verify-matrix.md::Escaping expected-value paths` (six failed blocks because each entry has run/contains/not-contains assertions)
+- Preconditions checked: `crates/mustmatch-cli/src/verify_matrix.rs`, `spec/13-verify-matrix.md`, `Makefile`, `cargo`, `make`, and `mustmatch` are present; no external services or credentials are required
+- Prior-art search: `crates/mustmatch-cli/src/verify_matrix.rs` already has `TABLE_ROW_RE`, `CODE_RE`, `looks_like_repo_path`, `TableRef`, `collect_table_refs`, and resolver tests; `spec/13-verify-matrix.md` already contains the landed `expected-missing` authoring example
+- Edited `crates/mustmatch-cli/src/verify_matrix.rs`: `collect_table_refs` now captures the table row body, splits cells with the existing minimal table model, and skips only a code span whose same-cell prefix ends with `expected-missing` after trimming whitespace
+- Added unit coverage in `verify_matrix.rs` for marker binding, same-cell unmarked references after an escaped path, and unescaped missing-reference preservation
+- `cargo test -p mustmatch-cli verify_matrix` — green (7 passed)
+- `make spec` — green (80 passed, 2 skipped); expected-red check entries now pass and escaped paths are omitted from JSON/human output
+- Verify lane: `.march/contract-red-check.json` has no `lane: verify` entries, so no `make verify`/credential-backed operator check is outstanding for this ticket
+- Docs/scripts check: `rg` found the landed `expected-missing` contract only in `spec/13-verify-matrix.md`; no help text, README, scripts, or CLI output changes were needed beyond preserving the landed spec
+- `git diff --name-only` — only `.march/code-log.md` and `crates/mustmatch-cli/src/verify_matrix.rs` changed; no shipped spec assertions were edited
+- `make test` — focused profile green (`.march/validation-profiles.toml` maps focused to `make test`; 31 CLI tests, 48 core tests, doc-tests green)
+- `make lint` — green (`cargo fmt --check` + `cargo clippy -- -D warnings`)
+- `git diff --check` — clean
+- Final `make spec` — green (80 passed, 2 skipped)
+- `git status --short --branch`, `git diff --name-only`, `git diff --cached --name-only`, `git ls-files --others --exclude-standard` — only intended unstaged changes are `.march/code-log.md` and `crates/mustmatch-cli/src/verify_matrix.rs`; no staged files and no untracked build artifacts
 
 Proof results:
-- Check-lane contract: `make spec` green, including all three entries from `.march/contract-red-check.json`
+- Check-lane contract: `make spec` green, including both entries from `.march/contract-red-check.json`
 - Focused profile: `make test` green
-- Release smoke: default `make smoke` green and explicit `SMOKE_WHEEL=... make smoke` green
 - Lint: `make lint` green
 - Verify lane: no entries in `.march/contract-red-check.json`
 
 Over-edit audit:
-- `tests/smoke/smoke.md` is the design-named self-contained installed-binary smoke input and contains only the required embedded fixture, stdin assertion, and nested `mustmatch test`
-- `Makefile` edits are limited to `.PHONY`, `smoke`, and help; the PATH check is load-bearing to prevent fallback to a non-installed binary
-- Release workflow edits are limited to checkout/setup, artifact selection, and smoke-before-publish ordering required by design
-- AGENTS/README edits only document the new release/package gate
-- No Rust runtime, spec contract, or unrelated release logic was changed
+- Collector changes are limited to the design-named path: table row body extraction, per-cell splitting, and a same-cell immediate-prefix `expected-missing` skip before reusing existing `looks_like_repo_path`/`TableRef` behavior
+- Unit tests cover only design-named runtime edges: escaped path omission with real `README.md`, same-cell unmarked path preservation, and unescaped missing-reference preservation
+- No CLI parsing, output shape, resolver, docs, scripts, or shipped-spec assertions were changed
 
 Diff-size audit:
-- Runtime code diff is zero Rust lines; this ticket is release infrastructure only
-- Makefile target is longer than the smoke command itself because the design requires isolated install, optional `SMOKE_WHEEL`, missing-file validation, PATH precedence, and cleanup
-- Workflow additions are bounded to the required publish-job ordering and host-compatible wheel selection
+- Minimal runtime fix required changing the collector loop from row-wide scan to cell-aware scan; the implementation delta is confined to that loop
+- Added unit-test lines are the design-requested internal proof for marker binding and true-positive preservation
 - No adjacent fixes were taken
 
 ## Deviations from Design
