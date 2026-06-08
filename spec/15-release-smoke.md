@@ -15,9 +15,25 @@ an embedded example file.
 ```bash
 git -C .. ls-files tests/smoke/smoke.md | mustmatch "tests/smoke/smoke.md"
 
-awk '/file=|mustmatch test|\| mustmatch/{print}' ../tests/smoke/smoke.md | mustmatch like "file=
-| mustmatch
-mustmatch test"
+awk '
+  /^````markdown file=nested-smoke\.md$/ { in_fixture=1; print "embedded fixture: nested-smoke.md"; next }
+  in_fixture && /^````$/ { in_fixture=0; in_nested_bash=0; next }
+  in_fixture && /^```bash$/ { in_nested_bash=1; print "nested executable bash"; next }
+  in_fixture && in_nested_bash && /^```$/ { in_nested_bash=0; next }
+  in_fixture && in_nested_bash && /^[[:space:]]*[^#].*\|[[:space:]]*mustmatch/ { print "nested assertion pipe"; next }
+' ../tests/smoke/smoke.md | mustmatch like "embedded fixture: nested-smoke.md
+nested executable bash
+nested assertion pipe"
+
+awk '
+  /^````markdown file=nested-smoke\.md$/ { in_fixture=1; next }
+  in_fixture && /^````$/ { in_fixture=0; next }
+  !in_fixture && /^```bash$/ { in_bash=1; next }
+  in_bash && /^```$/ { in_bash=0; next }
+  in_bash && /^printf .*\| mustmatch/ { print "top-level stdin assertion"; next }
+  in_bash && /^mustmatch test nested-smoke\.md \| mustmatch/ { print "top-level nested smoke test command"; next }
+' ../tests/smoke/smoke.md | mustmatch like "top-level stdin assertion
+top-level nested smoke test command"
 
 awk '/cargo|target\/|\.\.\//{print}' ../tests/smoke/smoke.md | mustmatch ""
 ```

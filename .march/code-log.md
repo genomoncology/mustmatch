@@ -1,73 +1,61 @@
 # Code Log
 
 ## Execution Order
-1. Orientation, rebase, design/contract review, and baseline observation confirmation — done
-2. Precondition checks and prior-art search in runner/context paths — done
-3. Implement missing explicit-path validation and bare-filename context root normalization — done
-4. Run targeted cargo tests, spec-only, and focused validation; fix minimal failures — done
-5. Hygiene, over-edit audit, final code-log proof — done
+1. Orientation, rebase, design/contract review, and baseline spec-only confirmation — done
+2. Preconditions and prior-art/scope search to confirm no runtime work is named or needed — done
+3. Preserve landed green-ratchet specs without shipped-spec edits; implement runtime only if an unexpected bug appears — done
+4. Run focused validation and final hygiene/audit — done
 
 ## Resume State
-- Last completed batch: Hygiene, over-edit audit, final code-log proof
-- Files edited so far: `.march/code-log.md`, `crates/mustmatch-cli/src/runner.rs`, `crates/mustmatch-cli/src/context.rs`, `README.md`
-- Existing partial edits: preserve current minimal path-validation/root-normalization edits
-- Tests passing: `cargo test -q -p mustmatch-cli --test runner_error_paths -- --nocapture`, `make spec`, `make test` (focused), and `make lint` are green
+- Last completed batch: Run focused validation and final hygiene/audit
+- Files edited so far: `.march/code-log.md`
+- Existing partial edits: none; no runtime/spec edits were needed
+- Tests passing: `make spec` green (82 passed, 2 skipped); `make test` green; `make lint` green
 - Next concrete action: final response
 - Current blocker: none
 
 ## Out of Scope
-- Adding, relaxing, deleting, or changing shipped `spec/*.md` assertions
-- Redesigning runner discovery, CLI parsing, named-run dependency handling, or hook diagnostics
-- Changing happy-path runner output or existing empty-directory no-op behavior
-- Adding docs/help/spec expansion unless an existing public note contradicts the final behavior
-- Implementing speculative validation beyond missing explicit operands and bare-filename root normalization
+- Runtime/runner semantic changes, including global bash `pipefail`
+- Changes to `crates/mustmatch-cli/src/process.rs`, runner internals, Makefile targets, release workflow ordering, or `tests/smoke/smoke.md`
+- Adding, relaxing, deleting, or changing landed shipped-spec assertions
+- New directives, helper scripts, fixtures outside the landed specs, abstractions, or speculative validation
+- Documentation/help changes unless an existing public document contradicts the already-landed behavior
 
 ## Adjacent Fixes
 - (empty)
 
 ## Commands and Changes
 - `checkpoint status` — initial checklist read
-- Read `AGENTS.md` and `CLAUDE.md`; behavioral specs are `spec/*.md`
-- Read mustmatch and rust-standards skill guidance
-- `find spec -maxdepth 2 -type f -name '*.md'` — located spec files
-- `git fetch origin main && git rebase origin/main` — branch already up to date
-- Read `.march/ticket.md`, `.march/design-final.md`, `.march/contract-red-check.json`, and replaced stale seed `.march/code-log.md`
-- `make spec` — green (80 passed, 2 skipped), matching the spec-only/baseline note
-- Baseline cargo check-lane observations:
-  - `cargo test -q -p mustmatch-cli --test runner_error_paths missing_explicit_path_fails_but_empty_directory_is_noop -- --nocapture` — red as recorded; missing explicit path currently prints `No markdown files found` and exits successfully
-  - `cargo test -q -p mustmatch-cli --test runner_error_paths bare_filename_context_root_resolves_to_current_directory -- --nocapture` — red as recorded; bare filename context setup fails from bad cwd/root resolution
-  - `cargo test -q -p mustmatch-cli --test runner_error_paths invalid_lang_exits_before_green_no_tests_summary -- --nocapture` — green ratchet
-  - `cargo test -q -p mustmatch-cli --test runner_error_paths cyclic_uses_dependency_fails_with_clear_message -- --nocapture` — green ratchet
-  - `cargo test -q -p mustmatch-cli --test runner_error_paths setup_failure_diagnostic_redacts_expanded_secret -- --nocapture` — green ratchet
-- Preconditions checked: `crates/mustmatch-cli/src/runner.rs`, `crates/mustmatch-cli/src/context.rs`, `crates/mustmatch-cli/tests/runner_error_paths.rs`, `Makefile`, `Cargo.toml`, `.march/validation-profiles.toml`, `cargo`, `make`, and `mustmatch` are present; no external services, data files, or credentials are required for this ticket
-- Prior-art search: `runner.rs` already has `doc_dir` treating bare filename parents as `.`; `collect_markdown_files`/`collect_one` currently ignore nonexistent paths; `context.rs` has the repeated `path.parent().unwrap_or(path)` pattern in `ContextRegistry::new` and `find_config`; no existing helper is shared between runner/context
-- Edited `crates/mustmatch-cli/src/runner.rs`: `run` now rejects missing explicit operands before markdown collection and preserves existing empty-directory/no-markdown behavior after validation
-- Edited `crates/mustmatch-cli/src/context.rs`: added local `effective_parent` mirroring `doc_dir` and used it for config-root derivation and non-directory config discovery starts
-- `cargo test -q -p mustmatch-cli --test runner_error_paths -- --nocapture` — green (5 passed); both expected-red behavioral checks now pass and all three green ratchets remain green
-- `make spec` — green (80 passed, 2 skipped)
-- Verify lane: `.march/contract-red-check.json` has no `lane: verify` entries, so no credential-backed `make verify`/operator check is outstanding for this ticket
-- Docs/scripts check: searched README, AGENTS/CLAUDE, docs/specs, Makefile, tests, and CLI sources for `mustmatch test`, missing/no-markdown path text, and `{root}` references; verify found one stale README console example count and relaxed it to durable `passed` wording. No help/scripts edits were needed.
-- `git diff --name-only` — `.march/code-log.md`, `README.md`, `crates/mustmatch-cli/src/context.rs`, `crates/mustmatch-cli/src/runner.rs`, and `crates/mustmatch-cli/tests/runner_error_paths.rs` changed; no shipped specs changed
+- Read `AGENTS.md` and `CLAUDE.md`; repo behavioral contract is `spec/*.md`
+- `find . -maxdepth 2 \( -name CLAUDE.md -o -path './spec/*.md' \) -print | sort` — located shipped specs
+- `git fetch --all --prune && git rebase main` — branch already up to date, no conflicts
+- Read `.march/ticket.md`, `.march/design-final.md`, `.march/contract-red-check.json`, and mustmatch skill guidance
+- Contract-red entries: four `lane: check` rows, all `expected_kind: already-implemented` / `observed_status: green, ratchet`; no expected-red behavioral rows; no `lane: verify` rows
+- `make spec` — baseline green (82 passed, 2 skipped), matching all check-lane observed statuses
+- Preconditions checked: `spec/14-authoring-and-self-test.md`, `spec/15-release-smoke.md`, `tests/smoke/smoke.md`, `tests/fixtures/rust-runner/`, `Makefile`, `cargo`, `make`, and `mustmatch` are present; no external services, credentials, or data files are required
+- Confirmed landed anchors exist in specs: runner self-test absence check, `.march/**` archaeology-grep exclusion, quoted-hash section, and smoke self-containment section
+- Prior-art/scope search: inspected landed spec sections and smoke document; searched runner/process paths for bash execution and `| mustmatch` detection; `run_bash` still intentionally uses `set -e` without `pipefail`, while `code_before_shell_comment` already handles quoted `#` versus true shell comments
+- Implementation decision: made no runtime changes. `.march/contract-red-check.json` has no expected-red check entries, and baseline `make spec` proved all improved green ratchets already pass. There are no verify-lane assertions to implement or exercise.
+- Docs/scripts review: no public behavior changed in this code step, so README/help/examples/Makefile updates are not required
+- Shipped specs: no `spec/*.md`, public API output, CLI output, or docs assertions were added, relaxed, deleted, or changed in this code step
 - `make test` — focused profile green (31 CLI unit tests, 5 runner_error_paths integration tests, 48 core tests, doc-tests green)
+- `make spec` — final spec-only green (82 passed, 2 skipped)
 - `make lint` — green (`cargo fmt --check` + `cargo clippy -- -D warnings`)
-- `git diff --check` — clean
-- `git status --short --branch`, `git diff --cached --name-only`, `git ls-files --others --exclude-standard` — verify staged intended work products, including the bounded README docs parity fix; no untracked build artifacts
+- `git diff --stat`, `git diff -- . ':(exclude).march/code-log.md'`, `git status --short --branch`, `git diff --cached --name-only`, `git ls-files --others --exclude-standard` — only `.march/code-log.md` changed; no runtime/spec diffs, no staged files, no untracked build artifacts
 
 Proof results:
-- Check lane: `cargo test -q -p mustmatch-cli --test runner_error_paths -- --nocapture` is green; the two red behavioral entries now pass and the three green ratchets still pass
-- Spec-only: `make spec` is green (80 passed, 2 skipped)
-- Focused profile: `make test` is green
-- Lint: `make lint` is green
+- Check lane: all four check entries are improved green ratchets and remain green under `make spec`
 - Verify lane: no entries in `.march/contract-red-check.json`
+- Focused profile: `make test` green
+- Lint: `make lint` green
 
 Over-edit audit:
-- `runner.rs` changes are limited to validating explicit operands before the existing collector and printing one missing-path diagnostic per missing operand when not quiet; removing any line would either restore the silent-green typo bug, break quiet behavior, or remove the design-named diagnostic/exit behavior
-- `context.rs` changes are limited to the design-named bare-parent normalization in root derivation and config discovery; `effective_parent` is the same local shape as existing `doc_dir`
-- No CLI parsing, discovery recursion, named-run cycle handling, setup diagnostic handling, or shipped specs were changed; the only docs change is the README's stale non-executable count relaxed to durable wording
+- Runtime diff is empty; removing any potential runtime/code edit is exactly the intended minimal implementation for this already-green contract-hardening ticket
+- Required artifact diff is limited to replacing stale dependency-ticket code-log content with ticket 026 execution/proof state
+- No adjacent fixes were taken
 
 Diff-size audit:
-- Minimal fix is two small path-handling changes plus one helper per file; total runtime diff is under the expected 3x envelope for the named changes
-- No adjacent fixes were taken
+- Minimal runtime fix estimate is zero lines because every authored assertion is an already-implemented green ratchet; actual runtime/spec diff is zero lines, within the minimal-diff requirement
 
 ## Deviations from Design
 - None

@@ -3,60 +3,61 @@ Operator verify pending: no
 
 ## Checkpoint Summary
 
-- Read `AGENTS.md` and `CLAUDE.md`; this repo's mustmatch contract is `spec/*.md`, run by `make spec`, while runner error paths are cargo tests.
-- Read `.march/ticket.md`, `.march/design-draft.md`, `.march/design-final.md`, `.march/code-log.md`, `.march/code-review-log.md`, `.march/checkpoint.json`, `.march/contract-red-check.json`, and `planning/mustmatch/faq.md`.
-- Rebased at start and before sign-off; branch remained up to date with `origin/main`.
-- Preflight found no untracked files. Staged ticket work products up front, then staged the bounded README/docs repair found during verification.
-- Diff vs `main` is limited to `.march/code-log.md`, `README.md`, `crates/mustmatch-cli/src/context.rs`, `crates/mustmatch-cli/src/runner.rs`, and `crates/mustmatch-cli/tests/runner_error_paths.rs`; no `spec/*.md` files changed.
+- Read `AGENTS.md` and `CLAUDE.md`; mustmatch's shipped behavioral contract is `spec/*.md`, run by `make spec`.
+- Read the required March artifacts: `.march/ticket.md`, `.march/design-draft.md`, `.march/design-final.md`, `.march/code-log.md`, `.march/code-review-log.md`, `.march/checkpoint.json`, `.march/contract-red-check.json`, prior `.march/verify-log.md`, and supporting March notes/profiles.
+- Read `planning/mustmatch/faq.md`; there are no active `watching` entries.
+- Rebased at start; fetched before sign-off and confirmed `origin/main` is still an ancestor of `HEAD`, so no final rebase was needed.
+- Preflight found no untracked files. Ticket diff is limited to March artifacts plus `spec/14-authoring-and-self-test.md` and `spec/15-release-smoke.md`.
 
 ## Planning/FAQ Watch Results — relevant watching/answered entries probed
 
-- `planning/mustmatch/faq.md` has no active `watching` entries.
-- Relevant answered memory says mustmatch's contract lives in `AGENTS.md` and `spec/*.md`; this ticket preserves that split by proving the new runner error paths in cargo tests rather than shipped specs.
-- Safety boundaries probed: missing path diagnostics, quiet mode, mixed valid+missing operands, invalid `--lang`, cyclic `uses=`, and setup failure redaction. The synthetic secret was not leaked.
+- No relevant `watching` entries are active for mustmatch.
+- Relevant answered entry: mustmatch uses `AGENTS.md` plus `spec/*.md` as its executable contract. This ticket preserves that by changing shipped specs only, with no runtime/README/help behavior changes.
+- Security/safety boundaries touched here are local-only: embedded fixture paths remain relative, smoke scans inspect tracked Markdown, and no credentials/network/destructive operations are introduced.
 
 ## Exercise Results — ran, inputs, observations
 
-- `cargo test -q -p mustmatch-cli --test runner_error_paths -- --nocapture`: green, 5 passed. This covered all five check-lane assertions from `.march/contract-red-check.json`.
-- Missing explicit path probe with source CLI: exited `1`, stdout empty, stderr `Path not found: .../missing.md`.
-- Existing empty directory probe: exited `0`, stderr `No markdown files found`, preserving the intended no-op.
-- Mixed valid markdown plus missing operand: exited `1` before running the valid file, so a typo cannot be hidden by another good operand.
-- Quiet missing path: exited `1` with zero stdout/stderr bytes.
-- Bare-filename `mustmatch.toml` context probe: from the fixture directory, `mustmatch test doc.md` exited `0`, printed `1 passed`, and wrote the `{root}` sentinel in the config directory.
-- Bare-filename `pyproject.toml` context probe: same shape, exited `0` and wrote the `{root}` sentinel in the config directory.
-- Invalid `--lang nope`: exited `2`, reported `Error: --lang must be all or bash`, and did not print a no-tests/no-markdown success.
-- Cyclic named-run fixture: exited nonzero with clear `cyclic run dependency` diagnostics rather than recursing.
-- Setup failure redaction fixture: exited nonzero with `context "leaky" setup command failed`; the synthetic secret value was absent.
+- `make spec`: green, `82 passed, 2 skipped`; this covered every `lane: check` entry in `.march/contract-red-check.json`.
+- Injected an intentional failing Markdown file into a temp copy of `tests/fixtures/rust-runner`:
+  - Positive masked pipeline probe exited `0`, reproducing the original false-negative shape.
+  - New absence assertion shape exited `1` and reported forbidden `FAIL` and `failed`, proving the mask is closed.
+- Temp quoted-hash fixture with single-quoted hash, double-quoted hash, and leading real shell comment: source binary reported the two quoted cases as `PASS` and the real comment as `SKIP`.
+- Smoke structural probes over temp copies of `tests/smoke/smoke.md`:
+  - Current document satisfied both embedded-fixture and top-level executable scans.
+  - Removing the nested bash assertion and leaving prose outside a bash fence made the embedded-fixture check fail.
+  - Replacing the top-level nested smoke command with a different asserted line that merely mentioned `mustmatch test nested-smoke.md | mustmatch` made the top-level check fail.
+- `make smoke`: green; built and installed the wheel in an isolated venv and ran `tests/smoke/smoke.md` through the installed `mustmatch` entry point (`2 passed`).
+- `./target/debug/mustmatch lint spec/14-authoring-and-self-test.md` and `spec/15-release-smoke.md`: both `findings=0`.
+- `./target/debug/mustmatch verify-matrix .march/design-final.md --repo-root .`: initially exposed a non-shipped artifact reference to embedded `nested-smoke.md`; after bounded wording repair it passed.
 
 ## Exploratory Verification — change-aware probes tried; high-signal probes; noisy/not-worth-repeating probes; recommended improved tests (`spec`, `test`, `lint`, `gate`, `verify-group`, docs/help, FAQ watching, experiment/harness); agent/tool-cost friction if applicable
 
-- High-signal probes were missing/empty/mixed/quiet path operands and bare-filename context configs because those directly target the changed path handling and catch the original silent-green and empty-`{root}` failures.
-- Adjacent regression probes covered pyproject fallback contexts, invalid language parsing, named-run cycle detection, setup secret redaction, and existing rust-runner fixtures.
-- Noisy probes:
-  - Running `cargo run -q -p mustmatch-cli --` from inside a temporary fixture directory failed because Cargo could not find `Cargo.toml`; using the built source binary path is the right user-like probe for arbitrary cwd fixtures.
-  - Running `./target/debug/mustmatch test spec/` without prepending `target/debug` to `PATH` made nested spec commands resolve the older installed `mustmatch`; `make spec` / `PATH="$PWD/target/debug:$PATH" ./target/debug/mustmatch ...` is the authoritative source-tree shape.
-  - `./target/debug/mustmatch lint spec/` does not accept a directory; not relevant to this runner-path ticket and not repeated.
-- Improved tests already landed in this ticket as cargo integration tests (`test`). No additional spec/lint/gate/verify-group follow-up is needed.
-- Agent/tool-cost friction: the source-tree command shape is efficient through `make spec`; direct ad hoc runs need `PATH` discipline so nested `mustmatch` calls use the built binary, but that is existing repo behavior and documented in the Makefile.
+- High-signal probes were chosen from the diff: masked runner pipelines, quoted-`#` shell-comment detection, executable-fence-aware smoke structure, and the installed-wheel smoke path.
+- The temp failing fixture was the strongest probe because it proved both the old positive pipeline false-negative and the new absence assertion's failure behavior on the same input.
+- The top-level smoke replacement probe was high-signal because it recreated the code-review concern: prose/mentions inside an executable bash block must not satisfy the nested-smoke command sentinel.
+- Noisy/not worth repeating: replacing the nested smoke assertion with arbitrary invalid text *inside an existing bash fence* still looks like executable structure to the structural scan; this is not the prose-only false negative targeted by this ticket, and `make smoke` catches invalid executable bash content directly.
+- Recommended durable improved tests: already landed as shipped specs in this ticket. No additional spec/test/lint/gate/verify-group/FAQ/experiment issue is needed.
+- Agent/tool-cost friction: the Makefile remains the cheapest discovery path. Direct source-tree probes need `PATH="$PWD/target/debug:$PATH"` so nested `mustmatch` calls use the just-built binary; this is existing repo behavior and is encoded in `make spec`.
 
 ## Edge Cases Tested — specific cases, results
 
-- Empty/zero input equivalent: existing empty directory remains exit-0 no-op with `No markdown files found`.
-- Missing prerequisite: nonexistent explicit operand exits nonzero and names the path.
-- Malformed/wrong option: unsupported `--lang` exits as usage error before discovery.
-- Boundary/mixed operands: any missing explicit operand fails even if another operand is valid markdown.
-- Quiet recovery: `-q` suppresses diagnostics but preserves nonzero exit, so scripts can retry/fix the path cleanly.
-- Bare-filename root boundary: both `mustmatch.toml` and `pyproject.toml` configs resolve `{root}` to the invocation/config directory for `mustmatch test doc.md`.
-- Safety/security: setup-failure diagnostics omit expanded synthetic secret values.
+- Empty/zero-style protected output: full canonical fixture absence check remains green on the real fixture and red on injected failure output.
+- Malformed/intentional failure: temp failing fixture produced `FAIL`/`failed` and the absence assertion failed.
+- Boundary values: quoted `#` in single and double quotes both ran; a leading real shell comment with `| mustmatch` skipped.
+- Stale/prose smoke state: prose-only embedded fixture and prose-like top-level command replacements failed the structural checks.
+- Release integration: installed-wheel smoke passed through `make smoke`.
 
 ## Spec Audit — specs reviewed, gaps found, counts before/after, spec-only result
 
-- Reviewed `spec/05-executable-markdown.md`, `spec/contexts/10-contexts.md`, `spec/07-named-runs.md`, `spec/lifecycle/11-lifecycle-hooks.md`, `spec/14-authoring-and-self-test.md`, and `README.md` for the changed runner/context surfaces.
-- Proof-matrix locations in `.march/contract-red-check.json` all resolve to `crates/mustmatch-cli/tests/runner_error_paths.rs`.
-- `git diff --name-only main -- spec` is empty; verify authored no new shipped spec assertions.
-- No missing shipped-contract coverage blocks approval: `.march/ticket.md` and design-final intentionally route these runner error-path/runtime safety behaviors to cargo tests, not `spec/*.md`.
-- Spec-only command `make spec`: green, `80 passed, 2 skipped` before full-blocking; full-blocking repeated the same spec result after the README repair.
-- Assertion-quality delta: 0 shipped spec assertions relaxed, 0 weak assertions escalated, 0 syntactic-red spec references found. The only relaxation was README prose/example text, changing stale exact `67 passed` to durable `passed` wording.
+- Reviewed changed shipped specs: `spec/14-authoring-and-self-test.md` and `spec/15-release-smoke.md`, plus `tests/smoke/smoke.md` and the Makefile smoke/spec targets they document.
+- Proof locations exist in repo:
+  - `spec/14-authoring-and-self-test.md::Runner self-test`
+  - `spec/14-authoring-and-self-test.md::Quoted hash assertion detection`
+  - `spec/15-release-smoke.md::Smoke document is self-contained`
+- `spec-only` result: green, `82 passed, 2 skipped`.
+- Full-blocking later repeated `make spec` with the same green `82 passed, 2 skipped` result.
+- No coverage gap blocks approval. The ticket's introduced behavior is contract hardening in the changed spec files, and the adversarial probes show the named false negatives fail.
+- Verify authored no new shipped-spec assertions. `git diff main..HEAD -- spec/*` is still the design/code-review-authored spec diff only.
 
 ## Verify Group — `lane: verify` entries exercised (each: assertion, red_command, observed_status); operator-pending list explicit if credentials unavailable
 
@@ -64,31 +65,31 @@ No `lane: verify` entries exist in `.march/contract-red-check.json`; operator-pe
 
 ## Regression Results — existing features verified
 
-- `PATH="$PWD/target/debug:$PATH" ./target/debug/mustmatch test -v tests/fixtures/rust-runner`: green, `27 passed` covering assertion blocks, console examples, named runs, expected exits/stderr, contexts, tables, and embedded files.
-- `PATH="$PWD/target/debug:$PATH" ./target/debug/mustmatch test -v tests/fixtures/rust-runner-pyproject`: green, `2 passed` covering pyproject context fallback.
-- `make spec`: green for the full shipped spec suite and README.
-- Existing empty-directory no-op remains unchanged.
+- `make smoke`: green installed-wheel release smoke (`2 passed`).
+- `mustmatch --help`, `mustmatch test --help`, and `make help`: output remains accurate for commands/options/targets; no help text change was required.
+- Public-doc archaeology grep with `.march/**` excluded returned no matches.
+- `mustmatch lint` for both changed specs returned `findings=0`.
+- `mustmatch verify-matrix .march/design-final.md --repo-root .` passed after the bounded artifact wording repair.
 
 ## Test Suite — full-blocking result
 
-- Full-blocking profile run exactly once as `make lint && make test && make spec`: green.
+- Full-blocking profile was run exactly once as `make lint && make test && make spec`: green.
 - `make lint`: green (`cargo fmt --check` + `cargo clippy -- -D warnings`).
-- `make test`: green (31 CLI unit tests, 5 `runner_error_paths` integration tests, 48 core tests, doc-tests green).
-- `make spec`: green (`80 passed, 2 skipped`).
+- `make test`: green (31 CLI unit tests, 5 runner error-path integration tests, 48 core tests, doc-tests green).
+- `make spec`: green (`82 passed, 2 skipped`).
 
 ## Documentation — parity audit of docs/help/examples
 
-- `mustmatch test --help` remains accurate for options and `PATHS...` syntax.
-- Main `mustmatch --help` remains accurate for the `test`, `verify-matrix`, and `lint` command list.
-- No public docs claimed missing explicit paths were an exit-0 no-op; no docs/help update was required for the new missing-path diagnostic.
-- `spec/contexts/10-contexts.md` already documents `{root}` as the directory holding the config file; the implementation now matches that for bare-filename invocations.
-- Fixed one stale README console example count: `67 passed` became durable `passed` wording so the example no longer drifts when the spec count changes.
+- `README.md` remains accurate: it points to `spec/14-authoring-and-self-test.md` and `spec/15-release-smoke.md`, and documents `make smoke` as the installed-wheel smoke gate.
+- `mustmatch --help`, `mustmatch test --help`, and `make help` remain in parity with the shipped commands/targets.
+- `tests/smoke/smoke.md` remains unchanged and is structurally aligned with `spec/15-release-smoke.md`.
+- Fixed one non-shipped March artifact wording issue in `.march/design-final.md`: bare backticked embedded `nested-smoke.md` made `verify-matrix` look for a nonexistent repo file. It now references `tests/smoke/smoke.md`, and `verify-matrix` passes.
 
 ## Issues Found and Fixed — fixes + proof
 
-- Fixed README stale count in a non-executable console example: replaced exact `67 passed` with durable `passed` wording.
-  - Proof: full-blocking `make lint && make test && make spec` stayed green after the README repair.
-- No bounded runtime defects were found beyond the code-step fixes already present.
+- Fixed `.march/design-final.md` wording so embedded fixture references resolve through `tests/smoke/smoke.md` instead of a nonexistent top-level `nested-smoke.md`.
+  - Proof: `./target/debug/mustmatch verify-matrix .march/design-final.md --repo-root .` now reports both references OK.
+- No bounded runtime defects or shipped-doc mismatches were found.
 
 ## Issues Filed — list with paths
 
@@ -96,14 +97,12 @@ None.
 
 ## Planning Updates — concrete issues filed or FAQ watching proposal (or "none")
 
-None. No recurring unautomated constraint remained after the bounded README fix, and the ticket's runtime behaviors are now covered by cargo tests.
+None. No recurring unautomated constraint remained after verification.
 
 ## UX Quality — CLI/UI assessment (if applicable)
 
-- Missing explicit path output is concise, names the path, and exits nonzero.
-- Empty-directory no-op remains quiet except for the existing `No markdown files found` diagnostic.
-- `-q` preserves script-friendly nonzero status while suppressing user-facing output.
-- Context `{root}` now matches the author mental model for both `mustmatch.toml` and pyproject configs invoked via bare filenames.
-- No excessive tool-call/token friction in the CLI behavior itself; source-tree verification remains cheapest through Makefile gates.
+- The changed interface is agent/user-facing executable documentation. The spec prose remains understandable and the assertions target structural behavior rather than exact counts.
+- CLI/help output remains concise and discoverable.
+- No performance regression was observed; added checks are local fixture runs and small scans, and full-blocking passed normally.
 
 Issues filed: 0
