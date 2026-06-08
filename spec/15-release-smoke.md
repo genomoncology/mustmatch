@@ -17,9 +17,10 @@ git -C .. ls-files tests/smoke/smoke.md | mustmatch "tests/smoke/smoke.md"
 
 awk '
   /^````markdown file=nested-smoke\.md$/ { in_fixture=1; print "embedded fixture: nested-smoke.md"; next }
-  in_fixture && /^```bash$/ { print "nested executable bash"; next }
-  in_fixture && /\| mustmatch/ { print "nested assertion pipe"; next }
-  in_fixture && /^````$/ { in_fixture=0 }
+  in_fixture && /^````$/ { in_fixture=0; in_nested_bash=0; next }
+  in_fixture && /^```bash$/ { in_nested_bash=1; print "nested executable bash"; next }
+  in_fixture && in_nested_bash && /^```$/ { in_nested_bash=0; next }
+  in_fixture && in_nested_bash && /^[[:space:]]*[^#].*\|[[:space:]]*mustmatch/ { print "nested assertion pipe"; next }
 ' ../tests/smoke/smoke.md | mustmatch like "embedded fixture: nested-smoke.md
 nested executable bash
 nested assertion pipe"

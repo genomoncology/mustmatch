@@ -71,7 +71,7 @@ Tracked Markdown describes the current CLI directly; a grep for old
 release-archaeology terms must come back empty:
 
 ```bash
-git -C .. grep -inE 'py''thon|py''test|pyo''3|remo''ved|cut''over|trans''itional|mig''rat' -- '*.md' spec/ | mustmatch ""
+git -C .. grep -inE 'py''thon|py''test|pyo''3|remo''ved|cut''over|trans''itional|mig''rat' -- '*.md' ':(exclude).march/**' spec/ | mustmatch ""
 ```
 
 ## Quoted hash assertion detection

@@ -1,5 +1,7 @@
 {
   "baseline_green": true,
+  "review_observed_command": "make spec (spec-only profile)",
+  "review_observed_status": "green after review repairs: 82 passed, 2 skipped",
   "entries": [
     {
       "assertion": "spec/14-authoring-and-self-test.md::Runner self-test — canonical fixture failure absence",
@@ -34,7 +36,7 @@
       "expected_kind": "already-implemented",
       "expected_observation": "green ratchet",
       "observed_status": "green, ratchet",
-      "expected_green_after": "the smoke document contains an executable embedded nested-smoke.md fixture with a nested bash assertion pipe",
+      "expected_green_after": "the smoke document contains an executable embedded nested-smoke.md fixture with a nested bash assertion pipe, and prose inside the fixture cannot satisfy the pipe check",
       "user_visible_regression_caught": "the smoke document only mentions the embedded fixture or assertion pipe in prose while losing the executable nested smoke fixture"
     },
     {
