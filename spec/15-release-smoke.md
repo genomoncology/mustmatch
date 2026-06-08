@@ -30,10 +30,10 @@ awk '
   in_fixture && /^````$/ { in_fixture=0; next }
   !in_fixture && /^```bash$/ { in_bash=1; next }
   in_bash && /^```$/ { in_bash=0; next }
-  in_bash && /^printf .*\| mustmatch/ { print }
-  in_bash && /^mustmatch test nested-smoke\.md \| mustmatch/ { print }
-' ../tests/smoke/smoke.md | mustmatch like "printf 'installed entry point
-mustmatch test nested-smoke.md | mustmatch like"
+  in_bash && /^printf .*\| mustmatch/ { print "top-level stdin assertion"; next }
+  in_bash && /^mustmatch test nested-smoke\.md \| mustmatch/ { print "top-level nested smoke test command"; next }
+' ../tests/smoke/smoke.md | mustmatch like "top-level stdin assertion
+top-level nested smoke test command"
 
 awk '/cargo|target\/|\.\.\//{print}' ../tests/smoke/smoke.md | mustmatch ""
 ```
