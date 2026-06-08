@@ -136,6 +136,16 @@ pub(crate) fn parse_test_args(args: &[String]) -> Result<TestArgs, i32> {
 }
 
 pub(crate) fn run(args: TestArgs) -> i32 {
+    let missing_paths = missing_explicit_paths(&args.paths);
+    if !missing_paths.is_empty() {
+        if !args.quiet {
+            for path in missing_paths {
+                eprintln!("Path not found: {}", path.display());
+            }
+        }
+        return 1;
+    }
+
     let files = collect_markdown_files(&args.paths);
     if files.is_empty() {
         if !args.quiet {
@@ -804,6 +814,14 @@ impl MarkdownRunner {
         fs::write(&target, content)
             .map_err(|err| format!("failed to write fixture file {}: {err}", target.display()))
     }
+}
+
+fn missing_explicit_paths(paths: &[PathBuf]) -> Vec<&Path> {
+    paths
+        .iter()
+        .map(PathBuf::as_path)
+        .filter(|path| !path.exists())
+        .collect()
 }
 
 fn collect_markdown_files(paths: &[PathBuf]) -> Vec<PathBuf> {
