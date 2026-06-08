@@ -1,0 +1,53 @@
+{
+  "baseline_green": true,
+  "entries": [
+    {
+      "assertion": "spec/14-authoring-and-self-test.md::Runner self-test — canonical fixture failure absence",
+      "location": "spec/14-authoring-and-self-test.md",
+      "class": "structural",
+      "lane": "check",
+      "red_command": "spec-only",
+      "expected_kind": "already-implemented",
+      "expected_observation": "green ratchet",
+      "observed_status": "green, ratchet",
+      "expected_green_after": "the canonical rust-runner fixture emits no FAIL lines or failed summary; the spec now catches future nested runner failures that positive pipelines can mask",
+      "user_visible_regression_caught": "a failing inner runner fixture can be hidden by the right-hand mustmatch assertion and still leave the self-test green"
+    },
+    {
+      "assertion": "spec/14-authoring-and-self-test.md::Quoted hash assertion detection",
+      "location": "spec/14-authoring-and-self-test.md",
+      "class": "semantic",
+      "lane": "check",
+      "red_command": "spec-only",
+      "expected_kind": "already-implemented",
+      "expected_observation": "green ratchet",
+      "observed_status": "green, ratchet",
+      "expected_green_after": "the runner treats a quoted # before | mustmatch as code and treats a true shell-comment assertion line as skipped documentation",
+      "user_visible_regression_caught": "bash assertion blocks with quoted # before the assertion pipe are silently skipped, or real shell-comment assertion lines are accidentally executed"
+    },
+    {
+      "assertion": "spec/15-release-smoke.md::Smoke document is self-contained — embedded fixture structure",
+      "location": "spec/15-release-smoke.md",
+      "class": "structural",
+      "lane": "check",
+      "red_command": "spec-only",
+      "expected_kind": "already-implemented",
+      "expected_observation": "green ratchet",
+      "observed_status": "green, ratchet",
+      "expected_green_after": "the smoke document contains an executable embedded nested-smoke.md fixture with a nested bash assertion pipe",
+      "user_visible_regression_caught": "the smoke document only mentions the embedded fixture or assertion pipe in prose while losing the executable nested smoke fixture"
+    },
+    {
+      "assertion": "spec/15-release-smoke.md::Smoke document is self-contained — top-level executable smoke commands",
+      "location": "spec/15-release-smoke.md",
+      "class": "structural",
+      "lane": "check",
+      "red_command": "spec-only",
+      "expected_kind": "already-implemented",
+      "expected_observation": "green ratchet",
+      "observed_status": "green, ratchet",
+      "expected_green_after": "top-level executable bash fences in tests/smoke/smoke.md contain both the installed stdin assertion and the nested mustmatch test command",
+      "user_visible_regression_caught": "the executable nested mustmatch test command is deleted from the smoke document while explanatory prose still mentions mustmatch test"
+    }
+  ]
+}

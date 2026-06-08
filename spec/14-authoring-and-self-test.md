@@ -34,6 +34,15 @@ PASS Contexts hide setup
 passed"
 ```
 
+The same full fixture run must also be free of failure output. This absence check
+keeps a failed inner runner result from being hidden by the right-hand assertion
+in a shell pipeline:
+
+```bash
+mustmatch test -v ../tests/fixtures/rust-runner 2>&1 | mustmatch not like "FAIL
+failed"
+```
+
 Documentation-only fences must not surface as skipped cases in user-visible
 output:
 
@@ -63,4 +72,34 @@ release-archaeology terms must come back empty:
 
 ```bash
 git -C .. grep -inE 'py''thon|py''test|pyo''3|remo''ved|cut''over|trans''itional|mig''rat' -- '*.md' spec/ | mustmatch ""
+```
+
+## Quoted hash assertion detection
+
+A quoted `#` before an assertion pipe is command data, not a shell comment. A
+real shell-comment line with the same pipe stays documentation and is skipped:
+
+````markdown file=quoted-hash.md
+# Quoted hash fixture
+
+## Quoted hash before pipe
+
+A quoted hash before the assertion pipe is command data, not a shell comment.
+
+```bash
+printf 'literal # before pipe\n' | mustmatch like "literal # before pipe"
+```
+
+## Real shell comments stay documentation
+
+A true shell comment with a would-be assertion pipe is not executable code.
+
+```bash
+# printf 'commented assertion pipe\n' | mustmatch like "commented assertion pipe"
+```
+````
+
+```bash
+mustmatch test -v quoted-hash.md | mustmatch like "PASS Quoted hash before pipe
+SKIP Real shell comments stay documentation"
 ```
