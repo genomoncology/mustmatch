@@ -48,9 +48,9 @@ impl ContextRegistry {
     pub(crate) fn new(path: &Path) -> Result<Self, String> {
         let (config_path, source) = find_config(path);
         let root = config_path
-            .as_ref()
-            .and_then(|candidate| candidate.parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| path.parent().unwrap_or(path).to_path_buf());
+            .as_deref()
+            .map(effective_parent)
+            .unwrap_or_else(|| effective_parent(path));
         let root = fs::canonicalize(&root).unwrap_or(root);
         let config = match (&config_path, source) {
             (Some(candidate), Some("mustmatch")) => parse_toml(candidate)?,
@@ -440,7 +440,7 @@ fn find_config(path: &Path) -> (Option<PathBuf>, Option<&'static str>) {
     let start = if path.is_dir() {
         path.to_path_buf()
     } else {
-        path.parent().unwrap_or(path).to_path_buf()
+        effective_parent(path)
     };
     for dir in start.ancestors() {
         let mustmatch = dir.join("mustmatch.toml");
@@ -455,6 +455,13 @@ fn find_config(path: &Path) -> (Option<PathBuf>, Option<&'static str>) {
         }
     }
     (None, None)
+}
+
+fn effective_parent(path: &Path) -> PathBuf {
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+        _ => PathBuf::from("."),
+    }
 }
 
 fn parse_toml(path: &Path) -> Result<Value, String> {

@@ -39,7 +39,7 @@ enforces — at once.
 ```console
 $ mustmatch test spec/
 ...
-67 passed
+passed
 ```
 
 The full, runnable guide lives in [`spec/`](spec/), one feature per file:
