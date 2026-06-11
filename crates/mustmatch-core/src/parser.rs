@@ -372,18 +372,15 @@ printf '{{input}} -> {{output}}\n'
 
 | expected_text |
 |---------------|
-| Variant Browser |
-| ClinVar |
+| Dashboard |
+| Settings |
 "#;
 
         let parsed = parse_markdown(source);
         assert_eq!(parsed.tables.len(), 1);
         assert_eq!(parsed.tables[0].headers, vec!["expected_text".to_string()]);
         assert_eq!(parsed.tables[0].rows.len(), 2);
-        assert_eq!(
-            parsed.tables[0].rows[0],
-            vec!["Variant Browser".to_string()]
-        );
+        assert_eq!(parsed.tables[0].rows[0], vec!["Dashboard".to_string()]);
     }
 
     #[test]

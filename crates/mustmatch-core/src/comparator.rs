@@ -267,8 +267,8 @@ fn tokenize_ellipsis(expected: &str) -> Vec<EllipsisToken> {
 pub fn compare_ellipsis(actual: &str, expected: &str, ignore_case: bool) -> CompareResult {
     let tokens = tokenize_ellipsis(expected);
     let actual_lines: Vec<&str> = actual.split('\n').collect();
-    // Collapse internal whitespace so a clean doc line (`name | BRAF`) matches
-    // padded table output (`name        | BRAF`). Column padding is a rendering
+    // Collapse internal whitespace so a clean doc line (`name | server`) matches
+    // padded table output (`name        | server`). Column padding is a rendering
     // artifact, not behaviour, so ellipsis matching is whitespace-insensitive.
     let fold = |value: &str| {
         let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -779,22 +779,24 @@ mod tests {
 
     #[test]
     fn has_ellipsis_detects_standalone_and_trailing() {
-        assert!(has_ellipsis("name | BRAF\n...\ndescription | foo"));
-        assert!(has_ellipsis("description | Protein kinase that ..."));
-        assert!(!has_ellipsis("name | BRAF\ndescription | foo"));
+        assert!(has_ellipsis("name | server\n...\ndescription | foo"));
+        assert!(has_ellipsis(
+            "description | Handles incoming requests that ..."
+        ));
+        assert!(!has_ellipsis("name | server\ndescription | foo"));
     }
 
     #[test]
     fn ellipsis_skips_leading_banner_then_matches_adjacent_rows() {
         // psql -x expanded output: a RECORD banner we don't care about, then rows.
         let actual = "-[ RECORD 1 ]----------\n\
-                      name | BRAF\n\
-                      long_name | B-Raf proto-oncogene, serine/threonine kinase\n\
-                      description | Protein kinase that participates in MAPK signalling";
+                      name | server\n\
+                      long_name | primary application server with load balancing\n\
+                      description | Handles incoming requests and routes them to workers";
         let expected = "...\n\
-                        name | BRAF\n\
-                        long_name | B-Raf proto-oncogene, serine/threonine ...\n\
-                        description | Protein kinase that ...";
+                        name | server\n\
+                        long_name | primary application server with ...\n\
+                        description | Handles incoming requests and ...";
         let result = contains(actual, expected);
         assert!(result.matches, "message: {}", result.message);
     }
@@ -842,8 +844,8 @@ mod tests {
     #[test]
     fn ellipsis_routes_through_compare_with_ignore_case() {
         let result = compare(
-            "HEADER\nNAME | BRAF",
-            "...\nname | braf",
+            "HEADER\nNAME | SERVER",
+            "...\nname | server",
             CompareMode::Contains,
             false,
             true,

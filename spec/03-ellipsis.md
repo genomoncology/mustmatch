@@ -35,10 +35,10 @@ A leading `...` skips a banner line, then the clean doc rows match the padded
 output because column padding is collapsed before comparison.
 
 ```bash
-printf -- '-[ RECORD 1 ]------------\nname        | BRAF\nkind        | kinase\n' \
+printf -- '-[ RECORD 1 ]------------\nname        | server\nkind        | service\n' \
   | mustmatch like "...
-name | BRAF
-kind | kinase"
+name | server
+kind | service"
 ```
 
 ## Adjacency needs a gap
